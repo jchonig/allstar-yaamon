@@ -1,0 +1,35 @@
+{{template "base" .}}
+
+{{define "title"}}Login — YAAMon{{end}}
+
+{{define "content"}}
+<div class="row justify-content-center mt-5">
+  <div class="col-sm-8 col-md-5 col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h4 class="card-title text-center mb-4">
+          <i class="bi bi-broadcast-pin me-2"></i>YAAMon
+        </h4>
+
+        {{if .Error}}
+        <div class="alert alert-danger py-2">{{.Error}}</div>
+        {{end}}
+
+        <form method="POST" action="/login">
+          <div class="mb-3">
+            <label for="username" class="form-label">Username</label>
+            <input type="text" class="form-control" id="username" name="username"
+                   autocomplete="username" autofocus required>
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" class="form-control" id="password" name="password"
+                   autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Sign in</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}

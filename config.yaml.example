@@ -1,0 +1,17 @@
+server:
+  http_port: 80
+  https_port: 443
+  redirect_http: true        # 301 redirect http → https
+
+tls:
+  mode: "disabled"           # disabled | self_signed | provided | acme
+  cert_file: ""              # path to fullchain.pem (mode: provided)
+  key_file: ""               # path to privkey.pem (mode: provided)
+  acme_domain: ""            # domain for Let's Encrypt (mode: acme)
+  acme_cache_dir: "/etc/yaamon/acme"
+
+db:
+  path: "/etc/yaamon/yaamon.db"
+
+log:
+  level: "info"              # debug | info | warn | error

@@ -1,0 +1,23 @@
+# Declarative state seeded before integration tests run.
+# Passwords are resolved from environment variables at apply time.
+purge:
+  users: true
+  nodes: true
+  favorites: true
+
+users:
+  - username: admin
+    permission: superuser
+    password: $TEST_ADMIN_PASSWORD
+  - username: viewer
+    permission: readonly
+    password: $TEST_VIEWER_PASSWORD
+
+nodes:
+  - name: Test Node
+    node_number: "99999"
+    ami_host: localhost
+    ami_port: 5038
+    ami_user: test
+    ami_pass: test
+    enabled: true

@@ -1,0 +1,102 @@
+/* YAAMon theme variables */
+[data-theme="dark"] {
+  --bg-primary:    #0d1117;
+  --bg-secondary:  #161b22;
+  --bg-card:       #1c2128;
+  --border:        #30363d;
+  --text-primary:  #e6edf3;
+  --text-muted:    #7d8590;
+  --accent-green:  #3fb950;
+  --accent-red:    #f85149;
+  --accent-yellow: #d29922;
+  --accent-blue:   #58a6ff;
+  --navbar-bg:     #161b22;
+}
+
+[data-theme="light"] {
+  --bg-primary:    #ffffff;
+  --bg-secondary:  #f6f8fa;
+  --bg-card:       #ffffff;
+  --border:        #d0d7de;
+  --text-primary:  #1f2328;
+  --text-muted:    #656d76;
+  --accent-green:  #1a7f37;
+  --accent-red:    #cf222e;
+  --accent-yellow: #9a6700;
+  --accent-blue:   #0969da;
+  --navbar-bg:     #f6f8fa;
+}
+
+[data-theme="solarized"] {
+  --bg-primary:    #002b36;
+  --bg-secondary:  #073642;
+  --bg-card:       #073642;
+  --border:        #586e75;
+  --text-primary:  #839496;
+  --text-muted:    #657b83;
+  --accent-green:  #859900;
+  --accent-red:    #dc322f;
+  --accent-yellow: #b58900;
+  --accent-blue:   #268bd2;
+  --navbar-bg:     #073642;
+}
+
+[data-theme="high-contrast"] {
+  --bg-primary:    #000000;
+  --bg-secondary:  #111111;
+  --bg-card:       #111111;
+  --border:        #ffffff;
+  --text-primary:  #ffffff;
+  --text-muted:    #cccccc;
+  --accent-green:  #00ff00;
+  --accent-red:    #ff0000;
+  --accent-yellow: #ffff00;
+  --accent-blue:   #00aaff;
+  --navbar-bg:     #111111;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.navbar-yaamon {
+  background-color: var(--navbar-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.navbar-yaamon .navbar-brand,
+.navbar-yaamon .nav-link {
+  color: var(--text-primary);
+}
+
+.card {
+  background-color: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.form-control,
+.form-select {
+  background-color: var(--bg-secondary);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.form-control:focus,
+.form-select:focus {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--accent-blue) 25%, transparent);
+}
+
+.table {
+  --bs-table-bg: var(--bg-card);
+  --bs-table-color: var(--text-primary);
+  --bs-table-border-color: var(--border);
+  --bs-table-striped-bg: var(--bg-secondary);
+  --bs-table-hover-bg: color-mix(in srgb, var(--accent-blue) 10%, transparent);
+}
+
+.text-muted { color: var(--text-muted) !important; }

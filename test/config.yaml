@@ -1,0 +1,9 @@
+server:
+  http_port: 80
+  redirect_http: false
+tls:
+  mode: disabled
+db:
+  path: /data/yaamon.db
+log:
+  level: debug
