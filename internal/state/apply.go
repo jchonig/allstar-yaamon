@@ -131,14 +131,21 @@ func substituteEnv(sf *StateFile) error {
 	return nil
 }
 
+// resolveEnv expands a value that is an environment variable reference.
+// "$VAR_NAME"  → value of env var VAR_NAME (required; error if unset)
+// "$$literal"  → literal "$literal" (escape for a leading dollar sign)
+// anything else → returned unchanged
 func resolveEnv(value, field string) (string, error) {
+	if strings.HasPrefix(value, "$$") {
+		return value[1:], nil
+	}
 	if !strings.HasPrefix(value, "$") {
 		return value, nil
 	}
 	name := value[1:]
 	val, ok := os.LookupEnv(name)
 	if !ok {
-		return "", fmt.Errorf("required env var %s is not set (referenced in %s)", name, field)
+		return "", fmt.Errorf("env var $%s not set (referenced in %s); use $$ to escape a literal $", name, field)
 	}
 	return val, nil
 }
