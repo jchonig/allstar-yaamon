@@ -1,8 +1,16 @@
 package astdb
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParse(t *testing.T) {
@@ -64,7 +72,7 @@ func TestParseEmptyLines(t *testing.T) {
 }
 
 func TestLookup(t *testing.T) {
-	db := New()
+	db := New("")
 	db.mu.Lock()
 	db.nodes["12345"] = Node{Callsign: "W1AW", Description: "ARRL HQ", Location: "Newington, CT"}
 	db.mu.Unlock()
@@ -81,4 +89,177 @@ func TestLookup(t *testing.T) {
 	if ok {
 		t.Error("Lookup(99999) should not be found")
 	}
+}
+
+func TestLoadFile(t *testing.T) {
+	// Write enough entries to pass the 25-entry minimum guard.
+	var sb strings.Builder
+	for i := 1000; i < 1030; i++ {
+		fmt.Fprintf(&sb, "%d|KD9ABC|Node %d|Chicago, IL\n", i, i)
+	}
+	f, err := os.CreateTemp(t.TempDir(), "astdb*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(sb.String()); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	db := New(f.Name())
+	db.loadFile()
+
+	if db.Len() != 30 {
+		t.Errorf("Len() = %d, want 30", db.Len())
+	}
+	n, ok := db.Lookup("1000")
+	if !ok {
+		t.Fatal("node 1000 not found after loadFile")
+	}
+	if n.Callsign != "KD9ABC" {
+		t.Errorf("callsign = %q, want KD9ABC", n.Callsign)
+	}
+	// lastModified should be seeded from the file mtime.
+	db.mu.RLock()
+	lastMod := db.lastModified
+	db.mu.RUnlock()
+	if lastMod == "" {
+		t.Error("lastModified not set after loadFile")
+	}
+}
+
+func TestLoadFileMissing(t *testing.T) {
+	// A missing file should be a no-op, not an error.
+	db := New(filepath.Join(t.TempDir(), "nonexistent.txt"))
+	db.loadFile()
+	if db.Len() != 0 {
+		t.Errorf("expected 0 nodes for missing file, got %d", db.Len())
+	}
+}
+
+func TestLoadFileTooSmall(t *testing.T) {
+	// A file with fewer than 25 entries should be ignored.
+	f, err := os.CreateTemp(t.TempDir(), "astdb*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("1000|KD9ABC|Hub|Chicago, IL\n") //nolint:errcheck
+	f.Close()
+
+	db := New(f.Name())
+	db.loadFile()
+	if db.Len() != 0 {
+		t.Errorf("expected 0 nodes for undersized file, got %d", db.Len())
+	}
+}
+
+func TestRefreshDownloadsAndSavesFile(t *testing.T) {
+	// Build a response body large enough to pass the 25-entry guard.
+	var sb strings.Builder
+	for i := 1000; i < 1030; i++ {
+		sb.WriteString(fmt.Sprintf("%d|W%dXY|Node %d|City, ST\n", i, i, i))
+	}
+	body := sb.String()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Last-Modified", "Mon, 01 Jan 2024 00:00:00 GMT")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(body)) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	outFile := filepath.Join(t.TempDir(), "astdb.txt")
+	db := New(outFile)
+	db.client = srv.Client()
+	// Override the URL by pointing the client at our test server.
+	// We do this by temporarily replacing the constant via a field on the test DB.
+	// Since dbURL is a package-level const, we use a custom http.RoundTripper instead.
+	db.client = &http.Client{
+		Transport: rewriteHost(srv.URL),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	db.refresh(ctx)
+
+	if db.Len() < 25 {
+		t.Errorf("expected ≥25 nodes after refresh, got %d", db.Len())
+	}
+
+	// File should have been written.
+	if _, err := os.Stat(outFile); err != nil {
+		t.Errorf("output file not written: %v", err)
+	}
+
+	// lastModified should be set from the response header.
+	db.mu.RLock()
+	lastMod := db.lastModified
+	db.mu.RUnlock()
+	if lastMod != "Mon, 01 Jan 2024 00:00:00 GMT" {
+		t.Errorf("lastModified = %q, want Mon, 01 Jan 2024 00:00:00 GMT", lastMod)
+	}
+}
+
+func TestRefreshNotModified(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	defer srv.Close()
+
+	db := New("")
+	db.mu.Lock()
+	db.nodes["9999"] = Node{Callsign: "W1AW"}
+	db.lastModified = "Mon, 01 Jan 2024 00:00:00 GMT"
+	db.mu.Unlock()
+	db.client = &http.Client{Transport: rewriteHost(srv.URL)}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	db.refresh(ctx)
+
+	// Existing data must be untouched after a 304.
+	if db.Len() != 1 {
+		t.Errorf("expected 1 node preserved after 304, got %d", db.Len())
+	}
+}
+
+func TestRefreshIgnoresSmallDownload(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("1000|W1AW|Hub|City, ST\n")) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	db := New("")
+	db.mu.Lock()
+	db.nodes["9999"] = Node{Callsign: "SEED"}
+	db.mu.Unlock()
+	db.client = &http.Client{Transport: rewriteHost(srv.URL)}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	db.refresh(ctx)
+
+	// The suspiciously small download should be discarded; seed node preserved.
+	if db.Len() != 1 {
+		t.Errorf("expected 1 node preserved after small download, got %d", db.Len())
+	}
+}
+
+// rewriteHost returns a RoundTripper that rewrites all requests to target.
+type rewriteHostRT struct {
+	target string
+	base   http.RoundTripper
+}
+
+func rewriteHost(target string) http.RoundTripper {
+	return &rewriteHostRT{target: target, base: http.DefaultTransport}
+}
+
+func (rt *rewriteHostRT) RoundTrip(req *http.Request) (*http.Response, error) {
+	r2 := req.Clone(req.Context())
+	parsed, _ := url.Parse(rt.target)
+	r2.URL.Scheme = parsed.Scheme
+	r2.URL.Host = parsed.Host
+	return rt.base.RoundTrip(r2)
 }

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -28,13 +29,16 @@ type DB struct {
 	nodes        map[string]Node
 	lastModified string
 	client       *http.Client
+	filePath     string
 }
 
-// New creates an empty DB. Call Start to begin downloading.
-func New() *DB {
+// New creates an empty DB. filePath is where the database is persisted on disk
+// (empty string disables file persistence). Call Start to begin downloading.
+func New(filePath string) *DB {
 	return &DB{
-		nodes:  make(map[string]Node),
-		client: &http.Client{Timeout: 30 * time.Second},
+		nodes:    make(map[string]Node),
+		client:   &http.Client{Timeout: 30 * time.Second},
+		filePath: filePath,
 	}
 }
 
@@ -53,9 +57,10 @@ func (db *DB) Len() int {
 	return len(db.nodes)
 }
 
-// Start downloads the database immediately, then refreshes every interval using
-// If-Modified-Since so unchanged responses cost only a HEAD round-trip.
+// Start loads the database from disk (if available), then downloads a fresh copy,
+// and refreshes every interval using If-Modified-Since so unchanged responses cost only a HEAD round-trip.
 func (db *DB) Start(ctx context.Context, interval time.Duration) {
+	db.loadFile()
 	db.refresh(ctx)
 	go func() {
 		t := time.NewTicker(interval)
@@ -69,6 +74,55 @@ func (db *DB) Start(ctx context.Context, interval time.Duration) {
 			}
 		}
 	}()
+}
+
+// loadFile reads the persisted database from disk and uses the file mtime as
+// the initial If-Modified-Since value so the first refresh is conditional.
+func (db *DB) loadFile() {
+	if db.filePath == "" {
+		return
+	}
+	f, err := os.Open(db.filePath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			slog.Warn("astdb: open file", "path", db.filePath, "err", err)
+		}
+		return
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		slog.Warn("astdb: stat file", "path", db.filePath, "err", err)
+		return
+	}
+
+	nodes, err := parse(f)
+	if err != nil {
+		slog.Warn("astdb: parse file", "path", db.filePath, "err", err)
+		return
+	}
+	if len(nodes) < 25 {
+		slog.Warn("astdb: file too small, ignoring", "path", db.filePath, "count", len(nodes))
+		return
+	}
+
+	db.mu.Lock()
+	db.nodes = nodes
+	db.lastModified = fi.ModTime().UTC().Format(http.TimeFormat)
+	db.mu.Unlock()
+
+	slog.Info("astdb: loaded from file", "path", db.filePath, "nodes", len(nodes))
+}
+
+// saveFile writes the current raw body to the configured file path.
+func (db *DB) saveFile(body []byte) {
+	if db.filePath == "" {
+		return
+	}
+	if err := os.WriteFile(db.filePath, body, 0644); err != nil {
+		slog.Warn("astdb: write file", "path", db.filePath, "err", err)
+	}
 }
 
 func (db *DB) refresh(ctx context.Context) {
@@ -102,8 +156,14 @@ func (db *DB) refresh(ctx context.Context) {
 		return
 	}
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		slog.Warn("astdb: read body", "err", err)
+		return
+	}
+
 	newMod := resp.Header.Get("Last-Modified")
-	nodes, err := parse(resp.Body)
+	nodes, err := parse(strings.NewReader(string(body)))
 	if err != nil {
 		slog.Warn("astdb: parse", "err", err)
 		return
@@ -120,6 +180,7 @@ func (db *DB) refresh(ctx context.Context) {
 	}
 	db.mu.Unlock()
 
+	db.saveFile(body)
 	slog.Info("astdb: updated", "nodes", len(nodes))
 }
 

@@ -278,6 +278,7 @@
           <div class="position-absolute bottom-0 start-0 m-2 small text-muted d-flex gap-3">
             <span><i class="bi bi-circle-fill" style="color:var(--accent-yellow)"></i> This node</span>
             <span><i class="bi bi-circle-fill" style="color:var(--accent-red)"></i> Keyed</span>
+            <span><i class="bi bi-circle-fill" style="color:var(--accent-green)"></i> Web TX</span>
             <span><i class="bi bi-circle-fill" style="color:var(--accent-blue)"></i> Online</span>
             <span><i class="bi bi-circle-fill" style="color:var(--text-muted)"></i> Unknown</span>
           </div>
@@ -313,6 +314,9 @@ let favsData = [];
 let statsData = {};
 let amiLinks = {};           // {nodeNum: typeChar} — from AMI "rpt show variables"
 let amiLinksReceived = false; // true once first "links" SSE message arrives
+let linksSince = {};         // {nodeNum: Date} — when each link first appeared in SSE stream
+let astdbCache = {};         // {nodeNum: {callsign, description, location}} from connections API
+let connModalOpen = false;
 let sortCol = sessionStorage.getItem('yaamon_sort_col') || null;
 let sortDir = parseInt(sessionStorage.getItem('yaamon_sort_dir') || '1');
 let addFavModal, connModal;
@@ -321,9 +325,21 @@ let sseSource = null;
 document.addEventListener('DOMContentLoaded', () => {
   addFavModal = new bootstrap.Modal(document.getElementById('addFavModal'));
   connModal   = new bootstrap.Modal(document.getElementById('connModal'));
+  const connModalEl = document.getElementById('connModal');
+  connModalEl.addEventListener('show.bs.modal',  () => { connModalOpen = true; });
+  connModalEl.addEventListener('hidden.bs.modal', () => { connModalOpen = false; });
   loadFavs();
   connectSSE();
 });
+
+function fmtAge(date) {
+  if (!date) return '—';
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60)   return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h + 'h' + (m ? ' ' + m + 'm' : '');
+}
 
 // --- Sort ---
 
@@ -455,6 +471,13 @@ function applyStats(stats) {
     }
   }
   renderActiveLinks();
+  // If the connections modal is open and the viewed node's link count changed, re-fetch.
+  if (connModalOpen && connNodeNum && stats[connNodeNum]) {
+    const newLcnt = stats[connNodeNum].connected_links;
+    if (newLcnt != null && connData && newLcnt !== connData.lcnt) {
+      openConnModal(connNodeNum, newLcnt);
+    }
+  }
 }
 
 // --- SSE ---
@@ -468,10 +491,20 @@ function connectSSE() {
       if (msg.type === 'stats' && msg.stats) {
         applyStats(msg.stats);
       } else if (msg.type === 'links' && msg.links && typeof msg.links === 'object') {
+        const now = new Date();
+        // Track when each link first appeared.
+        for (const nodeNum of Object.keys(msg.links)) {
+          if (!amiLinks[nodeNum]) linksSince[nodeNum] = now;
+        }
+        for (const nodeNum of Object.keys(linksSince)) {
+          if (!(nodeNum in msg.links)) delete linksSince[nodeNum];
+        }
         amiLinks = msg.links;
         amiLinksReceived = true;
         setAMIBadge(true);
         rebuildAllActionCells();
+        refreshAstdbCache();
+        if (connModalOpen && connData) renderConnList();
       }
     } catch {}
   };
@@ -518,6 +551,22 @@ function rebuildAllActionCells() {
 
 const TYPE_LABEL = { T: 'Transceive', R: 'Monitor', M: 'Monitor', L: 'Monitor Local', P: 'Permanent' };
 
+async function refreshAstdbCache() {
+  try {
+    const r = await fetch(`/api/nodes/${NODE_ID}/connections/${NODE_NUM}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    for (const c of (data.connections || [])) {
+      astdbCache[c.node_number] = {
+        callsign: c.callsign || '',
+        description: c.description || '',
+        location: c.location || '',
+      };
+    }
+    renderActiveLinks();
+  } catch {}
+}
+
 function renderActiveLinks() {
   const section = document.getElementById('active-links-section');
   const body    = document.getElementById('active-links-body');
@@ -533,7 +582,10 @@ function renderActiveLinks() {
   const rows = entries.map(([nodeNum, typeChar]) => {
     const s    = statsData[nodeNum] || {};
     const fav  = favsData.find(f => f.node_number === nodeNum);
-    const call = s.callsign || (fav && fav.callsign) || '';
+    const adb  = astdbCache[nodeNum] || {};
+    const call = s.callsign || adb.callsign || (fav && fav.callsign) || '';
+    const desc = s.description || adb.description || (fav && fav.description) || '';
+    const loc  = s.location   || adb.location    || (fav && fav.location)    || '';
     const keyed = s.keyed;
     const dotClass  = keyed ? 'text-danger' : (s.fetched_at ? 'text-success' : 'text-secondary');
     const dotTitle  = keyed ? 'Keyed (transmitting)' : (s.fetched_at ? 'Idle' : 'Status unknown');
@@ -558,18 +610,34 @@ function renderActiveLinks() {
          </div>`
       : '';
 
+    const since = fmtAge(linksSince[nodeNum]);
     return `<tr>
       <td class="text-center" style="width:1.5rem">
         <i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem" title="${dotTitle}"></i>
       </td>
       <td style="width:6rem"><code>${esc(nodeNum)}</code></td>
       <td>${esc(call)}</td>
+      <td class="text-truncate d-none d-md-table-cell" style="max-width:200px" title="${esc(desc)}">${esc(desc || '—')}</td>
+      <td class="text-truncate d-none d-md-table-cell" style="max-width:150px" title="${esc(loc)}">${esc(loc || '—')}</td>
       <td class="text-muted small">${typeLabel}</td>
+      <td class="text-muted small d-none d-md-table-cell">${since}</td>
       <td class="text-end text-nowrap">${actions}</td>
     </tr>`;
   }).join('');
 
   body.innerHTML = `<table class="table table-sm table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th style="width:1.5rem"></th>
+        <th style="width:6rem">Node</th>
+        <th>Callsign</th>
+        <th class="d-none d-md-table-cell">Description</th>
+        <th class="d-none d-md-table-cell">Location</th>
+        <th>Type</th>
+        <th class="d-none d-md-table-cell">Since</th>
+        <th></th>
+      </tr>
+    </thead>
     <tbody>${rows}</tbody>
   </table>`;
   updateCtrlButtons();
@@ -836,7 +904,12 @@ function renderConnList() {
       ? `onclick="doConnect('${esc(c.node_number)}','transceive',true);connModal.hide()"
          style="cursor:pointer" title="Click to connect (transceive)"`
       : '';
-    return `<tr>
+    const parts = [`Node: ${c.node_number}`];
+    if (c.callsign) parts.push(`Callsign: ${c.callsign}`);
+    if (c.description) parts.push(`Description: ${c.description}`);
+    if (c.location) parts.push(`Location: ${c.location}`);
+    const rowTitle = parts.join('\n');
+    return `<tr title="${esc(rowTitle)}">
       <td><code ${clickAttrs}>${esc(c.node_number)}</code></td>
       <td>${esc(c.callsign || '—')}</td>
       <td class="text-truncate d-none d-md-table-cell" style="max-width:200px" title="${esc(c.description || '')}">${esc(c.description || '—')}</td>
@@ -879,19 +952,23 @@ function renderConnGraph() {
   const cs = getComputedStyle(document.documentElement);
   const cMuted  = cs.getPropertyValue('--text-muted').trim()   || '#888';
   const cRed    = cs.getPropertyValue('--accent-red').trim()   || '#f85149';
+  const cGreen  = cs.getPropertyValue('--accent-green').trim() || '#3fb950';
   const cBlue   = cs.getPropertyValue('--accent-blue').trim()  || '#58a6ff';
   const cYellow = cs.getPropertyValue('--accent-yellow').trim()|| '#d29922';
   const cText   = cs.getPropertyValue('--text-primary').trim() || '#e6edf3';
 
   const rootNum = connData.node_number;
+  const rootStats = statsData[rootNum] || {};
   const nodesArr = [{
     id: rootNum, callsign: connData.callsign || '', lcnt: connData.lcnt || 0,
-    keyed: (statsData[rootNum] || {}).keyed, isRoot: true,
+    keyed: rootStats.keyed, web: rootStats.web, isRoot: true,
   }];
   for (const c of (connData.connections || [])) {
+    const cs2 = statsData[c.node_number] || {};
     nodesArr.push({
       id: c.node_number, callsign: c.callsign || '', lcnt: 0,
-      keyed: (statsData[c.node_number] || {}).keyed, isRoot: false,
+      description: c.description || '', location: c.location || '',
+      keyed: cs2.keyed, web: c.web || cs2.web, isRoot: false,
     });
   }
   const linksArr = (connData.connections || []).map(c => ({ source: rootNum, target: c.node_number }));
@@ -900,6 +977,7 @@ function renderConnGraph() {
   const nodeStroke = d => {
     if (d.isRoot) return cYellow;
     if (d.keyed)  return cRed;
+    if (d.web)    return cGreen;
     return cBlue;
   };
 
@@ -943,7 +1021,13 @@ function renderConnGraph() {
     .attr('text-anchor', 'middle').attr('dy', '1.1em')
     .attr('fill', cMuted).attr('font-size', '8px').text(d => d.callsign);
 
-  node.append('title').text(d => d.id + (d.callsign ? ' (' + d.callsign + ')' : ''));
+  node.append('title').text(d => {
+    const parts = ['Node: ' + d.id];
+    if (d.callsign)     parts.push('Callsign: ' + d.callsign);
+    if (d.description)  parts.push('Description: ' + d.description);
+    if (d.location)     parts.push('Location: ' + d.location);
+    return parts.join('\n');
+  });
 
   if (CAN_WRITE) {
     node.on('click', (e, d) => {

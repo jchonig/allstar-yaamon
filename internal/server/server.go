@@ -54,7 +54,7 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 		return nil, fmt.Errorf("AMI manager: %w", err)
 	}
 	s.fetcher = aslstats.New("")
-	s.nodeDB = astdb.New()
+	s.nodeDB = astdb.New("/data/astdb.txt")
 	s.statsCache = newStatsCache()
 	s.linksCache = newLinksCache()
 	s.sseBroker = sse.NewBroker()
@@ -220,7 +220,7 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 
 	s.startStatsPoller(ctx)
 	s.startLinksPoller(ctx)
-	s.nodeDB.Start(ctx, 6*time.Hour)
+	s.nodeDB.Start(ctx, 1*time.Hour)
 
 	var mainServer *http.Server
 

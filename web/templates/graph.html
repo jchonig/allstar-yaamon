@@ -23,7 +23,9 @@
 <div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
   <h5 class="mb-0">Network Graph — Node <code>{{.NodeNumber}}</code></h5>
   <span id="graph-node-callsign" class="text-muted"></span>
-  <a href="/dashboard" class="btn btn-sm btn-outline-secondary ms-auto">
+  <input id="graph-filter" type="search" class="form-control form-control-sm ms-auto" style="max-width:200px"
+         placeholder="Filter by node or callsign" oninput="applyFilter(this.value)">
+  <a href="/dashboard" class="btn btn-sm btn-outline-secondary">
     <i class="bi bi-arrow-left me-1"></i>Dashboard
   </a>
 </div>
@@ -39,6 +41,7 @@
     <div id="graph-legend" class="position-absolute bottom-0 start-0 m-2 small text-muted d-flex gap-3">
       <span><i class="bi bi-circle-fill" style="color:var(--accent-yellow)"></i> This node</span>
       <span><i class="bi bi-circle-fill" style="color:var(--accent-red)"></i> Keyed</span>
+      <span><i class="bi bi-circle-fill" style="color:var(--accent-green)"></i> Web TX</span>
       <span><i class="bi bi-circle-fill" style="color:var(--accent-blue)"></i> Online</span>
       <span><i class="bi bi-circle-fill" style="color:var(--text-muted)"></i> Unknown</span>
     </div>
@@ -69,6 +72,7 @@ const CAN_WRITE = {{if or (eq .Permission "superuser") (eq .Permission "admin") 
 let gSimulation = null;
 let gZoom = null;
 let gSvg = null;
+let gNodes = null; // D3 selection of node <g> elements for filter updates
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -88,6 +92,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function resetZoom() {
   if (gSvg && gZoom) gSvg.transition().duration(500).call(gZoom.transform, d3.zoomIdentity);
+}
+
+function applyFilter(text) {
+  if (!gNodes) return;
+  const q = text.trim().toLowerCase();
+  gNodes.attr('opacity', d => {
+    if (!q) return 1;
+    return (d.id.toLowerCase().includes(q) || d.callsign.toLowerCase().includes(q)) ? 1 : 0.15;
+  });
 }
 
 function renderGraph(data) {
@@ -110,17 +123,23 @@ function renderGraph(data) {
   const rootNum = data.node_number;
   const nodesArr = [{
     id: rootNum, callsign: data.callsign || '', lcnt: data.lcnt || 0,
-    keyed: false, isRoot: true,
+    keyed: false, web: false, description: '', location: '', isRoot: true,
   }];
   for (const c of (data.connections || [])) {
-    nodesArr.push({ id: c.node_number, callsign: c.callsign || '', lcnt: 0, keyed: false, isRoot: false });
+    nodesArr.push({
+      id: c.node_number, callsign: c.callsign || '', lcnt: 0,
+      keyed: false, web: c.web || false,
+      description: c.description || '', location: c.location || '',
+      isRoot: false,
+    });
   }
   const linksArr = (data.connections || []).map(c => ({ source: rootNum, target: c.node_number }));
 
   const nodeR = d => d.isRoot ? 32 : Math.max(18, Math.min(28, 18 + (d.lcnt || 0) * 2));
   const nodeStroke = d => {
     if (d.isRoot) return cYellow;
-    if (d.keyed) return cRed;
+    if (d.keyed)  return cRed;
+    if (d.web)    return cGreen;
     return cBlue;
   };
 
@@ -168,8 +187,16 @@ function renderGraph(data) {
     .attr('fill', cMuted).attr('font-size', '9px')
     .text(d => d.callsign);
 
-  node.append('title')
-    .text(d => `${d.id}${d.callsign ? ' (' + d.callsign + ')' : ''}${d.lcnt ? '\n' + d.lcnt + ' connections' : ''}`);
+  node.append('title').text(d => {
+    const parts = ['Node: ' + d.id];
+    if (d.callsign)    parts.push('Callsign: ' + d.callsign);
+    if (d.description) parts.push('Description: ' + d.description);
+    if (d.location)    parts.push('Location: ' + d.location);
+    if (d.lcnt)        parts.push('Connections: ' + d.lcnt);
+    return parts.join('\n');
+  });
+
+  gNodes = node;
 
   node.on('click', (e, d) => {
     if (d.id !== rootNum && e.shiftKey) {

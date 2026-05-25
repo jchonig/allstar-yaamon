@@ -35,7 +35,15 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:community.allstarlink.org)",
       "WebFetch(domain:wiki.allstarlink.org)",
-      "WebFetch(domain:allstarlink.github.io)"
+      "WebFetch(domain:allstarlink.github.io)",
+      "Bash(curl -s -b /tmp/yc.txt -c /tmp/yc.txt 'http://localhost:8080/api/nodes/1/stats')",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl *)",
+      "Bash(docker exec test-yaamon-1 *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d['stats'].keys\\(\\)\\)\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d['stats']['data'], indent=2\\)\\)\")",
+      "Bash(python3 -c ' *)",
+      "WebFetch(domain:www.billmongan.com)"
     ]
   }
 }

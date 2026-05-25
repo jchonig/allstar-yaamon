@@ -81,3 +81,33 @@ func TestParseRPTALinks_EmptyString(t *testing.T) {
 		t.Errorf("expected nil for empty input, got %v", links)
 	}
 }
+
+func TestParseRPTALinks_AllTypeChars(t *testing.T) {
+	// Verify each type char used for Direction is preserved exactly.
+	// T=transceive, M/R=monitor, L=local monitor, P=permanent transceive.
+	output := "RPT_ALINKS=4,11111TU,22222MU,33333LU,44444PU\n"
+	links := parseRPTALinks(output)
+	cases := map[string]string{
+		"11111": "T",
+		"22222": "M",
+		"33333": "L",
+		"44444": "P",
+	}
+	for nodeNum, want := range cases {
+		if got := links[nodeNum]; got != want {
+			t.Errorf("node %s: expected type %q, got %q", nodeNum, want, got)
+		}
+	}
+}
+
+func TestParseRPTALinks_KeyedState(t *testing.T) {
+	// Keyed state (K/U) must be stripped; only the type char returned.
+	output := "RPT_ALINKS=2,55555TK,66666MU\n"
+	links := parseRPTALinks(output)
+	if links["55555"] != "T" {
+		t.Errorf("keyed node 55555: expected T, got %q", links["55555"])
+	}
+	if links["66666"] != "M" {
+		t.Errorf("unkeyed node 66666: expected M, got %q", links["66666"])
+	}
+}

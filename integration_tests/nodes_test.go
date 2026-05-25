@@ -226,11 +226,23 @@ func TestConnectionsEndpointReturnsJSON(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 	var result struct {
-		NodeNumber string `json:"node_number"`
+		NodeNumber  string `json:"node_number"`
+		Connections []struct {
+			NodeNumber string `json:"node_number"`
+			Web        bool   `json:"web"`
+		} `json:"connections"`
+		BubbleChartURL string `json:"bubble_chart_url"`
 	}
 	decodeJSON(t, resp, &result)
 	if result.NodeNumber != "99999" {
 		t.Errorf("node_number = %q, want 99999", result.NodeNumber)
+	}
+	if result.BubbleChartURL == "" {
+		t.Error("bubble_chart_url should not be empty")
+	}
+	// connections may be empty (no cache) but must be present as an array, not null.
+	if result.Connections == nil {
+		t.Error("connections field should be an array, not null")
 	}
 }
 
