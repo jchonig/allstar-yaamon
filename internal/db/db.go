@@ -157,4 +157,6 @@ var migrations = []migration{
 			generated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 	`},
+	{2, `ALTER TABLE favorites ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+	     UPDATE favorites SET position = id WHERE position = 0;`},
 }

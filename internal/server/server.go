@@ -92,7 +92,7 @@ func (s *Server) initSessions() error {
 }
 
 func (s *Server) parseTemplates() error {
-	pages := []string{"login", "dashboard", "setup", "nodes", "users", "backup"}
+	pages := []string{"login", "dashboard", "setup", "nodes", "users", "backup", "favorites"}
 	s.tmpls = make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		t, err := template.ParseFS(s.webFS,
@@ -159,10 +159,14 @@ func (s *Server) Run() error {
 	// Readwrite+ routes — can connect/disconnect and manage favorites
 	r.Group(func(r chi.Router) {
 		r.Use(s.sessions.RequirePermission(db.PermReadWrite))
+		r.Get("/settings/favorites", s.handleFavoritesPage)
+		r.Get("/settings/favorites/{nodeID}", s.handleFavoritesPage)
 		r.Post("/api/nodes/{id}/connect", s.handleConnect)
 		r.Post("/api/nodes/{id}/disconnect", s.handleDisconnect)
 		r.Post("/api/nodes/{id}/favorites", s.handleAPICreateFavorite)
 		r.Put("/api/nodes/{id}/favorites/{fid}", s.handleAPIUpdateFavorite)
+		r.Put("/api/nodes/{id}/favorites/reorder", s.handleAPIReorderFavorites)
+		r.Post("/api/nodes/{id}/favorites/copy", s.handleAPICopyFavorites)
 		r.Delete("/api/nodes/{id}/favorites/{fid}", s.handleAPIDeleteFavorite)
 	})
 

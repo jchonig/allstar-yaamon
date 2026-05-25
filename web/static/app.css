@@ -83,6 +83,21 @@ body {
   color: var(--text-primary);
 }
 
+.form-control:disabled,
+.form-control[readonly],
+.form-select:disabled {
+  background-color: var(--bg-secondary);
+  border-color: var(--border);
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.form-control::placeholder,
+.form-select::placeholder {
+  color: var(--text-muted);
+  opacity: 1; /* Firefox applies 0.54 opacity by default */
+}
+
 .form-control:focus,
 .form-select:focus {
   background-color: var(--bg-secondary);
@@ -178,6 +193,14 @@ th.sort-col.sort-active .sort-icon { opacity: 1; }
 }
 .collapse-header.collapsed .collapse-chevron {
   transform: rotate(-90deg);
+}
+
+/* Disabled dropdown items — use theme text color at reduced opacity so they
+   remain legible in all color schemes (overrides Bootstrap's hardcoded grey). */
+.dropdown-item:disabled,
+.dropdown-item.disabled {
+  color: var(--text-primary);
+  opacity: 0.4;
 }
 
 /* Connected node row highlight */

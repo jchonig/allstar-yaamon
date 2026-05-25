@@ -11,12 +11,14 @@
   <ul class="dropdown-menu dropdown-menu-end">
     <li><h6 class="dropdown-header">{{.Permission}}</h6></li>
     <li><hr class="dropdown-divider"></li>
+    <li><a class="dropdown-item" href="/settings/favorites"><i class="bi bi-star me-2"></i>Favorites</a></li>
     {{if or (eq .Permission "superuser") (eq .Permission "admin")}}
+    <li><hr class="dropdown-divider"></li>
     <li><a class="dropdown-item" href="/admin/nodes"><i class="bi bi-diagram-3 me-2"></i>Nodes</a></li>
     <li><a class="dropdown-item" href="/admin/users"><i class="bi bi-people me-2"></i>Users</a></li>
     <li><a class="dropdown-item active" href="/admin/backup"><i class="bi bi-archive me-2"></i>Backup</a></li>
-    <li><hr class="dropdown-divider"></li>
     {{end}}
+    <li><hr class="dropdown-divider"></li>
     <li><a class="dropdown-item text-danger" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
   </ul>
 </div>
@@ -59,45 +61,6 @@
       </div>
     </div>
   </div>
-
-  {{/* Favorites Export */}}
-  {{if .Nodes}}
-  <div class="col-12 col-lg-6">
-    <div class="card h-100">
-      <div class="card-header"><i class="bi bi-file-earmark-text me-2"></i>Favorites Export / Import</div>
-      <div class="card-body">
-        <div class="mb-3">
-          <label class="form-label">Node</label>
-          <select class="form-select" id="fav-node-select">
-            {{range .Nodes}}
-            <option value="{{.ID}}">{{.Name}} ({{.NodeNumber}})</option>
-            {{end}}
-          </select>
-        </div>
-        <div class="d-flex gap-2 mb-4">
-          <button class="btn btn-outline-primary" onclick="doFavExport()">
-            <i class="bi bi-download me-1"></i>Export favorites.ini
-          </button>
-        </div>
-        <hr>
-        <h6 class="text-muted">Import</h6>
-        <div class="mb-3">
-          <input type="file" class="form-control" id="fav-import-file" accept=".ini,.txt">
-        </div>
-        <div id="fav-import-preview" class="alert alert-info small mb-3" style="display:none"></div>
-        <div class="d-flex gap-2">
-          <button class="btn btn-outline-secondary" onclick="doFavPreview()">
-            <i class="bi bi-eye me-1"></i>Preview
-          </button>
-          <button class="btn btn-primary" id="fav-import-btn" onclick="doFavImport()" disabled>
-            <i class="bi bi-upload me-1"></i>Import
-          </button>
-        </div>
-        <div class="text-danger small mt-2" id="fav-import-error"></div>
-      </div>
-    </div>
-  </div>
-  {{end}}
 
   {{/* Restore */}}
   {{if eq .Permission "superuser"}}
@@ -187,62 +150,6 @@ async function doBackup() {
   a.href = URL.createObjectURL(blob);
   a.download = name;
   a.click();
-}
-
-function selectedNodeID() {
-  return document.getElementById('fav-node-select')?.value;
-}
-
-function doFavExport() {
-  const id = selectedNodeID();
-  if (!id) return;
-  window.location = `/api/nodes/${id}/favorites/export`;
-}
-
-let favPreviewData = null;
-
-async function doFavPreview() {
-  const errEl = document.getElementById('fav-import-error');
-  const previewEl = document.getElementById('fav-import-preview');
-  errEl.textContent = '';
-  previewEl.style.display = 'none';
-  document.getElementById('fav-import-btn').disabled = true;
-  favPreviewData = null;
-
-  const file = document.getElementById('fav-import-file').files[0];
-  if (!file) { errEl.textContent = 'Choose a file first.'; return; }
-  const id = selectedNodeID();
-  if (!id) return;
-
-  const r = await fetch(`/api/nodes/${id}/favorites/import/preview`, {
-    method: 'POST',
-    body: file,
-  });
-  if (!r.ok) { errEl.textContent = await r.text(); return; }
-  const data = await r.json();
-  favPreviewData = data;
-  previewEl.style.display = '';
-  previewEl.innerHTML = `Will add <strong>${data.will_add}</strong> favorites, skip <strong>${data.will_skip}</strong> (already exist).`;
-  if (data.will_add > 0) document.getElementById('fav-import-btn').disabled = false;
-}
-
-async function doFavImport() {
-  const errEl = document.getElementById('fav-import-error');
-  errEl.textContent = '';
-  const file = document.getElementById('fav-import-file').files[0];
-  if (!file) return;
-  const id = selectedNodeID();
-  if (!id) return;
-
-  const r = await fetch(`/api/nodes/${id}/favorites/import`, {
-    method: 'POST',
-    body: file,
-  });
-  if (!r.ok) { errEl.textContent = await r.text(); return; }
-  const data = await r.json();
-  document.getElementById('fav-import-preview').innerHTML =
-    `<i class="bi bi-check-circle me-1"></i>Imported <strong>${data.added}</strong> favorites (${data.skipped} skipped).`;
-  document.getElementById('fav-import-btn').disabled = true;
 }
 
 // --- Restore ---

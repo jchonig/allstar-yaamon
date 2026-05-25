@@ -1,0 +1,566 @@
+{{template "base" .}}
+
+{{define "title"}}Favorites — YAAMon{{end}}
+
+{{define "nav-extra"}}
+{{if .Username}}
+<div class="dropdown">
+  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+    <i class="bi bi-person-circle me-1"></i>{{.Username}}
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><h6 class="dropdown-header">{{.Permission}}</h6></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><a class="dropdown-item" href="/settings/favorites"><i class="bi bi-star me-2"></i>Favorites</a></li>
+    {{if or (eq .Permission "superuser") (eq .Permission "admin")}}
+    <li><hr class="dropdown-divider"></li>
+    <li><a class="dropdown-item" href="/admin/nodes"><i class="bi bi-diagram-3 me-2"></i>Nodes</a></li>
+    <li><a class="dropdown-item" href="/admin/users"><i class="bi bi-people me-2"></i>Users</a></li>
+    <li><a class="dropdown-item" href="/admin/backup"><i class="bi bi-archive me-2"></i>Backup</a></li>
+    {{end}}
+    <li><hr class="dropdown-divider"></li>
+    <li><a class="dropdown-item text-danger" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
+  </ul>
+</div>
+{{end}}
+{{end}}
+
+{{define "content"}}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0"><i class="bi bi-star me-2"></i>Favorites</h5>
+  {{if .ActiveNode}}
+  <div class="d-flex gap-2 flex-wrap">
+    <button class="btn btn-sm btn-outline-secondary" onclick="doExport()">
+      <i class="bi bi-download me-1"></i>Export
+    </button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="openImportModal()">
+      <i class="bi bi-upload me-1"></i>Import
+    </button>
+    {{if gt (len .Nodes) 1}}
+    <button class="btn btn-sm btn-outline-secondary" onclick="openCopyModal()">
+      <i class="bi bi-copy me-1"></i>Copy from Node
+    </button>
+    {{end}}
+    <button class="btn btn-sm btn-primary" onclick="openAddModal()">
+      <i class="bi bi-plus-circle me-1"></i>Add Favorite
+    </button>
+  </div>
+  {{end}}
+</div>
+
+{{if gt (len .Nodes) 1}}
+<div class="mb-3">
+  <div class="btn-group btn-group-sm" role="group">
+    {{range .Nodes}}
+    <a href="/settings/favorites/{{.ID}}"
+       class="btn {{if eq .ID $.ActiveNode.ID}}btn-primary{{else}}btn-outline-secondary{{end}}">
+      {{.Name}}
+    </a>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{if not .ActiveNode}}
+<div class="alert alert-info mt-3">
+  No nodes configured. <a href="/admin/nodes">Add a node</a> to get started.
+</div>
+{{else}}
+<div class="table-responsive">
+  <table class="table table-hover align-middle mb-0" id="favs-table">
+    <thead class="table-light">
+      <tr>
+        <th style="width:2rem" class="text-center text-muted" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></th>
+        <th>Node</th>
+        <th>Callsign</th>
+        <th class="d-none d-md-table-cell">Description</th>
+        <th class="d-none d-md-table-cell">Location</th>
+        <th>Group</th>
+        <th class="text-end">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="favs-tbody">
+      <tr><td colspan="7" class="text-center text-muted py-4">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+{{end}}
+
+{{if .ActiveNode}}
+
+<!-- Add / Edit Modal -->
+<div class="modal fade" id="favModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="favModalTitle">Add Favorite</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="fav-id">
+        <div class="mb-3">
+          <label class="form-label">Node Number <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="fav-node-number" inputmode="numeric"
+                 placeholder="12345">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Callsign <small class="text-muted">(auto-filled if blank)</small></label>
+          <input type="text" class="form-control" id="fav-callsign">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description <small class="text-muted">(auto-filled if blank)</small></label>
+          <input type="text" class="form-control" id="fav-description">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Location <small class="text-muted">(auto-filled if blank)</small></label>
+          <input type="text" class="form-control" id="fav-location">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Group</label>
+          <input type="text" class="form-control" id="fav-group" placeholder="default">
+        </div>
+        <div class="text-danger small" id="fav-form-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="fav-save-btn" onclick="saveFavorite()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Remove Favorite</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Remove node <strong id="delete-fav-num"></strong> from favorites?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" onclick="confirmDelete()">Remove</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Import INI Modal -->
+<div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Import Favorites</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">File <span class="text-danger">*</span></label>
+          <input type="file" class="form-control" id="fav-import-file" accept=".ini,.txt"
+                 onchange="resetImport()">
+        </div>
+        <div id="fav-import-preview" class="alert alert-info small mb-3" style="display:none"></div>
+        <div class="text-danger small" id="fav-import-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="doFavPreview()">
+          <i class="bi bi-eye me-1"></i>Preview
+        </button>
+        <button type="button" class="btn btn-primary" id="fav-import-btn" onclick="doFavImport()" disabled>
+          <i class="bi bi-upload me-1"></i>Import
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{if gt (len .Nodes) 1}}
+<!-- Copy from Node Modal -->
+<div class="modal fade" id="copyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Copy Favorites from Another Node</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Source Node</label>
+          <select class="form-select" id="copy-src-node" onchange="loadCopySrc()">
+            <option value="">— select —</option>
+            {{range .Nodes}}
+            {{if ne .ID $.ActiveNode.ID}}
+            <option value="{{.ID}}">{{.Name}} ({{.NodeNumber}})</option>
+            {{end}}
+            {{end}}
+          </select>
+        </div>
+        <div id="copy-list" style="display:none">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <small class="text-muted">Select which favorites to copy (duplicates will be skipped).</small>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-secondary" onclick="toggleAll(true)">All</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="toggleAll(false)">None</button>
+            </div>
+          </div>
+          <div class="table-responsive" style="max-height:320px;overflow-y:auto">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th style="width:2rem"><input type="checkbox" id="copy-all-chk" onchange="toggleAll(this.checked)"></th>
+                  <th>Node</th>
+                  <th>Callsign</th>
+                  <th class="d-none d-md-table-cell">Description</th>
+                </tr>
+              </thead>
+              <tbody id="copy-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="text-muted small mt-2" id="copy-status"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="copy-btn" onclick="doCopy()" disabled>
+          <i class="bi bi-copy me-1"></i>Copy Selected
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{end}}{{/* if .ActiveNode */}}
+{{end}}
+
+{{define "scripts"}}
+{{if .ActiveNode}}
+<script>
+const NODE_ID = {{.ActiveNode.ID}};
+const OTHER_NODES = [{{range .Nodes}}{{if ne .ID $.ActiveNode.ID}}{id:{{.ID}},name:{{.Name | printf "%q"}}}{{end}},{{end}}];
+
+let favsData = [];
+let pendingDeleteID = null;
+let favModal, deleteModal, copyModal, importModal;
+
+document.addEventListener('DOMContentLoaded', () => {
+  favModal    = new bootstrap.Modal(document.getElementById('favModal'));
+  deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+  importModal = new bootstrap.Modal(document.getElementById('importModal'));
+  const copyEl = document.getElementById('copyModal');
+  if (copyEl) copyModal = new bootstrap.Modal(copyEl);
+  loadFavs();
+});
+
+// --- Data ---
+
+async function loadFavs() {
+  try {
+    const r = await fetch(`/api/nodes/${NODE_ID}/favorites`);
+    favsData = (await r.json()) || [];
+  } catch { favsData = []; }
+  renderTable();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('favs-tbody');
+  if (!favsData.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No favorites yet — click Add Favorite to get started.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = favsData.map((f, idx) => `<tr data-id="${f.id}">
+    <td class="text-center drag-handle" style="cursor:grab" title="Drag to reorder">
+      <i class="bi bi-grip-vertical text-muted"></i>
+    </td>
+    <td><code>${esc(f.node_number)}</code></td>
+    <td>${esc(f.callsign || '—')}</td>
+    <td class="text-truncate d-none d-md-table-cell" style="max-width:200px">${esc(f.description || '—')}</td>
+    <td class="text-truncate d-none d-md-table-cell" style="max-width:150px">${esc(f.location || '—')}</td>
+    <td><span class="badge bg-secondary">${esc(f.group_name || 'default')}</span></td>
+    <td class="text-end text-nowrap">
+      <button class="btn btn-sm btn-outline-secondary me-1" onclick="openEditModal(${f.id})" title="Edit">
+        <i class="bi bi-pencil"></i>
+      </button>
+      <button class="btn btn-sm btn-outline-secondary me-1" onclick="moveUp(${idx})" ${idx === 0 ? 'disabled' : ''} title="Move up">
+        <i class="bi bi-chevron-up"></i>
+      </button>
+      <button class="btn btn-sm btn-outline-secondary me-1" onclick="moveDown(${idx})" ${idx === favsData.length-1 ? 'disabled' : ''} title="Move down">
+        <i class="bi bi-chevron-down"></i>
+      </button>
+      <button class="btn btn-sm btn-outline-danger" onclick="openDeleteModal(${f.id}, '${esc(f.node_number)}')" title="Remove">
+        <i class="bi bi-trash"></i>
+      </button>
+    </td>
+  </tr>`).join('');
+  initDragDrop();
+}
+
+// --- Add / Edit ---
+
+function openAddModal() {
+  document.getElementById('favModalTitle').textContent = 'Add Favorite';
+  document.getElementById('fav-id').value = '';
+  document.getElementById('fav-node-number').value = '';
+  document.getElementById('fav-node-number').removeAttribute('disabled');
+  document.getElementById('fav-callsign').value = '';
+  document.getElementById('fav-description').value = '';
+  document.getElementById('fav-location').value = '';
+  document.getElementById('fav-group').value = '';
+  document.getElementById('fav-form-error').textContent = '';
+  favModal.show();
+}
+
+function openEditModal(id) {
+  const f = favsData.find(x => x.id === id);
+  if (!f) return;
+  document.getElementById('favModalTitle').textContent = 'Edit Favorite';
+  document.getElementById('fav-id').value = id;
+  document.getElementById('fav-node-number').value = f.node_number;
+  document.getElementById('fav-node-number').setAttribute('disabled', '');
+  document.getElementById('fav-callsign').value = f.callsign || '';
+  document.getElementById('fav-description').value = f.description || '';
+  document.getElementById('fav-location').value = f.location || '';
+  document.getElementById('fav-group').value = f.group_name || 'default';
+  document.getElementById('fav-form-error').textContent = '';
+  favModal.show();
+}
+
+async function saveFavorite() {
+  const id  = document.getElementById('fav-id').value;
+  const num = document.getElementById('fav-node-number').value.trim();
+  if (!num) {
+    document.getElementById('fav-form-error').textContent = 'Node Number is required.';
+    return;
+  }
+  const body = {
+    node_number:  num,
+    callsign:     document.getElementById('fav-callsign').value.trim(),
+    description:  document.getElementById('fav-description').value.trim(),
+    location:     document.getElementById('fav-location').value.trim(),
+    group_name:   document.getElementById('fav-group').value.trim() || 'default',
+  };
+  const btn = document.getElementById('fav-save-btn');
+  btn.disabled = true;
+  try {
+    const resp = await fetch(
+      id ? `/api/nodes/${NODE_ID}/favorites/${id}` : `/api/nodes/${NODE_ID}/favorites`,
+      { method: id ? 'PUT' : 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body) }
+    );
+    if (!resp.ok) {
+      document.getElementById('fav-form-error').textContent = await resp.text();
+      return;
+    }
+    favModal.hide();
+    loadFavs();
+  } catch (e) {
+    document.getElementById('fav-form-error').textContent = 'Network error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// --- Delete ---
+
+function openDeleteModal(id, num) {
+  pendingDeleteID = id;
+  document.getElementById('delete-fav-num').textContent = num;
+  deleteModal.show();
+}
+
+async function confirmDelete() {
+  if (!pendingDeleteID) return;
+  await fetch(`/api/nodes/${NODE_ID}/favorites/${pendingDeleteID}`, {method: 'DELETE'});
+  pendingDeleteID = null;
+  deleteModal.hide();
+  loadFavs();
+}
+
+// --- Reorder: up/down buttons ---
+
+async function moveUp(idx) {
+  if (idx === 0) return;
+  [favsData[idx-1], favsData[idx]] = [favsData[idx], favsData[idx-1]];
+  await saveOrder();
+}
+
+async function moveDown(idx) {
+  if (idx >= favsData.length - 1) return;
+  [favsData[idx], favsData[idx+1]] = [favsData[idx+1], favsData[idx]];
+  await saveOrder();
+}
+
+async function saveOrder() {
+  renderTable();
+  await fetch(`/api/nodes/${NODE_ID}/favorites/reorder`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({order: favsData.map(f => f.id)}),
+  });
+}
+
+// --- Reorder: drag-and-drop ---
+
+function initDragDrop() {
+  const tbody = document.getElementById('favs-tbody');
+  let dragIdx = null;
+
+  tbody.querySelectorAll('tr').forEach((row, idx) => {
+    row.draggable = true;
+    row.addEventListener('dragstart', e => {
+      dragIdx = idx;
+      e.dataTransfer.effectAllowed = 'move';
+      row.classList.add('opacity-50');
+    });
+    row.addEventListener('dragend', () => row.classList.remove('opacity-50'));
+    row.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+    row.addEventListener('drop', async e => {
+      e.preventDefault();
+      if (dragIdx === null || dragIdx === idx) return;
+      const moved = favsData.splice(dragIdx, 1)[0];
+      favsData.splice(idx, 0, moved);
+      dragIdx = null;
+      await saveOrder();
+    });
+  });
+}
+
+// --- Export / Import INI ---
+
+function doExport() {
+  window.location = `/api/nodes/${NODE_ID}/favorites/export`;
+}
+
+function openImportModal() {
+  document.getElementById('fav-import-file').value = '';
+  document.getElementById('fav-import-preview').style.display = 'none';
+  document.getElementById('fav-import-error').textContent = '';
+  document.getElementById('fav-import-btn').disabled = true;
+  importModal.show();
+}
+
+function resetImport() {
+  document.getElementById('fav-import-preview').style.display = 'none';
+  document.getElementById('fav-import-error').textContent = '';
+  document.getElementById('fav-import-btn').disabled = true;
+}
+
+async function doFavPreview() {
+  const errEl    = document.getElementById('fav-import-error');
+  const previewEl = document.getElementById('fav-import-preview');
+  errEl.textContent = '';
+  previewEl.style.display = 'none';
+  document.getElementById('fav-import-btn').disabled = true;
+
+  const file = document.getElementById('fav-import-file').files[0];
+  if (!file) { errEl.textContent = 'Choose a file first.'; return; }
+
+  const r = await fetch(`/api/nodes/${NODE_ID}/favorites/import/preview`, {
+    method: 'POST', body: file,
+  });
+  if (!r.ok) { errEl.textContent = await r.text(); return; }
+  const data = await r.json();
+  previewEl.style.display = '';
+  previewEl.innerHTML = `Will add <strong>${data.will_add}</strong> favorite(s), skip <strong>${data.will_skip}</strong> (already exist).`;
+  if (data.will_add > 0) document.getElementById('fav-import-btn').disabled = false;
+}
+
+async function doFavImport() {
+  const errEl = document.getElementById('fav-import-error');
+  errEl.textContent = '';
+  const file = document.getElementById('fav-import-file').files[0];
+  if (!file) return;
+
+  const r = await fetch(`/api/nodes/${NODE_ID}/favorites/import`, {
+    method: 'POST', body: file,
+  });
+  if (!r.ok) { errEl.textContent = await r.text(); return; }
+  const data = await r.json();
+  document.getElementById('fav-import-preview').innerHTML =
+    `<i class="bi bi-check-circle me-1"></i>Imported <strong>${data.added}</strong> favorite(s) (${data.skipped} skipped).`;
+  document.getElementById('fav-import-btn').disabled = true;
+  importModal.hide();
+  loadFavs();
+}
+
+// --- Copy from node ---
+
+async function loadCopySrc() {
+  const srcID = document.getElementById('copy-src-node').value;
+  const list  = document.getElementById('copy-list');
+  const tbody = document.getElementById('copy-tbody');
+  const btn   = document.getElementById('copy-btn');
+  const status = document.getElementById('copy-status');
+  list.style.display = 'none';
+  btn.disabled = true;
+  status.textContent = '';
+  if (!srcID) return;
+
+  tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-2">Loading…</td></tr>';
+  list.style.display = '';
+  try {
+    const r = await fetch(`/api/nodes/${srcID}/favorites`);
+    const favs = (await r.json()) || [];
+    if (!favs.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-2">No favorites on that node.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = favs.map(f => `<tr>
+      <td><input type="checkbox" class="copy-chk" value="${f.id}" checked></td>
+      <td><code>${esc(f.node_number)}</code></td>
+      <td>${esc(f.callsign || '—')}</td>
+      <td class="d-none d-md-table-cell">${esc(f.description || '—')}</td>
+    </tr>`).join('');
+    btn.disabled = false;
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-2">Failed to load.</td></tr>';
+  }
+}
+
+function toggleAll(checked) {
+  document.querySelectorAll('.copy-chk').forEach(c => c.checked = checked);
+  document.getElementById('copy-all-chk').checked = checked;
+}
+
+function openCopyModal() { copyModal && copyModal.show(); }
+
+async function doCopy() {
+  const srcID = parseInt(document.getElementById('copy-src-node').value);
+  const ids   = [...document.querySelectorAll('.copy-chk:checked')].map(c => parseInt(c.value));
+  if (!srcID || !ids.length) return;
+
+  const btn = document.getElementById('copy-btn');
+  const status = document.getElementById('copy-status');
+  btn.disabled = true;
+  status.textContent = '';
+  try {
+    const r = await fetch(`/api/nodes/${NODE_ID}/favorites/copy`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({source_node_id: srcID, ids}),
+    });
+    const data = await r.json();
+    status.textContent = `${data.copied} favorite(s) copied.`;
+    copyModal.hide();
+    loadFavs();
+  } catch {
+    status.textContent = 'Copy failed.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// --- Utility ---
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+{{end}}
+{{end}}
