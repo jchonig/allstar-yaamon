@@ -137,17 +137,33 @@ func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
 		return s
 	}
 
+	// Actual response shape (stats.allstarlink.org/api/stats/{node}):
+	// {
+	//   "node": { "callsign": "W1AW", "access_webtransceiver": 1, "server": {"Affiliation": "..."} },
+	//   "stats": {
+	//     "data": {
+	//       "keyed": false, "totaltxtime": 1234, "totalkeyups": 56,
+	//       "links": ["12345", "67890"],          // connected node numbers
+	//       "linkedNodes": [{"name": "12345"}, …] // same, as objects
+	//     }
+	//   }
+	// }
 	var raw struct {
-		Callsign string `json:"callsign"`
-		Desc     string `json:"desc"`
-		Location string `json:"location"`
-		Web      bool   `json:"web"`
-		Stats    struct {
-			Keyed          int      `json:"keyed"`
-			TotalTxTime    float64  `json:"totaltxtime"`
-			TotalKeyups    int      `json:"totalkeyups"`
-			LinkedNodes    []string `json:"linkedNodes"`
-			ConnectedLinks int      `json:"connectedLinks"`
+		Node struct {
+			Callsign            string `json:"callsign"`
+			AccessWebtransceiver int   `json:"access_webtransceiver"`
+			Server              struct {
+				Affiliation string `json:"Affiliation"`
+				SiteName    string `json:"SiteName"`
+			} `json:"server"`
+		} `json:"node"`
+		Stats struct {
+			Data struct {
+				Keyed       bool    `json:"keyed"`
+				TotalTxTime float64 `json:"totaltxtime"`
+				TotalKeyups int     `json:"totalkeyups"`
+				Links       []string `json:"links"` // connected node numbers as strings
+			} `json:"data"`
 		} `json:"stats"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
@@ -155,14 +171,18 @@ func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
 		return s
 	}
 
-	s.Callsign = raw.Callsign
-	s.Description = raw.Desc
-	s.Location = raw.Location
-	s.Web = raw.Web
-	s.Keyed = raw.Stats.Keyed != 0
-	s.TotalTxTime = raw.Stats.TotalTxTime
-	s.TotalKeyups = raw.Stats.TotalKeyups
-	s.LinkedNodes = raw.Stats.LinkedNodes
-	s.ConnectedLinks = raw.Stats.ConnectedLinks
+	s.Callsign = raw.Node.Callsign
+	// Use Affiliation as description when available; fall back to SiteName.
+	if raw.Node.Server.Affiliation != "" {
+		s.Description = raw.Node.Server.Affiliation
+	} else {
+		s.Description = raw.Node.Server.SiteName
+	}
+	s.Web = raw.Node.AccessWebtransceiver != 0
+	s.Keyed = raw.Stats.Data.Keyed
+	s.TotalTxTime = raw.Stats.Data.TotalTxTime
+	s.TotalKeyups = raw.Stats.Data.TotalKeyups
+	s.LinkedNodes = raw.Stats.Data.Links
+	s.ConnectedLinks = len(raw.Stats.Data.Links)
 	return s
 }
