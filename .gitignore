@@ -29,3 +29,6 @@ dist/
 test/data/*.db
 test/data/*.db-wal
 test/data/*.db-shm
+
+# Local development data (make run)
+run-data/

@@ -1,17 +1,24 @@
+# yaamon configuration — copy to config.yaml and customise.
+# With Docker: mount at /etc/yaamon/config.yaml
+# Any setting can be overridden with an env var: YAAMON_<SECTION>_<KEY>
+#   e.g. YAAMON_DB_PATH=/data/yaamon.db
+
 server:
   http_port: 80
   https_port: 443
-  redirect_http: true        # 301 redirect http → https
+  redirect_http: true        # 301 redirect http → https when TLS is enabled
 
 tls:
-  mode: "disabled"           # disabled | self_signed | provided | acme
-  cert_file: ""              # path to fullchain.pem (mode: provided)
-  key_file: ""               # path to privkey.pem (mode: provided)
-  acme_domain: ""            # domain for Let's Encrypt (mode: acme)
-  acme_cache_dir: "/etc/yaamon/acme"
+  mode: disabled             # disabled | self_signed | provided | acme
+  # cert_file: /etc/yaamon/fullchain.pem   # required for mode: provided
+  # key_file:  /etc/yaamon/privkey.pem     # required for mode: provided
+  # acme_domain: my.example.com           # required for mode: acme
+  # acme_cache_dir: /etc/yaamon/acme
 
 db:
-  path: "/etc/yaamon/yaamon.db"
+  # Use a volume-mounted path so the database survives container restarts.
+  # Docker: -v /host/data:/data -e YAAMON_DB_PATH=/data/yaamon.db
+  path: /data/yaamon.db
 
 log:
-  level: "info"              # debug | info | warn | error
+  level: info                # debug | info | warn | error

@@ -62,10 +62,16 @@ deps:
 	$(DOCKER_GO) sh -c "go mod tidy && go mod verify"
 
 ## Run the server on http://localhost:8080 using the built image.
-## Mounts config.yaml if it exists, otherwise the binary uses built-in defaults.
+## Data is persisted in run-data/ between restarts.
+## Optional: copy config.yaml.example → config.yaml and/or
+##           copy state.yaml.example → state.yaml to seed initial data.
 run: build
+	mkdir -p run-data
 	docker run --rm -p 8080:80 \
+	  -v "$(CURDIR)/run-data:/data" \
+	  -e YAAMON_DB_PATH=/data/yaamon.db \
 	  $(if $(wildcard $(CURDIR)/config.yaml),-v "$(CURDIR)/config.yaml:/etc/yaamon/config.yaml:ro") \
+	  $(if $(wildcard $(CURDIR)/state.yaml),-v "$(CURDIR)/state.yaml:/etc/yaamon/state.yaml:ro" -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml) \
 	  yaamon:dev
 
 ## Integration tests: start the yaamon container and a Go test runner on a shared
@@ -124,7 +130,7 @@ uninstall-service:
 	sudo systemctl daemon-reload
 
 clean:
-	rm -rf coverage.out coverage.html
+	rm -rf coverage.out coverage.html run-data/
 
 version:
 	@echo $(VERSION)
