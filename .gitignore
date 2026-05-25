@@ -25,10 +25,5 @@ go.work.sum
 dist/
 /yaamon
 
-# Integration test state (preserved for inspection but not committed)
-test/data/*.db
-test/data/*.db-wal
-test/data/*.db-shm
-
-# Local development data (make run)
-run-data/
+# Runtime database (persisted between make run / make test-integration)
+test/data/

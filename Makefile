@@ -21,7 +21,7 @@ TEST_SUT := yaamon-sut
 
 .PHONY: all build build-multi test test-unit coverage lint deps \
         run test-integration snapshot \
-        install-service uninstall-service version clean
+        install-service uninstall-service version clean cleanall
 
 ## Default — build the yaamon Docker image for the current platform.
 all: build
@@ -61,17 +61,17 @@ lint:
 deps:
 	$(DOCKER_GO) sh -c "go mod tidy && go mod verify"
 
-## Run the server on http://localhost:8080 using the built image.
-## Data is persisted in run-data/ between restarts.
-## Optional: copy config.yaml.example → config.yaml and/or
-##           copy state.yaml.example → state.yaml to seed initial data.
+## Run the server on http://localhost:8080.  test/config/ is mounted read-only
+## at /etc/yaamon; test/data/ persists the database between restarts.
+## Set TEST_ADMIN_PASSWORD / TEST_VIEWER_PASSWORD in your shell first.
 run: build
-	mkdir -p run-data
+	mkdir -p test/data
 	docker run --rm -p 8080:80 \
-	  -v "$(CURDIR)/run-data:/data" \
-	  -e YAAMON_DB_PATH=/data/yaamon.db \
-	  $(if $(wildcard $(CURDIR)/config.yaml),-v "$(CURDIR)/config.yaml:/etc/yaamon/config.yaml:ro") \
-	  $(if $(wildcard $(CURDIR)/state.yaml),-v "$(CURDIR)/state.yaml:/etc/yaamon/state.yaml:ro" -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml) \
+	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
+	  -v "$(CURDIR)/test/data:/data" \
+	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
+	  -e TEST_ADMIN_PASSWORD=$${TEST_ADMIN_PASSWORD:-changeme} \
+	  -e TEST_VIEWER_PASSWORD=$${TEST_VIEWER_PASSWORD:-changeme} \
 	  yaamon:dev
 
 ## Integration tests: start the yaamon container and a Go test runner on a shared
@@ -84,9 +84,8 @@ test-integration:
 	docker run -d \
 	  --name $(TEST_SUT) \
 	  --network $(TEST_NET) \
-	  -v "$(CURDIR)/test/config.yaml:/etc/yaamon/config.yaml:ro" \
+	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
 	  -v "$(CURDIR)/test/data:/data" \
-	  -v "$(CURDIR)/test/state.yaml:/etc/yaamon/state.yaml:ro" \
 	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
 	  -e TEST_ADMIN_PASSWORD=testpassword \
 	  -e TEST_VIEWER_PASSWORD=viewerpassword \
@@ -129,8 +128,13 @@ uninstall-service:
 	sudo rm -f /etc/systemd/system/yaamon.service
 	sudo systemctl daemon-reload
 
+## Remove build artifacts.
 clean:
-	rm -rf coverage.out coverage.html run-data/
+	rm -rf coverage.out coverage.html
+
+## Remove build artifacts and test state (DB, WAL files).
+cleanall: clean
+	rm -rf test/data/
 
 version:
 	@echo $(VERSION)
