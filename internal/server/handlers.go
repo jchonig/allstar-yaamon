@@ -139,6 +139,8 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 type dashboardData struct {
 	Username   string
 	Permission string
+	Nodes      []db.Node
+	ActiveNode int64
 }
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -148,6 +150,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		data.Username = sess.Username
 		data.Permission = sess.Permission
 	}
+	data.Nodes, _ = s.db.ListNodes(r.Context())
 	s.render(w, "dashboard", data)
 }
 
