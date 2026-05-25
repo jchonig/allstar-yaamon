@@ -132,6 +132,9 @@ func (s *Server) handleAPIUpdateNode(w http.ResponseWriter, r *http.Request) {
 	if in.AMIPort == 0 {
 		in.AMIPort = existing.AMIPort
 	}
+	if in.AMIUser == "" {
+		in.AMIUser = existing.AMIUser
+	}
 	amiPass := in.AMIPass
 	if amiPass == "" {
 		amiPass = existing.AMIPass
