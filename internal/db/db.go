@@ -10,7 +10,8 @@ import (
 
 // DB wraps a SQLite connection with migration support.
 type DB struct {
-	sql *sql.DB
+	sql  *sql.DB
+	path string
 }
 
 // Open opens the SQLite database at path and runs all pending migrations.
@@ -21,7 +22,7 @@ func Open(path string) (*DB, error) {
 	}
 	conn.SetMaxOpenConns(1) // SQLite is single-writer
 
-	db := &DB{sql: conn}
+	db := &DB{sql: conn, path: path}
 	if err := db.migrate(); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
@@ -33,6 +34,46 @@ func (db *DB) Close() error { return db.sql.Close() }
 
 // SQL returns the underlying *sql.DB for packages that need direct access.
 func (db *DB) SQL() *sql.DB { return db.sql }
+
+// Path returns the filesystem path of the database file.
+func (db *DB) Path() string { return db.path }
+
+// Snapshot creates a consistent point-in-time copy of the database at destPath.
+// Safe to call while the database is open and in use (uses SQLite VACUUM INTO).
+func (db *DB) Snapshot(ctx context.Context, destPath string) error {
+	_, err := db.sql.ExecContext(ctx, "VACUUM INTO ?", destPath)
+	return err
+}
+
+// SchemaVersion returns the current migration version.
+func (db *DB) SchemaVersion(ctx context.Context) (int, error) {
+	var v int
+	err := db.sql.QueryRowContext(ctx, "SELECT COALESCE(MAX(version), 0) FROM schema_version").Scan(&v)
+	return v, err
+}
+
+// Stats returns row counts for the main tables.
+type Stats struct {
+	Nodes, Favorites, Users, Configs int
+}
+
+func (db *DB) Stats(ctx context.Context) (Stats, error) {
+	var s Stats
+	for _, r := range []struct {
+		table string
+		dest  *int
+	}{
+		{"nodes", &s.Nodes},
+		{"favorites", &s.Favorites},
+		{"users", &s.Users},
+		{"configs", &s.Configs},
+	} {
+		if err := db.sql.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+r.table).Scan(r.dest); err != nil {
+			return s, err
+		}
+	}
+	return s, nil
+}
 
 func (db *DB) migrate() error {
 	ctx := context.Background()

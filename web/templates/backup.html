@@ -1,0 +1,320 @@
+{{template "base" .}}
+
+{{define "title"}}Backup & Restore — YAAMon{{end}}
+
+{{define "nav-extra"}}
+{{if .Username}}
+<div class="dropdown">
+  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+    <i class="bi bi-person-circle me-1"></i>{{.Username}}
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><h6 class="dropdown-header">{{.Permission}}</h6></li>
+    <li><hr class="dropdown-divider"></li>
+    {{if or (eq .Permission "superuser") (eq .Permission "admin")}}
+    <li><a class="dropdown-item" href="/admin/nodes"><i class="bi bi-diagram-3 me-2"></i>Nodes</a></li>
+    <li><a class="dropdown-item" href="/admin/users"><i class="bi bi-people me-2"></i>Users</a></li>
+    <li><a class="dropdown-item active" href="/admin/backup"><i class="bi bi-archive me-2"></i>Backup</a></li>
+    <li><hr class="dropdown-divider"></li>
+    {{end}}
+    <li><a class="dropdown-item text-danger" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
+  </ul>
+</div>
+{{end}}
+{{end}}
+
+{{define "content"}}
+<div class="row g-4">
+
+  {{/* Backup */}}
+  <div class="col-12 col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-download me-2"></i>Create Backup</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="backup-encrypt">
+            <label class="form-check-label" for="backup-encrypt">Encrypt with passphrase</label>
+          </div>
+        </div>
+        <div id="backup-passphrase-section" style="display:none">
+          <div class="mb-3">
+            <label class="form-label">Passphrase</label>
+            <div class="input-group">
+              <input type="password" class="form-control" id="backup-passphrase" autocomplete="new-password">
+              <button class="btn btn-outline-secondary" type="button" onclick="togglePass('backup-passphrase')">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Confirm passphrase</label>
+            <input type="password" class="form-control" id="backup-passphrase2" autocomplete="new-password">
+          </div>
+        </div>
+        <div class="text-danger small mb-2" id="backup-error"></div>
+        <button class="btn btn-primary" onclick="doBackup()">
+          <i class="bi bi-download me-1"></i>Download Backup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {{/* Favorites Export */}}
+  {{if .Nodes}}
+  <div class="col-12 col-lg-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-file-earmark-text me-2"></i>Favorites Export / Import</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">Node</label>
+          <select class="form-select" id="fav-node-select">
+            {{range .Nodes}}
+            <option value="{{.ID}}">{{.Name}} ({{.NodeNumber}})</option>
+            {{end}}
+          </select>
+        </div>
+        <div class="d-flex gap-2 mb-4">
+          <button class="btn btn-outline-primary" onclick="doFavExport()">
+            <i class="bi bi-download me-1"></i>Export favorites.ini
+          </button>
+        </div>
+        <hr>
+        <h6 class="text-muted">Import</h6>
+        <div class="mb-3">
+          <input type="file" class="form-control" id="fav-import-file" accept=".ini,.txt">
+        </div>
+        <div id="fav-import-preview" class="alert alert-info small mb-3" style="display:none"></div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary" onclick="doFavPreview()">
+            <i class="bi bi-eye me-1"></i>Preview
+          </button>
+          <button class="btn btn-primary" id="fav-import-btn" onclick="doFavImport()" disabled>
+            <i class="bi bi-upload me-1"></i>Import
+          </button>
+        </div>
+        <div class="text-danger small mt-2" id="fav-import-error"></div>
+      </div>
+    </div>
+  </div>
+  {{end}}
+
+  {{/* Restore */}}
+  {{if eq .Permission "superuser"}}
+  <div class="col-12">
+    <div class="card border-warning">
+      <div class="card-header text-warning"><i class="bi bi-arrow-counterclockwise me-2"></i>Restore from Backup</div>
+      <div class="card-body">
+        <div class="alert alert-warning">
+          <i class="bi bi-exclamation-triangle me-2"></i>
+          Restore replaces all current data. A pre-restore backup is created automatically before applying.
+          The server will restart after a successful restore.
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Backup file</label>
+          <input type="file" class="form-control" id="restore-file" accept=".owbackup">
+        </div>
+        <button class="btn btn-outline-warning mb-3" onclick="doInspect()">
+          <i class="bi bi-search me-1"></i>Inspect Backup
+        </button>
+        <div id="restore-manifest" class="card mb-3" style="display:none">
+          <div class="card-body small">
+            <table class="table table-sm mb-0" id="restore-manifest-table"></table>
+          </div>
+        </div>
+        <div id="restore-passphrase-section" style="display:none" class="mb-3">
+          <label class="form-label">Passphrase <span class="text-warning">(this backup is encrypted)</span></label>
+          <div class="input-group">
+            <input type="password" class="form-control" id="restore-passphrase" autocomplete="current-password">
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePass('restore-passphrase')">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="text-danger small mb-2" id="restore-error"></div>
+        <button class="btn btn-warning" id="restore-btn" onclick="doRestore()" disabled>
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Restore
+        </button>
+      </div>
+    </div>
+  </div>
+  {{end}}
+
+</div>
+
+{{/* Restart overlay — shown after restore */}}
+<div id="restart-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999"
+     class="d-flex align-items-center justify-content-center">
+  <div class="text-center text-white">
+    <div class="spinner-border mb-3" role="status"></div>
+    <h5>Restore complete — server restarting…</h5>
+    <p class="text-muted small">Page will reload automatically.</p>
+  </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+document.getElementById('backup-encrypt').addEventListener('change', function() {
+  document.getElementById('backup-passphrase-section').style.display = this.checked ? '' : 'none';
+});
+
+function togglePass(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+async function doBackup() {
+  const errEl = document.getElementById('backup-error');
+  errEl.textContent = '';
+  const encrypt = document.getElementById('backup-encrypt').checked;
+  let passphrase = '';
+  if (encrypt) {
+    passphrase = document.getElementById('backup-passphrase').value;
+    const confirm = document.getElementById('backup-passphrase2').value;
+    if (!passphrase) { errEl.textContent = 'Passphrase is required.'; return; }
+    if (passphrase !== confirm) { errEl.textContent = 'Passphrases do not match.'; return; }
+  }
+  const r = await fetch('/api/backup', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({passphrase}),
+  });
+  if (!r.ok) { errEl.textContent = await r.text(); return; }
+  const blob = await r.blob();
+  const cd = r.headers.get('Content-Disposition') || '';
+  const name = cd.match(/filename=(.+)/)?.[1] || 'backup.owbackup';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+
+function selectedNodeID() {
+  return document.getElementById('fav-node-select')?.value;
+}
+
+function doFavExport() {
+  const id = selectedNodeID();
+  if (!id) return;
+  window.location = `/api/nodes/${id}/favorites/export`;
+}
+
+let favPreviewData = null;
+
+async function doFavPreview() {
+  const errEl = document.getElementById('fav-import-error');
+  const previewEl = document.getElementById('fav-import-preview');
+  errEl.textContent = '';
+  previewEl.style.display = 'none';
+  document.getElementById('fav-import-btn').disabled = true;
+  favPreviewData = null;
+
+  const file = document.getElementById('fav-import-file').files[0];
+  if (!file) { errEl.textContent = 'Choose a file first.'; return; }
+  const id = selectedNodeID();
+  if (!id) return;
+
+  const r = await fetch(`/api/nodes/${id}/favorites/import/preview`, {
+    method: 'POST',
+    body: file,
+  });
+  if (!r.ok) { errEl.textContent = await r.text(); return; }
+  const data = await r.json();
+  favPreviewData = data;
+  previewEl.style.display = '';
+  previewEl.innerHTML = `Will add <strong>${data.will_add}</strong> favorites, skip <strong>${data.will_skip}</strong> (already exist).`;
+  if (data.will_add > 0) document.getElementById('fav-import-btn').disabled = false;
+}
+
+async function doFavImport() {
+  const errEl = document.getElementById('fav-import-error');
+  errEl.textContent = '';
+  const file = document.getElementById('fav-import-file').files[0];
+  if (!file) return;
+  const id = selectedNodeID();
+  if (!id) return;
+
+  const r = await fetch(`/api/nodes/${id}/favorites/import`, {
+    method: 'POST',
+    body: file,
+  });
+  if (!r.ok) { errEl.textContent = await r.text(); return; }
+  const data = await r.json();
+  document.getElementById('fav-import-preview').innerHTML =
+    `<i class="bi bi-check-circle me-1"></i>Imported <strong>${data.added}</strong> favorites (${data.skipped} skipped).`;
+  document.getElementById('fav-import-btn').disabled = true;
+}
+
+// --- Restore ---
+
+let restoreFileData = null;
+let restoreEncrypted = false;
+
+async function doInspect() {
+  const errEl = document.getElementById('restore-error');
+  const manifestEl = document.getElementById('restore-manifest');
+  errEl.textContent = '';
+  manifestEl.style.display = 'none';
+  document.getElementById('restore-btn').disabled = true;
+  restoreFileData = null;
+
+  const file = document.getElementById('restore-file').files[0];
+  if (!file) { errEl.textContent = 'Choose a backup file first.'; return; }
+
+  restoreFileData = await file.arrayBuffer();
+  const r = await fetch('/api/backup/inspect', {
+    method: 'POST',
+    body: restoreFileData,
+  });
+  if (!r.ok) { errEl.textContent = await r.text(); return; }
+  const m = await r.json();
+  restoreEncrypted = m.encrypted;
+
+  const rows = [
+    ['Created', new Date(m.created_at).toLocaleString()],
+    ['App Version', m.app_version],
+    ['Schema Version', m.schema_version],
+    ['Encrypted', m.encrypted ? 'Yes' : 'No'],
+    ['Contents', `${m.contents.nodes} nodes, ${m.contents.favorites} favorites, ${m.contents.users} users`],
+  ];
+  document.getElementById('restore-manifest-table').innerHTML = rows
+    .map(([k,v]) => `<tr><td class="text-muted pe-3">${k}</td><td>${v}</td></tr>`)
+    .join('');
+  manifestEl.style.display = '';
+  document.getElementById('restore-passphrase-section').style.display = m.encrypted ? '' : 'none';
+  document.getElementById('restore-btn').disabled = false;
+}
+
+async function doRestore() {
+  if (!restoreFileData) return;
+  if (!confirm('This will replace all current data and restart the server. Continue?')) return;
+
+  const errEl = document.getElementById('restore-error');
+  errEl.textContent = '';
+
+  const headers = {'Content-Type': 'application/octet-stream'};
+  if (restoreEncrypted) {
+    const pp = document.getElementById('restore-passphrase').value;
+    if (!pp) { errEl.textContent = 'Passphrase required.'; return; }
+    headers['X-Backup-Passphrase'] = pp;
+  }
+
+  const r = await fetch('/api/backup/restore', {
+    method: 'POST',
+    headers,
+    body: restoreFileData,
+  });
+  if (!r.ok) { errEl.textContent = await r.text(); return; }
+
+  document.getElementById('restart-overlay').style.display = '';
+  // Poll /health until the server comes back, then reload.
+  const poll = setInterval(async () => {
+    try {
+      const h = await fetch('/health');
+      if (h.ok) { clearInterval(poll); location.href = '/dashboard'; }
+    } catch {}
+  }, 1000);
+}
+</script>
+{{end}}

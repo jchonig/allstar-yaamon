@@ -92,7 +92,7 @@ func (s *Server) initSessions() error {
 }
 
 func (s *Server) parseTemplates() error {
-	pages := []string{"login", "dashboard", "setup", "nodes", "users"}
+	pages := []string{"login", "dashboard", "setup", "nodes", "users", "backup"}
 	s.tmpls = make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		t, err := template.ParseFS(s.webFS,
@@ -179,6 +179,21 @@ func (s *Server) Run() error {
 		r.Post("/api/users", s.handleAPICreateUser)
 		r.Put("/api/users/{id}", s.handleAPIUpdateUser)
 		r.Delete("/api/users/{id}", s.handleAPIDeleteUser)
+		r.Get("/admin/backup", s.handleBackupPage)
+		r.Post("/api/backup", s.handleAPIBackup)
+		r.Post("/api/backup/inspect", s.handleAPIBackupInspect)
+		r.Post("/api/backup/restore", s.handleAPIBackupRestore)
+	})
+
+	// Readwrite+ favorites export/import
+	r.Group(func(r chi.Router) {
+		r.Use(s.sessions.RequirePermission(db.PermReadOnly))
+		r.Get("/api/nodes/{id}/favorites/export", s.handleAPIFavoritesExport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Use(s.sessions.RequirePermission(db.PermReadWrite))
+		r.Post("/api/nodes/{id}/favorites/import/preview", s.handleAPIFavoritesImportPreview)
+		r.Post("/api/nodes/{id}/favorites/import", s.handleAPIFavoritesImport)
 	})
 
 	return s.listenAndServe(r)
