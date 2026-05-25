@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -58,7 +59,8 @@ func (s *Server) handleAPIConnections(w http.ResponseWriter, r *http.Request) {
 	resp.LCnt = stats.ConnectedLinks
 	resp.CacheAgeSeconds = int(time.Since(stats.FetchedAt).Seconds())
 
-	// Fetch stats for any connected nodes not already in the cache.
+	// Fetch stats for connected nodes not in cache. Use FetchDirect (semaphore, no
+	// rate-limit queue) with a hard timeout so the handler never hangs on large hubs.
 	var missing []string
 	for _, ln := range stats.LinkedNodes {
 		if ls, ok2 := s.statsCache.get(ln); !ok2 || ls.Error != "" {
@@ -66,7 +68,9 @@ func (s *Server) handleAPIConnections(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(missing) > 0 {
-		fetched := s.fetcher.FetchAll(r.Context(), missing)
+		fetchCtx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+		defer cancel()
+		fetched := s.fetcher.FetchDirect(fetchCtx, missing, 40, 10)
 		s.statsCache.update(fetched)
 	}
 

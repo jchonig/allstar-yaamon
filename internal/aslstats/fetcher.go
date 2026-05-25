@@ -92,6 +92,36 @@ func New(baseURL string) *Fetcher {
 	}
 }
 
+// FetchDirect fetches stats for up to maxNodes node numbers concurrently using a
+// semaphore instead of the shared rate limiter. Intended for on-demand user-initiated
+// requests where rate-limit queuing would cause visible timeouts.
+func (f *Fetcher) FetchDirect(ctx context.Context, nodeNumbers []string, maxNodes, concurrency int) map[string]NodeStats {
+	if len(nodeNumbers) == 0 {
+		return nil
+	}
+	if len(nodeNumbers) > maxNodes {
+		nodeNumbers = nodeNumbers[:maxNodes]
+	}
+	sem := make(chan struct{}, concurrency)
+	out := make(map[string]NodeStats, len(nodeNumbers))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, num := range nodeNumbers {
+		wg.Add(1)
+		go func(n string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			s := f.Fetch(ctx, n)
+			mu.Lock()
+			out[n] = s
+			mu.Unlock()
+		}(num)
+	}
+	wg.Wait()
+	return out
+}
+
 // FetchAll fetches stats for all nodeNumbers concurrently, respecting the rate limit.
 // The returned map contains an entry for every requested node number.
 func (f *Fetcher) FetchAll(ctx context.Context, nodeNumbers []string) map[string]NodeStats {
