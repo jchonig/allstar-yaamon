@@ -37,20 +37,22 @@ type Client struct {
 	stopOnce  sync.Once
 	connected atomic.Bool
 
-	mu   sync.Mutex
-	conn net.Conn
+	mu      sync.Mutex
+	conn    net.Conn
+	pending map[string]chan Event // ActionID → waiting caller
 }
 
 // NewClient creates a new Client. Call Start to begin connecting.
 func NewClient(nodeID int64, host string, port int, user, pass string) *Client {
 	return &Client{
-		nodeID: nodeID,
-		host:   host,
-		port:   port,
-		user:   user,
-		pass:   pass,
-		events: make(chan Event, 128),
-		quit:   make(chan struct{}),
+		nodeID:  nodeID,
+		host:    host,
+		port:    port,
+		user:    user,
+		pass:    pass,
+		events:  make(chan Event, 128),
+		quit:    make(chan struct{}),
+		pending: make(map[string]chan Event),
 	}
 }
 
@@ -77,7 +79,8 @@ func (c *Client) Events() <-chan Event { return c.events }
 // IsConnected reports whether the AMI session is currently authenticated.
 func (c *Client) IsConnected() bool { return c.connected.Load() }
 
-// SendAction writes an AMI action to the current connection.
+// SendAction writes an AMI action to the current connection and returns
+// immediately without waiting for a response.
 func (c *Client) SendAction(headers map[string]string) error {
 	c.mu.Lock()
 	conn := c.conn
@@ -88,13 +91,58 @@ func (c *Client) SendAction(headers map[string]string) error {
 	return writeAction(conn, headers)
 }
 
+// SendActionWait sends an AMI action with a unique ActionID and waits up to
+// timeout for the corresponding response block. Returns an error if the
+// response indicates failure or the timeout elapses.
+func (c *Client) SendActionWait(headers map[string]string, timeout time.Duration) (Event, error) {
+	actionID := fmt.Sprintf("ya-%d", time.Now().UnixNano())
+	headers["ActionID"] = actionID
+
+	ch := make(chan Event, 1)
+	c.mu.Lock()
+	conn := c.conn
+	if conn != nil {
+		c.pending[actionID] = ch
+	}
+	c.mu.Unlock()
+
+	if conn == nil {
+		return Event{}, fmt.Errorf("AMI not connected (node %d)", c.nodeID)
+	}
+	defer func() {
+		c.mu.Lock()
+		delete(c.pending, actionID)
+		c.mu.Unlock()
+	}()
+
+	if err := writeAction(conn, headers); err != nil {
+		return Event{}, err
+	}
+
+	select {
+	case evt := <-ch:
+		if evt.Get("Response") == "Error" {
+			return evt, fmt.Errorf("AMI error: %s", evt.Get("Message"))
+		}
+		return evt, nil
+	case <-time.After(timeout):
+		return Event{}, fmt.Errorf("timeout waiting for AMI response")
+	}
+}
+
+// writeAction serialises an AMI action block to the connection.
+// The Action header is always written first as required by the AMI protocol.
 func writeAction(conn net.Conn, headers map[string]string) error {
 	var sb strings.Builder
+	// Action must be the first header per the AMI protocol spec.
+	if v, ok := headers["Action"]; ok {
+		fmt.Fprintf(&sb, "Action: %s\r\n", v)
+	}
 	for k, v := range headers {
-		sb.WriteString(k)
-		sb.WriteString(": ")
-		sb.WriteString(v)
-		sb.WriteString("\r\n")
+		if k == "Action" {
+			continue
+		}
+		fmt.Fprintf(&sb, "%s: %s\r\n", k, v)
 	}
 	sb.WriteString("\r\n")
 	_, err := conn.Write([]byte(sb.String()))
@@ -204,24 +252,41 @@ func (c *Client) readLoop(ctx context.Context, r *bufio.Reader) error {
 			if len(headers) == 0 {
 				continue
 			}
-			// Check for login response before delivering to callers.
-			if resp, ok := headers["Response"]; ok {
-				switch resp {
+			evt := Event{Headers: headers}
+			headers = make(map[string]string)
+
+			// Route responses with an ActionID to waiting callers.
+			if id := evt.Get("ActionID"); id != "" {
+				c.mu.Lock()
+				ch, ok := c.pending[id]
+				c.mu.Unlock()
+				if ok {
+					select {
+					case ch <- evt:
+					default:
+					}
+					continue
+				}
+			}
+
+			// Handle login response inline.
+			if evt.IsResponse() {
+				switch evt.Get("Response") {
 				case "Success":
-					if headers["Message"] == "Authentication accepted" {
+					if evt.Get("Message") == "Authentication accepted" {
 						c.connected.Store(true)
 						slog.Info("AMI authenticated", "node_id", c.nodeID, "host", c.host)
 					}
 				case "Error":
-					return fmt.Errorf("AMI auth failed: %s", headers["Message"])
+					return fmt.Errorf("AMI auth failed: %s", evt.Get("Message"))
 				}
 			}
+
 			select {
-			case c.events <- Event{Headers: headers}:
+			case c.events <- evt:
 			default:
 				// Drop if consumer is not keeping up.
 			}
-			headers = make(map[string]string)
 			continue
 		}
 

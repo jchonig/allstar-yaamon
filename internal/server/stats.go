@@ -216,10 +216,10 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		ilink = "5"
 	}
 	cmd := fmt.Sprintf("rpt cmd %s ilink %s %s", n.NodeNumber, ilink, body.Target)
-	if err := s.amiMgr.SendAction(nodeID, map[string]string{
+	if _, err := s.amiMgr.SendActionWait(nodeID, map[string]string{
 		"Action":  "Command",
 		"Command": cmd,
-	}); err != nil {
+	}, 5*time.Second); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
@@ -252,10 +252,10 @@ func (s *Server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
 		cmd = fmt.Sprintf("rpt cmd %s ilink 1 %s", n.NodeNumber, body.Target)
 	}
 
-	if err := s.amiMgr.SendAction(nodeID, map[string]string{
+	if _, err := s.amiMgr.SendActionWait(nodeID, map[string]string{
 		"Action":  "Command",
 		"Command": cmd,
-	}); err != nil {
+	}, 5*time.Second); err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}

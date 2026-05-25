@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"allstar-yaamon/internal/db"
 )
@@ -82,7 +83,7 @@ func (m *Manager) IsConnected(nodeID int64) bool {
 	return ok && c.IsConnected()
 }
 
-// SendAction sends an AMI action to the specified node.
+// SendAction sends an AMI action to the specified node without waiting for a response.
 func (m *Manager) SendAction(nodeID int64, headers map[string]string) error {
 	m.mu.RLock()
 	c, ok := m.clients[nodeID]
@@ -91,6 +92,17 @@ func (m *Manager) SendAction(nodeID int64, headers map[string]string) error {
 		return fmt.Errorf("no AMI client for node %d", nodeID)
 	}
 	return c.SendAction(headers)
+}
+
+// SendActionWait sends an AMI action and waits up to timeout for the response.
+func (m *Manager) SendActionWait(nodeID int64, headers map[string]string, timeout time.Duration) (Event, error) {
+	m.mu.RLock()
+	c, ok := m.clients[nodeID]
+	m.mu.RUnlock()
+	if !ok {
+		return Event{}, fmt.Errorf("no AMI client for node %d", nodeID)
+	}
+	return c.SendActionWait(headers, timeout)
 }
 
 // Shutdown stops all managed clients.
