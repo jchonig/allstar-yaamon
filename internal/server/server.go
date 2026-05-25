@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"embed"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -17,29 +18,57 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"allstar-yaamon/internal/auth"
 	"allstar-yaamon/internal/config"
+	"allstar-yaamon/internal/db"
 	tlsserver "allstar-yaamon/internal/tls"
 )
 
 type Server struct {
-	cfg       *config.Config
-	webFS     embed.FS
-	templates map[string]*template.Template
+	cfg      *config.Config
+	webFS    embed.FS
+	db       *db.DB
+	sessions *auth.Manager
+	tmpls    map[string]*template.Template
 }
 
-func New(cfg *config.Config, webFS embed.FS) (*Server, error) {
-	s := &Server{cfg: cfg, webFS: webFS}
+func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
+	s := &Server{cfg: cfg, db: database, webFS: webFS}
+	if err := s.initSessions(); err != nil {
+		return nil, fmt.Errorf("session manager: %w", err)
+	}
 	if err := s.parseTemplates(); err != nil {
 		return nil, fmt.Errorf("parsing templates: %w", err)
 	}
 	return s, nil
 }
 
-// parseTemplates builds a per-page template set (base + page) so that each
-// page's {{define "content"}} overrides the base {{block}} without colliding.
+func (s *Server) initSessions() error {
+	ctx := context.Background()
+	secret, err := s.db.GetConfig(ctx, "session_secret")
+	if err != nil {
+		return err
+	}
+	if secret == "" {
+		secret, err = auth.GenerateSecret()
+		if err != nil {
+			return err
+		}
+		if err := s.db.SetConfig(ctx, "session_secret", secret); err != nil {
+			return err
+		}
+	}
+	raw, err := base64.StdEncoding.DecodeString(secret)
+	if err != nil {
+		return fmt.Errorf("invalid session secret: %w", err)
+	}
+	s.sessions = auth.NewManager(raw, s.cfg.TLS.Mode != "disabled")
+	return nil
+}
+
 func (s *Server) parseTemplates() error {
-	pages := []string{"login", "dashboard"}
-	s.templates = make(map[string]*template.Template, len(pages))
+	pages := []string{"login", "dashboard", "setup"}
+	s.tmpls = make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		t, err := template.ParseFS(s.webFS,
 			"web/templates/base.html",
@@ -48,13 +77,13 @@ func (s *Server) parseTemplates() error {
 		if err != nil {
 			return fmt.Errorf("page %s: %w", page, err)
 		}
-		s.templates[page] = t
+		s.tmpls[page] = t
 	}
 	return nil
 }
 
 func (s *Server) render(w http.ResponseWriter, page string, data any) {
-	t, ok := s.templates[page]
+	t, ok := s.tmpls[page]
 	if !ok {
 		http.Error(w, "template not found: "+page, http.StatusInternalServerError)
 		return
@@ -70,22 +99,33 @@ func (s *Server) Run() error {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(s.setupGuard) // redirect to /setup before auth fires when no users exist
+	r.Use(s.sessions.Middleware)
 
+	// Static files (served before auth middleware so login page CSS loads)
 	staticFS, err := fs.Sub(s.webFS, "web/static")
 	if err != nil {
 		return fmt.Errorf("web/static embed: %w", err)
 	}
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/dashboard", http.StatusFound)
-	})
+	// Public routes
+	r.Get("/health", s.handleHealth)
+	r.Get("/setup", s.handleSetupGet)
+	r.Post("/setup", s.handleSetupPost)
 	r.Get("/login", s.handleLoginGet)
 	r.Post("/login", s.handleLoginPost)
 	r.Get("/logout", s.handleLogout)
-	r.Get("/dashboard", s.handleDashboard)
-	r.Get("/dashboard/{nodeID}", s.handleDashboard)
-	r.Get("/health", s.handleHealth)
+
+	// Protected routes
+	r.Group(func(r chi.Router) {
+		r.Use(s.sessions.RequirePermission(db.PermReadOnly))
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/dashboard", http.StatusFound)
+		})
+		r.Get("/dashboard", s.handleDashboard)
+		r.Get("/dashboard/{nodeID}", s.handleDashboard)
+	})
 
 	return s.listenAndServe(r)
 }
@@ -110,23 +150,20 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
 		}
-
 		if s.cfg.Server.RedirectHTTP {
 			httpAddr := fmt.Sprintf(":%d", s.cfg.Server.HTTPPort)
-			redirectServer := &http.Server{
-				Addr:         httpAddr,
-				Handler:      tlsserver.RedirectHandler(s.cfg.Server.HTTPSPort),
-				ReadTimeout:  10 * time.Second,
-				WriteTimeout: 10 * time.Second,
+			redirect := &http.Server{
+				Addr:        httpAddr,
+				Handler:     tlsserver.RedirectHandler(s.cfg.Server.HTTPSPort),
+				ReadTimeout: 10 * time.Second,
 			}
 			go func() {
 				slog.Info("HTTP redirect listener", "addr", httpAddr)
-				if err := redirectServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				if err := redirect.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 					slog.Error("HTTP redirect server", "err", err)
 				}
 			}()
 		}
-
 		ln, err := net.Listen("tcp", httpsAddr)
 		if err != nil {
 			return fmt.Errorf("listen %s: %w", httpsAddr, err)

@@ -1,0 +1,119 @@
+package db
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+
+	_ "modernc.org/sqlite"
+)
+
+// DB wraps a SQLite connection with migration support.
+type DB struct {
+	sql *sql.DB
+}
+
+// Open opens the SQLite database at path and runs all pending migrations.
+func Open(path string) (*DB, error) {
+	conn, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on")
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+	conn.SetMaxOpenConns(1) // SQLite is single-writer
+
+	db := &DB{sql: conn}
+	if err := db.migrate(); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	return db, nil
+}
+
+func (db *DB) Close() error { return db.sql.Close() }
+
+// SQL returns the underlying *sql.DB for packages that need direct access.
+func (db *DB) SQL() *sql.DB { return db.sql }
+
+func (db *DB) migrate() error {
+	ctx := context.Background()
+
+	_, err := db.sql.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_version (
+			version    INTEGER PRIMARY KEY,
+			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`)
+	if err != nil {
+		return err
+	}
+
+	var current int
+	_ = db.sql.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_version`).Scan(&current)
+
+	for _, m := range migrations {
+		if m.version <= current {
+			continue
+		}
+		if _, err := db.sql.ExecContext(ctx, m.sql); err != nil {
+			return fmt.Errorf("migration %d: %w", m.version, err)
+		}
+		if _, err := db.sql.ExecContext(ctx, `INSERT INTO schema_version (version) VALUES (?)`, m.version); err != nil {
+			return fmt.Errorf("recording migration %d: %w", m.version, err)
+		}
+	}
+	return nil
+}
+
+type migration struct {
+	version int
+	sql     string
+}
+
+var migrations = []migration{
+	{1, `
+		CREATE TABLE IF NOT EXISTS nodes (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			name         TEXT NOT NULL,
+			node_number  TEXT NOT NULL,
+			ami_host     TEXT NOT NULL DEFAULT 'localhost',
+			ami_port     INTEGER NOT NULL DEFAULT 5038,
+			ami_user     TEXT NOT NULL DEFAULT 'admin',
+			ami_pass     TEXT NOT NULL DEFAULT '',
+			enabled      INTEGER NOT NULL DEFAULT 1,
+			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE IF NOT EXISTS favorites (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			node_id      INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+			node_number  TEXT NOT NULL,
+			callsign     TEXT,
+			description  TEXT,
+			location     TEXT,
+			cmd          TEXT,
+			sort_order   INTEGER NOT NULL DEFAULT 0,
+			group_name   TEXT NOT NULL DEFAULT 'default',
+			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE IF NOT EXISTS users (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			username     TEXT UNIQUE NOT NULL,
+			password     TEXT NOT NULL,
+			permission   TEXT NOT NULL DEFAULT 'readonly',
+			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE IF NOT EXISTS configs (
+			key        TEXT PRIMARY KEY,
+			value      TEXT,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE IF NOT EXISTS tls_certs (
+			id           INTEGER PRIMARY KEY,
+			cert_pem     TEXT,
+			key_pem      TEXT,
+			generated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+	`},
+}

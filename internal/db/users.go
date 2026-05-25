@@ -1,0 +1,143 @@
+package db
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+)
+
+// Permission levels in descending order.
+const (
+	PermSuperuser = "superuser"
+	PermAdmin     = "admin"
+	PermReadWrite = "readwrite"
+	PermReadOnly  = "readonly"
+	PermNone      = "none"
+)
+
+var permRank = map[string]int{
+	PermSuperuser: 4,
+	PermAdmin:     3,
+	PermReadWrite: 2,
+	PermReadOnly:  1,
+	PermNone:      0,
+}
+
+// PermissionAtLeast reports whether a has at least the access level of b.
+func PermissionAtLeast(a, b string) bool {
+	return permRank[a] >= permRank[b]
+}
+
+// ValidPermission reports whether p is a known permission level.
+func ValidPermission(p string) bool {
+	_, ok := permRank[p]
+	return ok
+}
+
+type User struct {
+	ID         int64
+	Username   string
+	Password   string // bcrypt hash
+	Permission string
+}
+
+// GetUser returns the user with the given username, or ErrNotFound.
+func (db *DB) GetUser(ctx context.Context, username string) (*User, error) {
+	u := &User{}
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT id, username, password, permission FROM users WHERE username = ?`, username,
+	).Scan(&u.ID, &u.Username, &u.Password, &u.Permission)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+	return u, nil
+}
+
+// GetUserByID returns the user with the given id.
+func (db *DB) GetUserByID(ctx context.Context, id int64) (*User, error) {
+	u := &User{}
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT id, username, password, permission FROM users WHERE id = ?`, id,
+	).Scan(&u.ID, &u.Username, &u.Password, &u.Permission)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get user by id: %w", err)
+	}
+	return u, nil
+}
+
+// ListUsers returns all users ordered by username.
+func (db *DB) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT id, username, password, permission FROM users ORDER BY username`)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Username, &u.Password, &u.Permission); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// CreateUser inserts a new user. password must already be bcrypt-hashed.
+func (db *DB) CreateUser(ctx context.Context, username, passwordHash, permission string) (*User, error) {
+	res, err := db.sql.ExecContext(ctx,
+		`INSERT INTO users (username, password, permission) VALUES (?, ?, ?)`,
+		username, passwordHash, permission,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
+	}
+	id, _ := res.LastInsertId()
+	return &User{ID: id, Username: username, Password: passwordHash, Permission: permission}, nil
+}
+
+// UpdateUserPassword sets a new bcrypt-hashed password.
+func (db *DB) UpdateUserPassword(ctx context.Context, id int64, passwordHash string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE users SET password = ? WHERE id = ?`, passwordHash, id)
+	return err
+}
+
+// UpdateUserPermission sets a new permission level.
+func (db *DB) UpdateUserPermission(ctx context.Context, id int64, permission string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE users SET permission = ? WHERE id = ?`, permission, id)
+	return err
+}
+
+// DeleteUser deletes the user with the given id.
+func (db *DB) DeleteUser(ctx context.Context, id int64) error {
+	_, err := db.sql.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
+	return err
+}
+
+// CountUsers returns the total number of users.
+func (db *DB) CountUsers(ctx context.Context) (int, error) {
+	var n int
+	err := db.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n)
+	return n, err
+}
+
+// CountSuperusers returns the number of superuser accounts.
+func (db *DB) CountSuperusers(ctx context.Context) (int, error) {
+	var n int
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM users WHERE permission = 'superuser'`).Scan(&n)
+	return n, err
+}
+
+// ErrNotFound is returned when a requested record does not exist.
+var ErrNotFound = errors.New("not found")
