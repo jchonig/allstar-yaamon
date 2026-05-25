@@ -10,7 +10,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./config:/etc/yaamon
+      - ./config:/etc/yaamon:ro
       - ./data:/data
     environment:
       YAAMON_STATE_FILE: /etc/yaamon/state.yaml
