@@ -15,6 +15,8 @@ DOCKER_GO := docker run --rm \
   -w /src \
   $(BUILDER)
 
+PLAYWRIGHT_IMAGE := mcr.microsoft.com/playwright:v1.47.0-jammy
+
 # Names and credentials used by the integration test setup.
 TEST_NET             := yaamon-test-net
 TEST_SUT             := yaamon-sut
@@ -22,7 +24,7 @@ TEST_ADMIN_PASSWORD  := testpassword
 TEST_VIEWER_PASSWORD := viewerpassword
 
 .PHONY: all build build-multi test test-unit coverage lint deps \
-        compile run stop logs watch test-integration snapshot \
+        compile run stop logs watch test-integration e2e e2e-dev snapshot \
         install-service uninstall-service version clean cleanall
 
 ## Default — build the yaamon Docker image for the current platform.
@@ -39,8 +41,8 @@ build:
 build-multi:
 	docker buildx build --platform linux/amd64,linux/arm64 -t yaamon:dev .
 
-## Full test suite: unit tests → build image → integration tests.
-test: test-unit build test-integration
+## Full test suite: unit tests → build image → integration tests → e2e.
+test: test-unit build test-integration e2e
 
 ## Run unit tests inside Docker.
 test-unit:
@@ -123,6 +125,50 @@ test-integration:
 	docker rm   $(TEST_SUT) >/dev/null 2>&1; \
 	docker network rm $(TEST_NET) >/dev/null 2>&1; \
 	exit $$EXIT
+
+## End-to-end browser tests: starts a fresh SUT, runs Playwright, then tears down.
+e2e: build
+	@docker rm -f $(TEST_SUT) 2>/dev/null; \
+	docker network rm $(TEST_NET) 2>/dev/null; \
+	mkdir -p test/data; \
+	docker network create $(TEST_NET); \
+	docker run -d \
+	  --name $(TEST_SUT) \
+	  --network $(TEST_NET) \
+	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
+	  -v "$(CURDIR)/test/data:/data" \
+	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
+	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
+	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
+	  yaamon:dev; \
+	echo "Waiting for server..."; \
+	timeout 30 sh -c 'until docker exec $(TEST_SUT) curl -sf http://localhost/health >/dev/null 2>&1; do sleep 1; done'; \
+	echo "Server ready. Running Playwright tests..."; \
+	docker run --rm \
+	  --network $(TEST_NET) \
+	  -v "$(CURDIR)/e2e:/e2e" \
+	  -w /e2e \
+	  -e YAAMON_URL=http://$(TEST_SUT):80 \
+	  -e ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
+	  -e VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
+	  $(PLAYWRIGHT_IMAGE) \
+	  sh -c "npm install --silent && npx playwright test"; \
+	EXIT=$$?; \
+	docker stop $(TEST_SUT) >/dev/null 2>&1; \
+	docker rm   $(TEST_SUT) >/dev/null 2>&1; \
+	docker network rm $(TEST_NET) >/dev/null 2>&1; \
+	exit $$EXIT
+
+## Run Playwright tests against the already-running dev server (make run).
+e2e-dev:
+	docker run --rm \
+	  -v "$(CURDIR)/e2e:/e2e" \
+	  -w /e2e \
+	  -e YAAMON_URL=http://host.docker.internal:8080 \
+	  -e ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
+	  -e VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
+	  $(PLAYWRIGHT_IMAGE) \
+	  sh -c "npm install --silent && npx playwright test"
 
 ## Local GoReleaser snapshot (builds all release artifacts without publishing).
 snapshot:
