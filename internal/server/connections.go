@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -59,27 +58,12 @@ func (s *Server) handleAPIConnections(w http.ResponseWriter, r *http.Request) {
 	resp.LCnt = stats.ConnectedLinks
 	resp.CacheAgeSeconds = int(time.Since(stats.FetchedAt).Seconds())
 
-	// Fetch stats for connected nodes not in cache. Use FetchDirect (semaphore, no
-	// rate-limit queue) with a hard timeout so the handler never hangs on large hubs.
-	var missing []string
-	for _, ln := range stats.LinkedNodes {
-		if ls, ok2 := s.statsCache.get(ln); !ok2 || ls.Error != "" {
-			missing = append(missing, ln)
-		}
-	}
-	if len(missing) > 0 {
-		fetchCtx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
-		defer cancel()
-		fetched := s.fetcher.FetchDirect(fetchCtx, missing, 40, 10)
-		s.statsCache.update(fetched)
-	}
-
 	for _, ln := range stats.LinkedNodes {
 		e := connEntry{NodeNumber: ln}
-		if ls, ok2 := s.statsCache.get(ln); ok2 && ls.Error == "" {
-			e.Callsign = ls.Callsign
-			e.Description = ls.Description
-			e.Location = ls.Location
+		if n, ok2 := s.nodeDB.Lookup(ln); ok2 {
+			e.Callsign = n.Callsign
+			e.Description = n.Description
+			e.Location = n.Location
 		}
 		resp.Connections = append(resp.Connections, e)
 	}

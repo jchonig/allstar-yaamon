@@ -20,6 +20,7 @@ import (
 
 	"allstar-yaamon/internal/ami"
 	"allstar-yaamon/internal/aslstats"
+	"allstar-yaamon/internal/astdb"
 	"allstar-yaamon/internal/auth"
 	"allstar-yaamon/internal/config"
 	"allstar-yaamon/internal/db"
@@ -34,6 +35,7 @@ type Server struct {
 	sessions   *auth.Manager
 	amiMgr     *ami.Manager
 	fetcher    *aslstats.Fetcher
+	nodeDB     *astdb.DB
 	statsCache *statsCache
 	linksCache *linksCache
 	sseBroker  *sse.Broker
@@ -52,6 +54,7 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 		return nil, fmt.Errorf("AMI manager: %w", err)
 	}
 	s.fetcher = aslstats.New("")
+	s.nodeDB = astdb.New()
 	s.statsCache = newStatsCache()
 	s.linksCache = newLinksCache()
 	s.sseBroker = sse.NewBroker()
@@ -217,6 +220,7 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 
 	s.startStatsPoller(ctx)
 	s.startLinksPoller(ctx)
+	s.nodeDB.Start(ctx, 6*time.Hour)
 
 	var mainServer *http.Server
 

@@ -261,9 +261,6 @@
           <button type="button" class="btn btn-outline-secondary" onclick="setConnView('list')">
             <i class="bi bi-list-ul me-1"></i>List
           </button>
-          <button type="button" class="btn btn-outline-secondary" onclick="setConnView('bubble')">
-            <i class="bi bi-diagram-3 me-1"></i>Bubble Chart
-          </button>
           <button type="button" class="btn btn-outline-secondary" onclick="setConnView('graph')">
             <i class="bi bi-bezier2 me-1"></i>Network Graph
           </button>
@@ -275,18 +272,6 @@
           <div id="conn-list-content" class="text-muted text-center py-4">
             <div class="spinner-border spinner-border-sm me-2"></div>Loading…
           </div>
-        </div>
-        <div id="conn-view-bubble" style="display:none">
-          <div class="text-center p-2">
-            <img id="conn-bubble-img" src="" alt="Bubble chart" style="max-width:100%;height:auto;display:none">
-            <div id="conn-bubble-loading" class="text-muted py-4">
-              <div class="spinner-border spinner-border-sm me-2"></div>Loading…
-            </div>
-          </div>
-          <p class="text-muted small px-3 pb-2 mb-0">
-            Bubble chart provided by AllStarLink.org —
-            <a id="conn-bubble-link" href="#" target="_blank" rel="noopener">open in new tab ↗</a>
-          </p>
         </div>
         <div id="conn-view-graph" style="display:none;height:480px;position:relative">
           <svg id="conn-graph-svg" style="width:100%;height:100%;display:block"></svg>
@@ -300,6 +285,10 @@
       </div>
       <div class="modal-footer">
         <small class="text-muted me-auto" id="conn-cache-age"></small>
+        <a id="conn-bubble-link" href="#" target="_blank" rel="noopener"
+           class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-diagram-3 me-1"></i>Bubble Chart ↗
+        </a>
         <a id="conn-fullgraph-link" href="#" target="_blank" rel="noopener"
            class="btn btn-sm btn-outline-secondary">
           <i class="bi bi-arrows-fullscreen me-1"></i>Full Page
@@ -796,6 +785,7 @@ async function openConnModal(nodeNum, lcnt) {
     ` — ${lcnt} Connection${lcnt !== 1 ? 's' : ''}`;
   document.getElementById('conn-cache-age').textContent = '';
   document.getElementById('conn-fullgraph-link').href = `/graph/${nodeNum}`;
+  document.getElementById('conn-bubble-link').href = `https://stats.allstarlink.org/getstatus.cgi?${nodeNum}`;
   document.getElementById('conn-list-content').innerHTML =
     '<div class="text-muted text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading…</div>';
 
@@ -820,29 +810,18 @@ async function openConnModal(nodeNum, lcnt) {
 }
 
 function setConnView(view, triggerLoad = true) {
+  // Guard: 'bubble' was a previous view option stored in localStorage; treat it as 'list'.
+  if (view === 'bubble') view = 'list';
   connView = view;
   localStorage.setItem('yaamon_lcnt_view', view);
 
-  document.getElementById('conn-view-list').style.display   = view === 'list'   ? '' : 'none';
-  document.getElementById('conn-view-bubble').style.display = view === 'bubble' ? '' : 'none';
-  document.getElementById('conn-view-graph').style.display  = view === 'graph'  ? '' : 'none';
+  document.getElementById('conn-view-list').style.display  = view === 'list'  ? '' : 'none';
+  document.getElementById('conn-view-graph').style.display = view === 'graph' ? '' : 'none';
 
-  const labels = ['list', 'bubble', 'graph'];
+  const labels = ['list', 'graph'];
   document.querySelectorAll('#conn-view-tabs button').forEach((btn, i) => {
     btn.classList.toggle('active', labels[i] === view);
   });
-
-  if (view === 'bubble' && connNodeNum) {
-    const url = `https://stats.allstarlink.org/getstatus.cgi?${connNodeNum}`;
-    const img = document.getElementById('conn-bubble-img');
-    const loading = document.getElementById('conn-bubble-loading');
-    img.style.display = 'none';
-    loading.style.display = '';
-    img.onload = () => { img.style.display = ''; loading.style.display = 'none'; };
-    img.onerror = () => { loading.textContent = 'Bubble chart unavailable.'; };
-    img.src = url;
-    document.getElementById('conn-bubble-link').href = url;
-  }
 
   if (view === 'graph' && triggerLoad && connData) {
     loadD3ThenGraph();
