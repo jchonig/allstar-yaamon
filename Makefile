@@ -63,18 +63,12 @@ lint:
 deps:
 	$(DOCKER_GO) sh -c "go mod tidy && go mod verify"
 
-## Run the server on http://localhost:8080.  test/config/ is mounted read-only
-## at /etc/yaamon; test/data/ persists the database between restarts.
-## Set TEST_ADMIN_PASSWORD / TEST_VIEWER_PASSWORD in your shell first.
-run: build
+## Run the server on http://localhost:8080 with live rebuild on source changes.
+## test/config/ is mounted read-only at /etc/yaamon; test/data/ persists the DB.
+## Override credentials: TEST_ADMIN_PASSWORD=xxx TEST_VIEWER_PASSWORD=xxx make run
+run:
 	mkdir -p test/data
-	docker run --rm -p 8080:80 \
-	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
-	  -v "$(CURDIR)/test/data:/data" \
-	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
-	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
-	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
-	  yaamon:dev
+	docker compose -f test/docker-compose.yml watch
 
 ## Integration tests: start the yaamon container and a Go test runner on a shared
 ## Docker network. test/data/ is preserved after the run for post-failure inspection.

@@ -1,0 +1,27 @@
+# Development compose file.
+# Usage:  make run
+#         docker compose -f test/docker-compose.yml watch
+
+services:
+  yaamon:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    volumes:
+      - ./config:/etc/yaamon:ro
+      - ./data:/data
+    environment:
+      YAAMON_STATE_FILE: /etc/yaamon/state.yaml
+      TEST_ADMIN_PASSWORD: ${TEST_ADMIN_PASSWORD:-testpassword}
+      TEST_VIEWER_PASSWORD: ${TEST_VIEWER_PASSWORD:-viewerpassword}
+    develop:
+      watch:
+        - action: rebuild
+          path: ..
+          ignore:
+            - test/
+            - .git/
+            - coverage.out
+            - coverage.html
