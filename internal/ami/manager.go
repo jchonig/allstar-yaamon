@@ -60,7 +60,7 @@ func (m *Manager) Add(n db.Node) {
 		port = 5038
 	}
 
-	c := NewClient(n.ID, host, port, n.AMIUser, n.AMIPass)
+	c := NewClient(n.ID, n.Name, n.NodeNumber, host, port, n.AMIUser, n.AMIPass)
 	c.Start(m.ctx)
 	m.clients[n.ID] = c
 }

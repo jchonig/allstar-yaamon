@@ -25,11 +25,13 @@ func (e Event) IsResponse() bool      { _, ok := e.Headers["Response"]; return o
 
 // Client manages a single persistent AMI TCP connection with automatic reconnect.
 type Client struct {
-	nodeID int64
-	host   string
-	port   int
-	user   string
-	pass   string
+	nodeID     int64
+	nodeName   string
+	nodeNumber string
+	host       string
+	port       int
+	user       string
+	pass       string
 
 	events    chan Event
 	quit      chan struct{}
@@ -43,16 +45,18 @@ type Client struct {
 }
 
 // NewClient creates a new Client. Call Start to begin connecting.
-func NewClient(nodeID int64, host string, port int, user, pass string) *Client {
+func NewClient(nodeID int64, name, nodeNumber, host string, port int, user, pass string) *Client {
 	return &Client{
-		nodeID:  nodeID,
-		host:    host,
-		port:    port,
-		user:    user,
-		pass:    pass,
-		events:  make(chan Event, 128),
-		quit:    make(chan struct{}),
-		pending: make(map[string]chan Event),
+		nodeID:     nodeID,
+		nodeName:   name,
+		nodeNumber: nodeNumber,
+		host:       host,
+		port:       port,
+		user:       user,
+		pass:       pass,
+		events:     make(chan Event, 128),
+		quit:       make(chan struct{}),
+		pending:    make(map[string]chan Event),
 	}
 }
 
@@ -169,6 +173,7 @@ func (c *Client) reconnectLoop(ctx context.Context) {
 			default:
 			}
 			slog.Warn("AMI connect error", "node_id", c.nodeID,
+				"node", c.nodeName, "node_number", c.nodeNumber,
 				"host", c.host, "err", err, "retry_in", backoff)
 			select {
 			case <-c.quit:
@@ -215,7 +220,7 @@ func (c *Client) connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read banner: %w", err)
 	}
-	slog.Debug("AMI banner", "node_id", c.nodeID, "banner", strings.TrimSpace(banner))
+	slog.Debug("AMI banner", "node_id", c.nodeID, "node", c.nodeName, "node_number", c.nodeNumber, "banner", strings.TrimSpace(banner))
 
 	if err := writeAction(conn, map[string]string{
 		"Action":   "Login",
@@ -275,7 +280,7 @@ func (c *Client) readLoop(ctx context.Context, r *bufio.Reader) error {
 				case "Success":
 					if evt.Get("Message") == "Authentication accepted" {
 						c.connected.Store(true)
-						slog.Info("AMI authenticated", "node_id", c.nodeID, "host", c.host)
+						slog.Info("AMI authenticated", "node_id", c.nodeID, "node", c.nodeName, "node_number", c.nodeNumber, "host", c.host)
 					}
 				case "Error":
 					return fmt.Errorf("AMI auth failed: %s", evt.Get("Message"))
