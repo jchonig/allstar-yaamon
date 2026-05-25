@@ -66,7 +66,7 @@ deps:
 ## Cross-compile for the dev container (linux, native arch, no CGO).
 ## While 'make watch' is running, this triggers a fast container restart instead of a full image rebuild.
 compile:
-	CGO_ENABLED=0 GOOS=linux go build -o test/yaamon .
+	$(DOCKER_GO) sh -c "CGO_ENABLED=0 GOOS=linux go build -o test/yaamon ."
 
 ## Start the server in the background on http://localhost:8080.
 ## test/config/ is mounted read-only at /etc/yaamon; test/data/ persists the DB.
