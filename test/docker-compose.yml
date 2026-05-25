@@ -10,7 +10,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./config:/etc/yaamon:ro
+      - ./config:/etc/yaamon
       - ./data:/data
     environment:
       YAAMON_STATE_FILE: /etc/yaamon/state.yaml
@@ -18,6 +18,7 @@ services:
       TEST_VIEWER_PASSWORD: ${TEST_VIEWER_PASSWORD:-viewerpassword}
     develop:
       watch:
+        # Rebuild image and restart when source code changes.
         - action: rebuild
           path: ..
           ignore:
@@ -25,3 +26,7 @@ services:
             - .git/
             - coverage.out
             - coverage.html
+        # Sync config/state files and restart (re-runs entrypoint / yaamon apply).
+        - action: sync+restart
+          path: ./config
+          target: /etc/yaamon
