@@ -22,7 +22,7 @@ TEST_ADMIN_PASSWORD  := testpassword
 TEST_VIEWER_PASSWORD := viewerpassword
 
 .PHONY: all build build-multi test test-unit coverage lint deps \
-        run test-integration snapshot \
+        run stop logs test-integration snapshot \
         install-service uninstall-service version clean cleanall
 
 ## Default — build the yaamon Docker image for the current platform.
@@ -63,12 +63,20 @@ lint:
 deps:
 	$(DOCKER_GO) sh -c "go mod tidy && go mod verify"
 
-## Run the server on http://localhost:8080 with live rebuild on source changes.
+## Start the server in the background on http://localhost:8080.
 ## test/config/ is mounted read-only at /etc/yaamon; test/data/ persists the DB.
 ## Override credentials: TEST_ADMIN_PASSWORD=xxx TEST_VIEWER_PASSWORD=xxx make run
 run:
 	mkdir -p test/data
-	docker compose -f test/docker-compose.yml watch
+	docker compose -f test/docker-compose.yml up -d --build
+
+## Stop the server.
+stop:
+	docker compose -f test/docker-compose.yml down
+
+## Follow server logs.
+logs:
+	docker compose -f test/docker-compose.yml logs -f
 
 ## Integration tests: start the yaamon container and a Go test runner on a shared
 ## Docker network. test/data/ is preserved after the run for post-failure inspection.

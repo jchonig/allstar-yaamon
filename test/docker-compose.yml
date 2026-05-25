@@ -1,6 +1,8 @@
 # Development compose file.
-# Usage:  make run
-#         docker compose -f test/docker-compose.yml watch
+# Usage:  make run        — start in background (builds image first)
+#         make stop       — stop and remove the container
+#         make logs       — follow container logs
+#         docker compose -f test/docker-compose.yml watch  — foreground with auto-rebuild
 
 services:
   yaamon:
