@@ -124,3 +124,36 @@ body {
 .dropdown-header {
   color: var(--text-muted);
 }
+
+/* Modals */
+.modal-content {
+  background-color: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.modal-header {
+  border-bottom-color: var(--border);
+}
+.modal-footer {
+  border-top-color: var(--border);
+}
+.modal-title {
+  color: var(--text-primary);
+}
+
+/* Form labels and helpers */
+.form-label,
+.form-check-label,
+.col-form-label {
+  color: var(--text-primary);
+}
+.form-text {
+  color: var(--text-muted);
+}
+
+/* Table header */
+.table-light {
+  --bs-table-bg: var(--bg-secondary);
+  --bs-table-color: var(--text-primary);
+  --bs-table-border-color: var(--border);
+}
