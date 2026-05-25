@@ -169,7 +169,7 @@
 </div>
 
 {{/* Active Links panel */}}
-<div id="active-links-section" class="card mb-3" style="display:none">
+<div id="active-links-section" class="card mb-3" style="display:none;border-color:var(--accent-green);border-width:2px">
   <div class="card-header d-flex align-items-center py-2 collapse-header"
        data-bs-toggle="collapse" data-bs-target="#active-links-collapse"
        aria-expanded="true" aria-controls="active-links-collapse">
@@ -467,7 +467,7 @@ function rebuildAllActionCells() {
   renderActiveLinks();
 }
 
-const TYPE_LABEL = { T: 'Transceive', M: 'Monitor', L: 'Monitor Local', P: 'Permanent' };
+const TYPE_LABEL = { T: 'Transceive', R: 'Monitor', M: 'Monitor', L: 'Monitor Local', P: 'Permanent' };
 
 function renderActiveLinks() {
   const section = document.getElementById('active-links-section');
