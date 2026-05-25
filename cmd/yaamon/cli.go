@@ -30,8 +30,9 @@ func Execute(fs embed.FS) {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "yaamon",
-	Short: "YAAMon — AllStar node management and monitoring",
+	Use:          "yaamon",
+	Short:        "YAAMon — AllStar node management and monitoring",
+	SilenceUsage: true, // don't print usage on runtime errors
 	Long: `YAAMon (Yet Another Allstar Monitor) is a multi-node AllStar management
 and monitoring web application. Run 'yaamon serve' to start the server.`,
 }

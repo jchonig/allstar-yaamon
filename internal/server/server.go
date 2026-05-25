@@ -190,12 +190,15 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 
 	var mainServer *http.Server
 
+	baseCtx := func(_ net.Listener) context.Context { return ctx }
+
 	if tlsCfg != nil {
 		httpsAddr := fmt.Sprintf(":%d", s.cfg.Server.HTTPSPort)
 		mainServer = &http.Server{
-			Addr:         httpsAddr,
-			Handler:      handler,
-			TLSConfig:    tlsCfg,
+			Addr:        httpsAddr,
+			Handler:     handler,
+			TLSConfig:   tlsCfg,
+			BaseContext: baseCtx,
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
 		}
@@ -226,8 +229,9 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 	} else {
 		httpAddr := fmt.Sprintf(":%d", s.cfg.Server.HTTPPort)
 		mainServer = &http.Server{
-			Addr:         httpAddr,
-			Handler:      handler,
+			Addr:        httpAddr,
+			Handler:     handler,
+			BaseContext: baseCtx,
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
 		}
