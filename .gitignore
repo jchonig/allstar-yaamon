@@ -23,7 +23,7 @@ go.work.sum
 
 # YAAMon build artifacts
 dist/
-yaamon
+/yaamon
 
 # Integration test state (preserved for inspection but not committed)
 test/data/*.db

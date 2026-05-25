@@ -1,0 +1,39 @@
+# yaamon state file — apply with: yaamon apply state.yaml
+#
+# Environment variable substitution: any value starting with $ is replaced
+# with the named environment variable at apply time. An unset variable is
+# a fatal error.
+#
+# purge controls whether objects absent from this file are deleted.
+purge:
+  users: false       # delete DB users not listed here
+  nodes: false       # delete DB nodes not listed here
+  favorites: false   # delete favorites not listed under their node
+
+users:
+  - username: admin
+    permission: superuser
+    password: $ADMIN_PASSWORD     # resolved from env at apply time
+  - username: viewer
+    permission: readonly
+    password: $VIEWER_PASSWORD
+
+nodes:
+  - name: "Home Node"
+    node_number: "12345"
+    ami_host: 192.168.1.10
+    ami_port: 5038
+    ami_user: admin
+    ami_pass: $NODE_AMI_PASS
+    enabled: true
+    favorites:
+      - node_number: "29840"
+        callsign: W1AW
+        description: ARRL HQ
+        location: Newington, CT
+        group_name: default
+      - node_number: "27339"
+        callsign: N0CALL
+        description: Example link
+        location: Anywhere, USA
+        group_name: regional

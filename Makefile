@@ -61,10 +61,11 @@ lint:
 deps:
 	$(DOCKER_GO) sh -c "go mod tidy && go mod verify"
 
-## Run the server using the built image (reads config.yaml from current dir).
+## Run the server on http://localhost:8080 using the built image.
+## Mounts config.yaml if it exists, otherwise the binary uses built-in defaults.
 run: build
 	docker run --rm -p 8080:80 \
-	  -v "$(CURDIR)/config.yaml:/etc/yaamon/config.yaml:ro" \
+	  $(if $(wildcard $(CURDIR)/config.yaml),-v "$(CURDIR)/config.yaml:/etc/yaamon/config.yaml:ro") \
 	  yaamon:dev
 
 ## Integration tests: start the yaamon container and a Go test runner on a shared
