@@ -266,6 +266,10 @@ async function saveNode() {
     document.getElementById('node-form-error').textContent = 'Name and Node Number are required.';
     return;
   }
+  if (!body.ami_user) {
+    document.getElementById('node-form-error').textContent = 'AMI Username is required.';
+    return;
+  }
 
   const saveBtn = document.getElementById('node-save-btn');
   saveBtn.disabled = true;

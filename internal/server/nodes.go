@@ -73,6 +73,10 @@ func (s *Server) handleAPICreateNode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name and node_number are required", http.StatusBadRequest)
 		return
 	}
+	if in.AMIUser == "" {
+		http.Error(w, "ami_user is required", http.StatusBadRequest)
+		return
+	}
 	if in.AMIPort == 0 {
 		in.AMIPort = 5038
 	}
@@ -133,7 +137,8 @@ func (s *Server) handleAPIUpdateNode(w http.ResponseWriter, r *http.Request) {
 		in.AMIPort = existing.AMIPort
 	}
 	if in.AMIUser == "" {
-		in.AMIUser = existing.AMIUser
+		http.Error(w, "ami_user is required", http.StatusBadRequest)
+		return
 	}
 	amiPass := in.AMIPass
 	if amiPass == "" {
