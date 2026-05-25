@@ -143,8 +143,7 @@
 </div>
 
 {{/* Restart overlay — shown after restore */}}
-<div id="restart-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999"
-     class="d-flex align-items-center justify-content-center">
+<div id="restart-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;align-items:center;justify-content:center">
   <div class="text-center text-white">
     <div class="spinner-border mb-3" role="status"></div>
     <h5>Restore complete — server restarting…</h5>
@@ -307,7 +306,7 @@ async function doRestore() {
   });
   if (!r.ok) { errEl.textContent = await r.text(); return; }
 
-  document.getElementById('restart-overlay').style.display = '';
+  document.getElementById('restart-overlay').style.display = 'flex';
   // Poll /health until the server comes back, then reload.
   const poll = setInterval(async () => {
     try {
