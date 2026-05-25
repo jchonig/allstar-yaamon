@@ -15,9 +15,11 @@ DOCKER_GO := docker run --rm \
   -w /src \
   $(BUILDER)
 
-# Names used by the integration test setup.
-TEST_NET := yaamon-test-net
-TEST_SUT := yaamon-sut
+# Names and credentials used by the integration test setup.
+TEST_NET             := yaamon-test-net
+TEST_SUT             := yaamon-sut
+TEST_ADMIN_PASSWORD  := testpassword
+TEST_VIEWER_PASSWORD := viewerpassword
 
 .PHONY: all build build-multi test test-unit coverage lint deps \
         run test-integration snapshot \
@@ -70,8 +72,8 @@ run: build
 	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
 	  -v "$(CURDIR)/test/data:/data" \
 	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
-	  -e TEST_ADMIN_PASSWORD=$${TEST_ADMIN_PASSWORD:-changeme} \
-	  -e TEST_VIEWER_PASSWORD=$${TEST_VIEWER_PASSWORD:-changeme} \
+	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
+	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
 	  yaamon:dev
 
 ## Integration tests: start the yaamon container and a Go test runner on a shared
