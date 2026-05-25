@@ -35,6 +35,7 @@ type Server struct {
 	amiMgr     *ami.Manager
 	fetcher    *aslstats.Fetcher
 	statsCache *statsCache
+	linksCache *linksCache
 	sseBroker  *sse.Broker
 	tmpls      map[string]*template.Template
 }
@@ -52,6 +53,7 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 	}
 	s.fetcher = aslstats.New("")
 	s.statsCache = newStatsCache()
+	s.linksCache = newLinksCache()
 	s.sseBroker = sse.NewBroker()
 	return s, nil
 }
@@ -192,6 +194,7 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 	defer stop()
 
 	s.startStatsPoller(ctx)
+	s.startLinksPoller(ctx)
 
 	var mainServer *http.Server
 

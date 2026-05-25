@@ -24,6 +24,7 @@ go.work.sum
 # YAAMon build artifacts
 dist/
 /yaamon
+test/yaamon
 
 # Runtime database (persisted between make run / make test-integration)
 test/data/

@@ -22,7 +22,7 @@ TEST_ADMIN_PASSWORD  := testpassword
 TEST_VIEWER_PASSWORD := viewerpassword
 
 .PHONY: all build build-multi test test-unit coverage lint deps \
-        run stop logs test-integration snapshot \
+        compile run stop logs watch test-integration snapshot \
         install-service uninstall-service version clean cleanall
 
 ## Default — build the yaamon Docker image for the current platform.
@@ -63,6 +63,11 @@ lint:
 deps:
 	$(DOCKER_GO) sh -c "go mod tidy && go mod verify"
 
+## Cross-compile for the dev container (linux, native arch, no CGO).
+## While 'make watch' is running, this triggers a fast container restart instead of a full image rebuild.
+compile:
+	CGO_ENABLED=0 GOOS=linux go build -o test/yaamon .
+
 ## Start the server in the background on http://localhost:8080.
 ## test/config/ is mounted read-only at /etc/yaamon; test/data/ persists the DB.
 ## Override credentials: TEST_ADMIN_PASSWORD=xxx TEST_VIEWER_PASSWORD=xxx make run
@@ -77,6 +82,11 @@ stop:
 ## Follow server logs.
 logs:
 	docker compose -f test/docker-compose.yml logs -f
+
+## Start docker-compose in foreground watch mode.
+## In a separate terminal, run 'make compile' to push binary updates without a full image rebuild.
+watch:
+	docker compose -f test/docker-compose.yml watch
 
 ## Integration tests: start the yaamon container and a Go test runner on a shared
 ## Docker network. test/data/ is preserved after the run for post-failure inspection.

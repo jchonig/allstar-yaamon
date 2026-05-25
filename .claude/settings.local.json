@@ -10,7 +10,32 @@
       "Bash(git commit -m ' *)",
       "Bash(make build *)",
       "Bash(go version *)",
-      "Bash(make test-unit *)"
+      "Bash(make test-unit *)",
+      "Bash(go env *)",
+      "Bash(docker run *)",
+      "Bash(git -C /Volumes/Projects/Radio/allstar-yaamon add internal/db/nodes.go internal/db/favorites.go internal/state/apply.go internal/state/apply_test.go cmd/yaamon/cli.go state.yaml.example)",
+      "Bash(git -C /Volumes/Projects/Radio/allstar-yaamon status)",
+      "Bash(git commit -m 'fix: entrypoint passes state file as positional arg, not --state flag *)",
+      "Bash(git commit -m 'fix: define test passwords as Makefile variables shared across targets *)",
+      "Bash(go vet *)",
+      "Bash(git -C /Volumes/Projects/Radio/allstar-yaamon diff --stat HEAD)",
+      "Bash(git -C /Volumes/Projects/Radio/allstar-yaamon add go.mod go.sum internal/ami/client.go internal/server/server.go internal/server/users.go web/templates/dashboard.html web/templates/nodes.html web/templates/users.html cmd/yaamon/helpers.go cmd/yaamon/node.go cmd/yaamon/user.go)",
+      "Bash(git -C /Volumes/Projects/Radio/allstar-yaamon commit -m ' *)",
+      "Bash(git -C /Volumes/Projects/Radio/allstar-yaamon add internal/db/nodes.go internal/server/stats.go web/templates/dashboard.html)",
+      "Bash(git -C /Volumes/Projects/Radio/allstar-yaamon add web/templates/base.html web/templates/dashboard.html web/templates/nodes.html web/templates/users.html web/static/app.js web/static/app.css)",
+      "Bash(git -C /Volumes/Projects/Radio/allstar-yaamon add docker-entrypoint.sh Makefile web/static/app.css)",
+      "Bash(git *)",
+      "Bash(docker compose *)",
+      "Bash(make compile *)",
+      "Bash(kill 14723 *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.hamvoip.org)",
+      "WebFetch(domain:allstarlinknetwork.blogspot.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:community.allstarlink.org)",
+      "WebFetch(domain:wiki.allstarlink.org)",
+      "WebFetch(domain:allstarlink.github.io)"
     ]
   }
 }

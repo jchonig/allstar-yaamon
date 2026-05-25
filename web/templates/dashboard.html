@@ -61,25 +61,48 @@
   {{end}}
 </div>
 
+{{/* Active Links panel */}}
+<div id="active-links-section" class="card mb-3" style="display:none">
+  <div class="card-header d-flex align-items-center py-2 collapse-header"
+       data-bs-toggle="collapse" data-bs-target="#active-links-collapse"
+       aria-expanded="true" aria-controls="active-links-collapse">
+    <i class="bi bi-diagram-3 me-2"></i>
+    <span>Active Links — Node {{.ActiveNode.NodeNumber}}</span>
+    <i class="bi bi-chevron-down ms-auto collapse-chevron"></i>
+  </div>
+  <div class="collapse show" id="active-links-collapse">
+    <div id="active-links-body" class="p-0"></div>
+  </div>
+</div>
+
 {{/* Favorites table */}}
-<div class="mb-4">
-  <table class="table table-hover table-sm align-middle mb-0" id="favs-table">
-    <thead class="table-light">
-      <tr>
-        <th style="width:2rem" title="Activity"></th>
-        <th>Node</th>
-        <th>Callsign</th>
-        <th>Description</th>
-        <th>Location</th>
-        <th title="Total TX time">TX</th>
-        <th title="Connected links">LCnt</th>
-        <th class="text-end">Action</th>
-      </tr>
-    </thead>
-    <tbody id="favs-tbody">
-      <tr><td colspan="8" class="text-center text-muted py-4">Loading…</td></tr>
-    </tbody>
-  </table>
+<div class="card mb-4">
+  <div class="card-header d-flex align-items-center py-2 collapse-header"
+       data-bs-toggle="collapse" data-bs-target="#favorites-collapse"
+       aria-expanded="true" aria-controls="favorites-collapse">
+    <i class="bi bi-star me-2"></i>
+    <span>Favorites</span>
+    <i class="bi bi-chevron-down ms-auto collapse-chevron"></i>
+  </div>
+  <div class="collapse show" id="favorites-collapse">
+    <table class="table table-hover table-sm align-middle mb-0" id="favs-table">
+      <thead class="table-light">
+        <tr>
+          <th style="width:2rem" title="Node status: green=online, red=keyed/transmitting, grey=unknown"></th>
+          <th>Node</th>
+          <th>Callsign</th>
+          <th class="d-none d-md-table-cell">Description</th>
+          <th class="d-none d-md-table-cell">Location</th>
+          <th title="Total TX time">TX</th>
+          <th title="Connected links">LCnt</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody id="favs-tbody">
+        <tr><td colspan="8" class="text-center text-muted py-4">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 {{/* Add Favorite Modal */}}
@@ -133,6 +156,8 @@ const CAN_WRITE = {{if or (eq .Permission "superuser") (eq .Permission "admin") 
 
 let favsData = [];
 let statsData = {};
+let amiLinks = {};           // {nodeNum: typeChar} — from AMI "rpt show variables"
+let amiLinksReceived = false; // true once first "links" SSE message arrives
 let addFavModal;
 let sseSource = null;
 
@@ -166,6 +191,7 @@ function renderFavs() {
     return;
   }
 
+  renderActiveLinks();
   tbody.innerHTML = favsData.map(f => {
     const s = statsData[f.node_number] || {};
     const keyed = s.keyed;
@@ -176,14 +202,15 @@ function renderFavs() {
     const loc  = s.location || f.location || '—';
     const stale = s.fetched_at && isStale(s.fetched_at);
     const dotClass = keyed ? 'text-danger' : (stale || !s.fetched_at ? 'text-secondary' : 'text-success');
-    const dot = `<i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem"></i>`;
+    const dotTitle = keyed ? 'Keyed (transmitting)' : (stale || !s.fetched_at ? 'Status unknown' : 'Online');
+    const dot = `<i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem" title="${dotTitle}"></i>`;
 
-    return `<tr data-node-num="${esc(f.node_number)}">
+    return `<tr data-node-num="${esc(f.node_number)}" class="${isConnected(f.node_number) ? 'row-connected' : ''}">
       <td class="text-center">${dot}</td>
       <td><code>${esc(f.node_number)}</code></td>
       <td>${esc(call)}</td>
-      <td class="text-truncate" style="max-width:200px" title="${esc(desc)}">${esc(desc)}</td>
-      <td class="text-truncate" style="max-width:150px" title="${esc(loc)}">${esc(loc)}</td>
+      <td class="text-truncate d-none d-md-table-cell" style="max-width:200px" title="${esc(desc)}">${esc(desc)}</td>
+      <td class="text-truncate d-none d-md-table-cell" style="max-width:150px" title="${esc(loc)}">${esc(loc)}</td>
       <td class="text-nowrap">${txTime}</td>
       <td>${lcnt}</td>
       <td class="text-end text-nowrap">${actionCell(f.node_number, f.id)}</td>
@@ -202,18 +229,23 @@ function applyStats(stats) {
     const keyed = s.keyed;
     const stale = s.fetched_at && isStale(s.fetched_at);
     const dotClass = keyed ? 'text-danger' : (stale ? 'text-secondary' : 'text-success');
-    cells[0].innerHTML = `<i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem"></i>`;
+    const dotTitle = keyed ? 'Keyed (transmitting)' : (stale ? 'Status unknown' : 'Online');
+    cells[0].innerHTML = `<i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem" title="${dotTitle}"></i>`;
     if (s.callsign)       cells[2].textContent = s.callsign;
-    if (s.description) {  cells[3].textContent = s.description; cells[3].title = s.description; }
-    if (s.location)    {  cells[4].textContent = s.location;    cells[4].title = s.location; }
+    if (s.description) { cells[3].textContent = s.description; cells[3].title = s.description; }
+    if (s.location)    { cells[4].textContent = s.location;    cells[4].title = s.location; }
     if (s.total_tx_time != null) cells[5].textContent = fmtDuration(s.total_tx_time);
     if (s.connected_links != null) cells[6].textContent = s.connected_links;
     // Rebuild action cell when connection state may have changed.
     if (s.linked_nodes !== undefined && CAN_WRITE) {
       const f = favsData.find(x => x.node_number === num);
-      if (f) cells[7].innerHTML = actionCell(num, f.id);
+      if (f) {
+        cells[7].innerHTML = actionCell(num, f.id);
+        row.classList.toggle('row-connected', isConnected(num));
+      }
     }
   }
+  renderActiveLinks();
 }
 
 // --- SSE ---
@@ -226,6 +258,10 @@ function connectSSE() {
       const msg = JSON.parse(evt.data);
       if (msg.type === 'stats' && msg.stats) {
         applyStats(msg.stats);
+      } else if (msg.type === 'links' && msg.links && typeof msg.links === 'object') {
+        amiLinks = msg.links;
+        amiLinksReceived = true;
+        rebuildAllActionCells();
       }
     } catch {}
   };
@@ -237,14 +273,105 @@ function connectSSE() {
 // --- Connection state ---
 
 function isConnected(nodeNum) {
+  // Primary: AMI link state — real-time, from home node's "rpt show variables".
+  if (amiLinksReceived) return nodeNum in amiLinks;
+  // Fallback: AllStarLink stats (before first AMI poll completes).
   const s = statsData[nodeNum] || {};
-  return Array.isArray(s.linked_nodes) && s.linked_nodes.includes(NODE_NUM);
+  if (!Array.isArray(s.linked_nodes)) return false;
+  return s.linked_nodes.some(n => n === NODE_NUM || n.slice(1) === NODE_NUM);
+}
+
+function isPermanent(nodeNum) {
+  // 'P' is the expected type char for permanent links; confirm once tested.
+  return amiLinks[nodeNum] === 'P';
+}
+
+function rebuildAllActionCells() {
+  const tbody = document.getElementById('favs-tbody');
+  favsData.forEach(f => {
+    const row = tbody.querySelector(`tr[data-node-num="${f.node_number}"]`);
+    if (!row) return;
+    if (CAN_WRITE) row.cells[7].innerHTML = actionCell(f.node_number, f.id);
+    row.classList.toggle('row-connected', isConnected(f.node_number));
+  });
+  renderActiveLinks();
+}
+
+const TYPE_LABEL = { T: 'Transceive', M: 'Monitor', L: 'Monitor Local', P: 'Permanent' };
+
+function renderActiveLinks() {
+  const section = document.getElementById('active-links-section');
+  const body    = document.getElementById('active-links-body');
+  if (!amiLinksReceived) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const entries = Object.entries(amiLinks);
+  if (!entries.length) {
+    body.innerHTML = '<p class="text-muted small fst-italic mb-0 ps-1">No active links</p>';
+    return;
+  }
+
+  const rows = entries.map(([nodeNum, typeChar]) => {
+    const s    = statsData[nodeNum] || {};
+    const fav  = favsData.find(f => f.node_number === nodeNum);
+    const call = s.callsign || (fav && fav.callsign) || '';
+    const keyed = s.keyed;
+    const dotClass  = keyed ? 'text-danger' : (s.fetched_at ? 'text-success' : 'text-secondary');
+    const dotTitle  = keyed ? 'Keyed (transmitting)' : (s.fetched_at ? 'Idle' : 'Status unknown');
+    const typeLabel = TYPE_LABEL[typeChar] || typeChar;
+
+    const actions = CAN_WRITE
+      ? `<div class="btn-group btn-group-sm">
+           <button class="btn btn-success btn-sm dropdown-toggle" data-bs-toggle="dropdown"
+                   aria-expanded="false" title="Connected — click to manage">
+             <i class="bi bi-plug-fill"></i>
+           </button>
+           <ul class="dropdown-menu dropdown-menu-end">
+             <li><h6 class="dropdown-header">${esc(nodeNum)} — Connected</h6></li>
+             <li><hr class="dropdown-divider"></li>
+             <li><button class="dropdown-item text-danger" onclick="doDisconnect('${esc(nodeNum)}',false)">
+               <i class="bi bi-x-circle me-1"></i>Disconnect</button></li>
+             <li><button class="dropdown-item text-danger" onclick="doDisconnect('${esc(nodeNum)}',true)">
+               <i class="bi bi-pin-angle me-1"></i>Disconnect Permanent</button></li>
+             <li><button class="dropdown-item text-danger" onclick="doDisconnect('',false)">
+               <i class="bi bi-x-circle-fill me-1"></i>Disconnect All</button></li>
+           </ul>
+         </div>`
+      : '';
+
+    return `<tr>
+      <td class="text-center" style="width:1.5rem">
+        <i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem" title="${dotTitle}"></i>
+      </td>
+      <td style="width:6rem"><code>${esc(nodeNum)}</code></td>
+      <td>${esc(call)}</td>
+      <td class="text-muted small">${typeLabel}</td>
+      <td class="text-end text-nowrap">${actions}</td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `<table class="table table-sm table-hover align-middle mb-0">
+    <tbody>${rows}</tbody>
+  </table>`;
 }
 
 function actionCell(nodeNum, favId) {
   if (!CAN_WRITE) return '';
   const num = esc(nodeNum);
   const connected = isConnected(nodeNum);
+
+  // Each connect row: left button = Connect (exclusive), right [+] = Add (keep existing).
+  const connectRow = (mode, icon, label) =>
+    `<li class="d-flex align-items-center px-2 gap-1">
+       <button class="dropdown-item rounded flex-grow-1" onclick="doConnect('${num}','${mode}',true)">
+         <i class="bi bi-${icon} me-1"></i>${label}
+       </button>
+       <button class="btn btn-sm btn-outline-secondary flex-shrink-0 py-0 px-1"
+               onclick="doConnect('${num}','${mode}',false)" title="Add without disconnecting others">
+         <i class="bi bi-plus"></i>
+       </button>
+     </li>`;
+
   let dropdown;
   if (connected) {
     dropdown = `<div class="btn-group btn-group-sm me-1">
@@ -255,9 +382,11 @@ function actionCell(nodeNum, favId) {
       <ul class="dropdown-menu dropdown-menu-end">
         <li><h6 class="dropdown-header">${num} — Connected</h6></li>
         <li><hr class="dropdown-divider"></li>
-        <li><button class="dropdown-item text-danger" onclick="doDisconnect('${num}')">
+        <li><button class="dropdown-item text-danger" onclick="doDisconnect('${num}',false)">
           <i class="bi bi-x-circle me-1"></i>Disconnect</button></li>
-        <li><button class="dropdown-item text-danger" onclick="doDisconnect('')">
+        <li><button class="dropdown-item text-danger" onclick="doDisconnect('${num}',true)">
+          <i class="bi bi-pin-angle me-1"></i>Disconnect Permanent</button></li>
+        <li><button class="dropdown-item text-danger" onclick="doDisconnect('',false)">
           <i class="bi bi-x-circle-fill me-1"></i>Disconnect All</button></li>
       </ul>
     </div>`;
@@ -267,17 +396,18 @@ function actionCell(nodeNum, favId) {
               aria-expanded="false" title="Not connected — click to connect">
         <i class="bi bi-plug"></i>
       </button>
-      <ul class="dropdown-menu dropdown-menu-end">
-        <li><h6 class="dropdown-header">Connect ${num}</h6></li>
+      <ul class="dropdown-menu dropdown-menu-end" style="min-width:230px">
+        <li><h6 class="dropdown-header">${num} <small class="text-muted fw-normal">click=connect · [+]=add</small></h6></li>
         <li><hr class="dropdown-divider"></li>
-        <li><button class="dropdown-item" onclick="doConnect('${num}','transceive')">
-          <i class="bi bi-arrow-left-right me-1"></i>Connect</button></li>
-        <li><button class="dropdown-item" onclick="doConnect('${num}','permanent')">
-          <i class="bi bi-pin-angle me-1"></i>Connect Permanent</button></li>
-        <li><button class="dropdown-item" onclick="doConnect('${num}','monitor')">
-          <i class="bi bi-eye me-1"></i>Monitor</button></li>
-        <li><button class="dropdown-item" onclick="doConnect('${num}','monitor_local')">
-          <i class="bi bi-ear me-1"></i>Monitor Local</button></li>
+        <li><h6 class="dropdown-header small py-0">Transceive</h6></li>
+        ${connectRow('transceive',      'arrow-left-right', 'Transceive')}
+        ${connectRow('transceive_perm', 'pin-angle',        'Permanent')}
+        <li><hr class="dropdown-divider"></li>
+        <li><h6 class="dropdown-header small py-0">Monitor</h6></li>
+        ${connectRow('monitor',         'eye',  'Monitor')}
+        ${connectRow('monitor_perm',    'pin-angle', 'Permanent')}
+        ${connectRow('monitor_local',   'ear',  'Monitor Local')}
+        ${connectRow('monitor_local_perm','pin-angle','Local Permanent')}
       </ul>
     </div>`;
   }
@@ -288,22 +418,22 @@ function actionCell(nodeNum, favId) {
 
 // --- Connect / Disconnect ---
 
-async function doConnect(targetNum, mode) {
+async function doConnect(targetNum, mode, exclusive) {
   const r = await fetch(`/api/nodes/${NODE_ID}/connect`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({target: targetNum, mode}),
+    body: JSON.stringify({target: targetNum, mode, exclusive}),
   });
   const data = await r.json();
   if (!data.ok) showToast('Connect failed: ' + (data.error || 'unknown'), 'danger');
-  else showToast(`Connecting to ${targetNum}…`, 'success');
+  else showToast(exclusive ? `Connecting to ${targetNum}…` : `Adding ${targetNum}…`, 'success');
 }
 
-async function doDisconnect(targetNum) {
+async function doDisconnect(targetNum, permanent) {
   const r = await fetch(`/api/nodes/${NODE_ID}/disconnect`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({target: targetNum}),
+    body: JSON.stringify({target: targetNum, permanent}),
   });
   const data = await r.json();
   if (!data.ok) showToast('Disconnect failed: ' + (data.error || 'unknown'), 'danger');

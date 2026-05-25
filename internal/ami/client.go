@@ -291,7 +291,24 @@ func (c *Client) readLoop(ctx context.Context, r *bufio.Reader) error {
 		}
 
 		if idx := strings.Index(line, ": "); idx > 0 {
-			headers[line[:idx]] = line[idx+2:]
+			key, val := line[:idx], line[idx+2:]
+			if key == "Output" {
+				// Accumulate multiple Output: headers (Asterisk 11 multi-line command responses).
+				if prev := headers["Output"]; prev != "" {
+					headers["Output"] = prev + "\n" + val
+				} else {
+					headers["Output"] = val
+				}
+			} else {
+				headers[key] = val
+			}
+		} else if len(headers) > 0 && line != "--END COMMAND--" {
+			// Accumulate raw output lines (Response: Follows format, older Asterisk).
+			if prev := headers["Output"]; prev != "" {
+				headers["Output"] = prev + "\n" + line
+			} else {
+				headers["Output"] = line
+			}
 		}
 	}
 }

@@ -157,3 +157,21 @@ body {
   --bs-table-color: var(--text-primary);
   --bs-table-border-color: var(--border);
 }
+
+/* Collapsible card headers */
+.collapse-header {
+  cursor: pointer;
+  user-select: none;
+}
+.collapse-chevron {
+  transition: transform 0.2s ease;
+}
+.collapse-header.collapsed .collapse-chevron {
+  transform: rotate(-90deg);
+}
+
+/* Connected node row highlight */
+tr.row-connected {
+  --bs-table-bg: color-mix(in srgb, var(--accent-green) 12%, transparent);
+  --bs-table-color: var(--text-primary);
+}

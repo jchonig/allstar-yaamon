@@ -53,8 +53,8 @@ func (b *Broker) Publish(topicID int64, data []byte) {
 }
 
 // Stream writes SSE events from topicID to w until r.Context() is cancelled.
-// If initial is non-nil it is sent immediately before waiting for published events.
-func (b *Broker) Stream(w http.ResponseWriter, r *http.Request, topicID int64, initial []byte) {
+// Any non-nil initial payloads are sent immediately before waiting for published events.
+func (b *Broker) Stream(w http.ResponseWriter, r *http.Request, topicID int64, initial ...[]byte) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -68,10 +68,12 @@ func (b *Broker) Stream(w http.ResponseWriter, r *http.Request, topicID int64, i
 	ch, cancel := b.Subscribe(topicID)
 	defer cancel()
 
-	if len(initial) > 0 {
-		fmt.Fprintf(w, "data: %s\n\n", initial)
-		flusher.Flush()
+	for _, msg := range initial {
+		if len(msg) > 0 {
+			fmt.Fprintf(w, "data: %s\n\n", msg)
+		}
 	}
+	flusher.Flush()
 
 	for {
 		select {

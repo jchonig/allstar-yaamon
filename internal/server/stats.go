@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"sync"
@@ -141,7 +142,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send cached stats immediately as the first event.
-	var initial []byte
+	var statsMsg []byte
 	favs, err := s.db.ListFavoritesByNode(r.Context(), nodeID)
 	if err == nil && len(favs) > 0 {
 		nums := make([]string, len(favs))
@@ -150,7 +151,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		}
 		current := s.statsCache.getMany(nums)
 		if len(current) > 0 {
-			initial, _ = json.Marshal(map[string]any{
+			statsMsg, _ = json.Marshal(map[string]any{
 				"type":   "stats",
 				"nodeID": nodeID,
 				"stats":  current,
@@ -158,7 +159,17 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.sseBroker.Stream(w, r, nodeID, initial)
+	// Send cached link state immediately as the second event (if already polled).
+	var linksMsg []byte
+	if links, ok := s.linksCache.get(nodeID); ok {
+		linksMsg, _ = json.Marshal(map[string]any{
+			"type":   "links",
+			"nodeID": nodeID,
+			"links":  links,
+		})
+	}
+
+	s.sseBroker.Stream(w, r, nodeID, statsMsg, linksMsg)
 }
 
 // handleAPINodeStats returns the current cached stats for all favorites of a node.
@@ -195,34 +206,58 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Target string `json:"target"`
-		// mode: "transceive" (default, ilink 5), "permanent" (ilink 11),
-		//       "monitor" (ilink 3), "monitor_local" (ilink 4)
-		Mode string `json:"mode"`
+		Target    string `json:"target"`
+		Mode      string `json:"mode"`      // see ilinkMap below
+		Exclusive bool   `json:"exclusive"` // disconnect all others first
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Target == "" {
 		http.Error(w, "body must be {\"target\":\"NNNNN\"}", http.StatusBadRequest)
 		return
 	}
 
+	// ilink function codes from app_rpt.c
 	ilinkMap := map[string]string{
-		"transceive":    "5",
-		"permanent":     "11",
-		"monitor":       "3",
-		"monitor_local": "4",
+		"transceive":         "3",
+		"transceive_perm":    "13",
+		"monitor":            "2",
+		"monitor_perm":       "12",
+		"monitor_local":      "8",
+		"monitor_local_perm": "18",
 	}
 	ilink, ok := ilinkMap[body.Mode]
 	if !ok {
-		ilink = "5"
+		ilink = "3"
 	}
+
+	if body.Exclusive {
+		// Only disconnect-all if there are actually active links; sending ilink 6
+		// when nothing is connected can race with the subsequent ilink 3 and cancel it.
+		if links, _ := s.linksCache.get(nodeID); len(links) > 0 {
+			disconnCmd := fmt.Sprintf("rpt cmd %s ilink 6", n.NodeNumber)
+			slog.Info("AMI disconnect-all (exclusive connect)", "node_id", nodeID, "cmd", disconnCmd)
+			if _, err := s.amiMgr.SendActionWait(nodeID, map[string]string{
+				"Action":  "Command",
+				"Command": disconnCmd,
+			}, 5*time.Second); err != nil {
+				slog.Warn("AMI disconnect-all failed", "node_id", nodeID, "err", err)
+			}
+			// Give Asterisk time to finish the disconnect before queuing the connect.
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
 	cmd := fmt.Sprintf("rpt cmd %s ilink %s %s", n.NodeNumber, ilink, body.Target)
-	if _, err := s.amiMgr.SendActionWait(nodeID, map[string]string{
+	slog.Info("AMI connect", "node_id", nodeID, "cmd", cmd, "exclusive", body.Exclusive)
+	resp, err := s.amiMgr.SendActionWait(nodeID, map[string]string{
 		"Action":  "Command",
 		"Command": cmd,
-	}, 5*time.Second); err != nil {
+	}, 5*time.Second)
+	if err != nil {
+		slog.Warn("AMI connect failed", "node_id", nodeID, "cmd", cmd, "err", err)
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	slog.Info("AMI connect response", "node_id", nodeID, "headers", resp.Headers)
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -241,24 +276,31 @@ func (s *Server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Target string `json:"target"`
+		Target    string `json:"target"`
+		Permanent bool   `json:"permanent"` // use ilink 11 (disconnect permanent link)
 	}
 	json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck — empty body is valid (disconnect all)
 
 	var cmd string
 	if body.Target == "" {
 		cmd = fmt.Sprintf("rpt cmd %s ilink 6", n.NodeNumber)
+	} else if body.Permanent {
+		cmd = fmt.Sprintf("rpt cmd %s ilink 11 %s", n.NodeNumber, body.Target)
 	} else {
 		cmd = fmt.Sprintf("rpt cmd %s ilink 1 %s", n.NodeNumber, body.Target)
 	}
 
-	if _, err := s.amiMgr.SendActionWait(nodeID, map[string]string{
+	slog.Info("AMI disconnect", "node_id", nodeID, "cmd", cmd)
+	resp, err := s.amiMgr.SendActionWait(nodeID, map[string]string{
 		"Action":  "Command",
 		"Command": cmd,
-	}, 5*time.Second); err != nil {
+	}, 5*time.Second)
+	if err != nil {
+		slog.Warn("AMI disconnect failed", "node_id", nodeID, "cmd", cmd, "err", err)
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	slog.Info("AMI disconnect response", "node_id", nodeID, "headers", resp.Headers)
 	writeJSON(w, map[string]any{"ok": true})
 }
 

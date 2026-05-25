@@ -20,14 +20,10 @@ services:
       TEST_VIEWER_PASSWORD: ${TEST_VIEWER_PASSWORD:-viewerpassword}
     develop:
       watch:
-        # Rebuild image and restart when source code changes.
-        - action: rebuild
-          path: ..
-          ignore:
-            - test/
-            - .git/
-            - coverage.out
-            - coverage.html
+        # Sync the pre-compiled linux binary and restart (fast; run 'make compile' to trigger).
+        - action: sync+restart
+          path: ./yaamon
+          target: /usr/local/bin/yaamon
         # Sync config/state files and restart (re-runs entrypoint / yaamon apply).
         - action: sync+restart
           path: ./config

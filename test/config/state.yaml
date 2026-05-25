@@ -1,9 +1,9 @@
 # Declarative state seeded before integration tests run.
 # Passwords are resolved from environment variables at apply time.
 purge:
-  users: true
-  nodes: true
-  favorites: true
+  users: false
+  nodes: false
+  favorites: false
 
 users:
   - username: admin
@@ -18,6 +18,6 @@ nodes:
     node_number: "99999"
     ami_host: localhost
     ami_port: 5038
-    ami_user: test
+    ami_user: admin
     ami_pass: test
     enabled: true
