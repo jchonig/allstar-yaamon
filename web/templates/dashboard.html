@@ -4,10 +4,10 @@
 
 {{define "nav-extra"}}
 {{if or (eq .Permission "superuser") (eq .Permission "admin")}}
-<a class="nav-link text-body" href="/admin/nodes">
+<a class="nav-link" href="/admin/nodes">
   <i class="bi bi-diagram-3 me-1"></i>Nodes
 </a>
-<a class="nav-link text-body" href="/admin/users">
+<a class="nav-link" href="/admin/users">
   <i class="bi bi-people me-1"></i>Users
 </a>
 {{end}}

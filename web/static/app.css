@@ -100,3 +100,27 @@ body {
 }
 
 .text-muted { color: var(--text-muted) !important; }
+
+/* Dropdown menus themed to match the current palette */
+.dropdown-menu {
+  background-color: var(--bg-card);
+  border-color: var(--border);
+}
+.dropdown-item {
+  color: var(--text-primary);
+}
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.dropdown-item.active {
+  background-color: var(--accent-blue);
+  color: #fff;
+}
+.dropdown-divider {
+  border-color: var(--border);
+}
+.dropdown-header {
+  color: var(--text-muted);
+}

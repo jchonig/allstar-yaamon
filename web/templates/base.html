@@ -8,6 +8,7 @@
   <script>
     (function() {
       var t = localStorage.getItem('yaamon_theme') || 'dark';
+      if (t === 'system') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', t);
     })();
   </script>
@@ -23,9 +24,21 @@
       </a>
       <div class="ms-auto d-flex align-items-center gap-2">
         {{block "nav-extra" .}}{{end}}
-        <button class="btn btn-sm btn-outline-secondary" id="themeToggle" title="Toggle theme">
-          <i class="bi bi-circle-half"></i>
-        </button>
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary dropdown-toggle" id="themeToggle"
+                  data-bs-toggle="dropdown" aria-expanded="false" title="Theme">
+            <i class="bi bi-circle-half"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><h6 class="dropdown-header">Theme</h6></li>
+            <li><button class="dropdown-item" data-theme-choice="system"><i class="bi bi-display me-2"></i>System</button></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><button class="dropdown-item" data-theme-choice="dark"><i class="bi bi-moon-stars me-2"></i>Dark</button></li>
+            <li><button class="dropdown-item" data-theme-choice="light"><i class="bi bi-sun me-2"></i>Light</button></li>
+            <li><button class="dropdown-item" data-theme-choice="solarized"><i class="bi bi-brightness-high me-2"></i>Solarized</button></li>
+            <li><button class="dropdown-item" data-theme-choice="high-contrast"><i class="bi bi-circle-fill me-2"></i>High Contrast</button></li>
+          </ul>
+        </div>
       </div>
     </div>
   </nav>
