@@ -3,6 +3,9 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
 
 	"allstar-yaamon/internal/auth"
 	"allstar-yaamon/internal/db"
@@ -140,7 +143,7 @@ type dashboardData struct {
 	Username   string
 	Permission string
 	Nodes      []db.Node
-	ActiveNode int64
+	ActiveNode *db.Node
 }
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -151,6 +154,24 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		data.Permission = sess.Permission
 	}
 	data.Nodes, _ = s.db.ListNodes(r.Context())
+
+	// Determine active node from URL param or default to first.
+	if idStr := chi.URLParam(r, "nodeID"); idStr != "" {
+		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+			for i := range data.Nodes {
+				if data.Nodes[i].ID == id {
+					n := data.Nodes[i]
+					data.ActiveNode = &n
+					break
+				}
+			}
+		}
+	}
+	if data.ActiveNode == nil && len(data.Nodes) > 0 {
+		n := data.Nodes[0]
+		data.ActiveNode = &n
+	}
+
 	s.render(w, "dashboard", data)
 }
 

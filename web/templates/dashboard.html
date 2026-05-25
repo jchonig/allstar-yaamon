@@ -9,36 +9,327 @@
 </a>
 {{end}}
 <span class="text-muted small">
-  {{.Username}}
-  <span class="badge bg-secondary ms-1">{{.Permission}}</span>
+  {{.Username}}<span class="badge bg-secondary ms-1">{{.Permission}}</span>
 </span>
 <a href="/logout" class="btn btn-sm btn-outline-secondary">Sign out</a>
 {{end}}
 
 {{define "content"}}
-<div class="row">
-  <div class="col">
-    <h5 class="mb-3">Dashboard</h5>
-    {{if .Nodes}}
-    <div class="list-group mb-3">
-      {{range .Nodes}}
-      <a href="/dashboard/{{.ID}}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-broadcast me-2"></i>{{.Name}}</span>
-        <span class="text-muted small"><code>{{.NodeNumber}}</code></span>
-      </a>
-      {{end}}
-    </div>
-    {{else}}
-    <div class="alert alert-info">
-      <i class="bi bi-info-circle me-2"></i>
-      Welcome, <strong>{{.Username}}</strong>.
-      {{if or (eq .Permission "superuser") (eq .Permission "admin")}}
-      <a href="/admin/nodes">Add a node</a> to get started.
-      {{else}}
-      No nodes have been configured yet.
-      {{end}}
-    </div>
+{{if not .ActiveNode}}
+<div class="alert alert-info mt-3">
+  <i class="bi bi-info-circle me-2"></i>
+  Welcome, <strong>{{.Username}}</strong>.
+  {{if or (eq .Permission "superuser") (eq .Permission "admin")}}
+  <a href="/admin/nodes">Add a node</a> to get started.
+  {{else}}
+  No nodes have been configured yet.
+  {{end}}
+</div>
+{{else}}
+
+{{/* Node selector tabs */}}
+{{if gt (len .Nodes) 1}}
+<div class="mb-3">
+  <div class="btn-group btn-group-sm" role="group">
+    {{range .Nodes}}
+    <a href="/dashboard/{{.ID}}"
+       class="btn {{if eq .ID $.ActiveNode.ID}}btn-primary{{else}}btn-outline-secondary{{end}}">
+      {{.Name}}
+    </a>
     {{end}}
   </div>
 </div>
+{{end}}
+
+{{/* Active node header */}}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <div>
+    <h5 class="mb-0 d-inline">{{.ActiveNode.Name}}</h5>
+    <code class="text-muted ms-2">{{.ActiveNode.NodeNumber}}</code>
+    <span id="ami-badge" class="badge ms-2 bg-secondary">AMI —</span>
+  </div>
+  {{if or (eq .Permission "superuser") (eq .Permission "admin") (eq .Permission "readwrite")}}
+  <button class="btn btn-sm btn-outline-secondary" onclick="openAddFavModal()">
+    <i class="bi bi-plus-circle me-1"></i>Add Favorite
+  </button>
+  {{end}}
+</div>
+
+{{/* Favorites table */}}
+<div class="table-responsive mb-4">
+  <table class="table table-hover table-sm align-middle mb-0" id="favs-table">
+    <thead class="table-light">
+      <tr>
+        <th style="width:2rem" title="Activity"></th>
+        <th>Node</th>
+        <th>Callsign</th>
+        <th>Description</th>
+        <th>Location</th>
+        <th title="Total TX time">TX</th>
+        <th title="Connected links">LCnt</th>
+        <th class="text-end">Action</th>
+      </tr>
+    </thead>
+    <tbody id="favs-tbody">
+      <tr><td colspan="8" class="text-center text-muted py-4">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+{{/* Add Favorite Modal */}}
+<div class="modal fade" id="addFavModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Favorite</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Node Number <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="fav-node-number" placeholder="12345">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Callsign</label>
+          <input type="text" class="form-control" id="fav-callsign">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-control" id="fav-description">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Location</label>
+          <input type="text" class="form-control" id="fav-location">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Group</label>
+          <input type="text" class="form-control" id="fav-group" placeholder="default">
+        </div>
+        <div class="text-danger small" id="fav-form-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveFavorite()">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{end}}
+{{end}}
+
+{{define "scripts"}}
+{{if .ActiveNode}}
+<script>
+const NODE_ID = {{.ActiveNode.ID}};
+const NODE_NUM = "{{.ActiveNode.NodeNumber}}";
+const CAN_WRITE = {{if or (eq .Permission "superuser") (eq .Permission "admin") (eq .Permission "readwrite")}}true{{else}}false{{end}};
+
+let favsData = [];
+let statsData = {};
+let addFavModal;
+let sseSource = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  addFavModal = new bootstrap.Modal(document.getElementById('addFavModal'));
+  loadFavs();
+  connectSSE();
+});
+
+// --- Favorites ---
+
+async function loadFavs() {
+  try {
+    const r = await fetch(`/api/nodes/${NODE_ID}/favorites`);
+    favsData = (await r.json()) || [];
+  } catch { favsData = []; }
+
+  // Also load cached stats immediately.
+  try {
+    const r2 = await fetch(`/api/nodes/${NODE_ID}/stats`);
+    statsData = (await r2.json()) || {};
+  } catch { statsData = {}; }
+
+  renderFavs();
+}
+
+function renderFavs() {
+  const tbody = document.getElementById('favs-tbody');
+  if (!favsData.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No favorites — click Add Favorite to get started.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = favsData.map(f => {
+    const s = statsData[f.node_number] || {};
+    const keyed = s.keyed;
+    const txTime = s.total_tx_time != null ? fmtDuration(s.total_tx_time) : '—';
+    const lcnt = s.connected_links != null ? s.connected_links : '—';
+    const call = s.callsign || f.callsign || '—';
+    const desc = s.description || f.description || '—';
+    const loc  = s.location || f.location || '—';
+    const stale = s.fetched_at && isStale(s.fetched_at);
+    const dotClass = keyed ? 'text-danger' : (stale || !s.fetched_at ? 'text-secondary' : 'text-success');
+    const dot = `<i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem"></i>`;
+
+    const connectBtn = CAN_WRITE
+      ? `<button class="btn btn-sm btn-outline-success me-1" onclick="connectNode('${f.node_number}')" title="Connect">
+           <i class="bi bi-link-45deg"></i>
+         </button>`
+      : '';
+    const delBtn = CAN_WRITE
+      ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteFav(${f.id})" title="Remove favorite">
+           <i class="bi bi-trash"></i>
+         </button>`
+      : '';
+
+    return `<tr data-node-num="${esc(f.node_number)}">
+      <td class="text-center">${dot}</td>
+      <td><code>${esc(f.node_number)}</code></td>
+      <td>${esc(call)}</td>
+      <td class="text-truncate" style="max-width:200px" title="${esc(desc)}">${esc(desc)}</td>
+      <td class="text-truncate" style="max-width:150px" title="${esc(loc)}">${esc(loc)}</td>
+      <td class="text-nowrap">${txTime}</td>
+      <td>${lcnt}</td>
+      <td class="text-end text-nowrap">${connectBtn}${delBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+function applyStats(stats) {
+  statsData = Object.assign(statsData, stats);
+  // Update existing rows in-place without full re-render.
+  const tbody = document.getElementById('favs-tbody');
+  for (const [num, s] of Object.entries(stats)) {
+    const row = tbody.querySelector(`tr[data-node-num="${num}"]`);
+    if (!row) continue;
+    const cells = row.cells;
+    const keyed = s.keyed;
+    const stale = s.fetched_at && isStale(s.fetched_at);
+    const dotClass = keyed ? 'text-danger' : (stale ? 'text-secondary' : 'text-success');
+    cells[0].innerHTML = `<i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem"></i>`;
+    if (s.callsign)       cells[2].textContent = s.callsign;
+    if (s.description) {  cells[3].textContent = s.description; cells[3].title = s.description; }
+    if (s.location)    {  cells[4].textContent = s.location;    cells[4].title = s.location; }
+    if (s.total_tx_time != null) cells[5].textContent = fmtDuration(s.total_tx_time);
+    if (s.connected_links != null) cells[6].textContent = s.connected_links;
+  }
+}
+
+// --- SSE ---
+
+function connectSSE() {
+  if (sseSource) sseSource.close();
+  sseSource = new EventSource(`/sse/${NODE_ID}`);
+  sseSource.onmessage = evt => {
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.type === 'stats' && msg.stats) {
+        applyStats(msg.stats);
+      }
+    } catch {}
+  };
+  sseSource.onerror = () => {
+    // Browser will reconnect automatically; no extra action needed.
+  };
+}
+
+// --- Connect / Disconnect ---
+
+async function connectNode(targetNum) {
+  const r = await fetch(`/api/nodes/${NODE_ID}/connect`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({target: targetNum}),
+  });
+  const data = await r.json();
+  if (!data.ok) showToast('Connect failed: ' + (data.error || 'unknown'), 'danger');
+  else showToast(`Connecting to ${targetNum}…`, 'success');
+}
+
+// --- Favorites CRUD ---
+
+function openAddFavModal() {
+  document.getElementById('addFavModal').querySelector('form') &&
+    document.getElementById('addFavModal').querySelector('form').reset();
+  document.getElementById('fav-node-number').value = '';
+  document.getElementById('fav-callsign').value = '';
+  document.getElementById('fav-description').value = '';
+  document.getElementById('fav-location').value = '';
+  document.getElementById('fav-group').value = '';
+  document.getElementById('fav-form-error').textContent = '';
+  addFavModal.show();
+}
+
+async function saveFavorite() {
+  const num = document.getElementById('fav-node-number').value.trim();
+  if (!num) {
+    document.getElementById('fav-form-error').textContent = 'Node Number is required.';
+    return;
+  }
+  const body = {
+    node_number:  num,
+    callsign:     document.getElementById('fav-callsign').value.trim(),
+    description:  document.getElementById('fav-description').value.trim(),
+    location:     document.getElementById('fav-location').value.trim(),
+    group_name:   document.getElementById('fav-group').value.trim() || 'default',
+  };
+  const r = await fetch(`/api/nodes/${NODE_ID}/favorites`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    document.getElementById('fav-form-error').textContent = await r.text();
+    return;
+  }
+  addFavModal.hide();
+  loadFavs();
+}
+
+async function deleteFav(favID) {
+  if (!confirm('Remove this favorite?')) return;
+  await fetch(`/api/nodes/${NODE_ID}/favorites/${favID}`, {method: 'DELETE'});
+  loadFavs();
+}
+
+// --- Utilities ---
+
+function fmtDuration(secs) {
+  if (!secs) return '—';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = Math.floor(secs % 60);
+  if (h > 0) return `${h}h${String(m).padStart(2,'0')}m`;
+  if (m > 0) return `${m}m${String(s).padStart(2,'0')}s`;
+  return `${s}s`;
+}
+
+function isStale(fetchedAt) {
+  return (Date.now() - new Date(fetchedAt).getTime()) > 90_000;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+let toastContainer;
+function showToast(msg, type) {
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+    document.body.appendChild(toastContainer);
+  }
+  const el = document.createElement('div');
+  el.className = `toast align-items-center text-bg-${type} border-0`;
+  el.setAttribute('role', 'alert');
+  el.innerHTML = `<div class="d-flex"><div class="toast-body">${esc(msg)}</div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+  toastContainer.appendChild(el);
+  new bootstrap.Toast(el, {delay: 3000}).show();
+  el.addEventListener('hidden.bs.toast', () => el.remove());
+}
+</script>
+{{end}}
 {{end}}

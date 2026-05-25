@@ -19,19 +19,24 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"allstar-yaamon/internal/ami"
+	"allstar-yaamon/internal/aslstats"
 	"allstar-yaamon/internal/auth"
 	"allstar-yaamon/internal/config"
 	"allstar-yaamon/internal/db"
+	"allstar-yaamon/internal/sse"
 	tlsserver "allstar-yaamon/internal/tls"
 )
 
 type Server struct {
-	cfg      *config.Config
-	webFS    embed.FS
-	db       *db.DB
-	sessions *auth.Manager
-	amiMgr   *ami.Manager
-	tmpls    map[string]*template.Template
+	cfg        *config.Config
+	webFS      embed.FS
+	db         *db.DB
+	sessions   *auth.Manager
+	amiMgr     *ami.Manager
+	fetcher    *aslstats.Fetcher
+	statsCache *statsCache
+	sseBroker  *sse.Broker
+	tmpls      map[string]*template.Template
 }
 
 func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
@@ -45,6 +50,9 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 	if err := s.initAMI(); err != nil {
 		return nil, fmt.Errorf("AMI manager: %w", err)
 	}
+	s.fetcher = aslstats.New("")
+	s.statsCache = newStatsCache()
+	s.sseBroker = sse.NewBroker()
 	return s, nil
 }
 
@@ -140,7 +148,20 @@ func (s *Server) Run() error {
 		})
 		r.Get("/dashboard", s.handleDashboard)
 		r.Get("/dashboard/{nodeID}", s.handleDashboard)
+		r.Get("/sse/{nodeID}", s.handleSSE)
 		r.Get("/api/nodes", s.handleAPIListNodes)
+		r.Get("/api/nodes/{id}/favorites", s.handleAPIListFavorites)
+		r.Get("/api/nodes/{id}/stats", s.handleAPINodeStats)
+	})
+
+	// Readwrite+ routes — can connect/disconnect and manage favorites
+	r.Group(func(r chi.Router) {
+		r.Use(s.sessions.RequirePermission(db.PermReadWrite))
+		r.Post("/api/nodes/{id}/connect", s.handleConnect)
+		r.Post("/api/nodes/{id}/disconnect", s.handleDisconnect)
+		r.Post("/api/nodes/{id}/favorites", s.handleAPICreateFavorite)
+		r.Put("/api/nodes/{id}/favorites/{fid}", s.handleAPIUpdateFavorite)
+		r.Delete("/api/nodes/{id}/favorites/{fid}", s.handleAPIDeleteFavorite)
 	})
 
 	// Admin routes — admin+
@@ -164,6 +185,8 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	s.startStatsPoller(ctx)
 
 	var mainServer *http.Server
 
