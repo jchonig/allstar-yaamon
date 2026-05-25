@@ -794,8 +794,8 @@ async function openConnModal(nodeNum, lcnt) {
   document.getElementById('conn-list-content').innerHTML =
     '<div class="text-muted text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading…</div>';
 
-  // Clear graph SVG from a prior open
-  d3.select('#conn-graph-svg').selectAll('*').remove();
+  // Clear graph SVG from a prior open (only if D3 is already loaded)
+  if (window.d3) d3.select('#conn-graph-svg').selectAll('*').remove();
 
   connModal.show();
   setConnView(connView, false); // set tabs without re-triggering graph load
