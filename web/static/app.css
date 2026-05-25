@@ -158,6 +158,16 @@ body {
   --bs-table-border-color: var(--border);
 }
 
+/* Sortable table column headers */
+th.sort-col {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+th.sort-col:hover { opacity: 0.8; }
+th.sort-col .sort-icon { font-size: .65rem; opacity: .4; }
+th.sort-col.sort-active .sort-icon { opacity: 1; }
+
 /* Collapsible card headers */
 .collapse-header {
   cursor: pointer;

@@ -89,12 +89,12 @@
       <thead class="table-light">
         <tr>
           <th style="width:2rem" title="Node status: green=online, red=keyed/transmitting, grey=unknown"></th>
-          <th>Node</th>
-          <th>Callsign</th>
+          <th onclick="setSort('node')" class="sort-col">Node <i class="bi bi-chevron-expand sort-icon"></i></th>
+          <th onclick="setSort('callsign')" class="sort-col">Callsign <i class="bi bi-chevron-expand sort-icon"></i></th>
           <th class="d-none d-md-table-cell">Description</th>
           <th class="d-none d-md-table-cell">Location</th>
-          <th title="Total TX time">TX</th>
-          <th title="Connected links">LCnt</th>
+          <th onclick="setSort('tx')" class="sort-col" title="Total TX time">TX <i class="bi bi-chevron-expand sort-icon"></i></th>
+          <th onclick="setSort('lcnt')" class="sort-col" title="Connected links">LCnt <i class="bi bi-chevron-expand sort-icon"></i></th>
           <th class="text-end">Action</th>
         </tr>
       </thead>
@@ -158,6 +158,8 @@ let favsData = [];
 let statsData = {};
 let amiLinks = {};           // {nodeNum: typeChar} — from AMI "rpt show variables"
 let amiLinksReceived = false; // true once first "links" SSE message arrives
+let sortCol = sessionStorage.getItem('yaamon_sort_col') || null;
+let sortDir = parseInt(sessionStorage.getItem('yaamon_sort_dir') || '1');
 let addFavModal;
 let sseSource = null;
 
@@ -166,6 +168,53 @@ document.addEventListener('DOMContentLoaded', () => {
   loadFavs();
   connectSSE();
 });
+
+// --- Sort ---
+
+function setSort(col) {
+  if (sortCol === col && sortDir === -1) {
+    // Third click resets to insertion order.
+    sortCol = null;
+    sortDir = 1;
+    sessionStorage.removeItem('yaamon_sort_col');
+    sessionStorage.removeItem('yaamon_sort_dir');
+  } else {
+    sortDir = (sortCol === col) ? -sortDir : 1;
+    sortCol = col;
+    sessionStorage.setItem('yaamon_sort_col', sortCol);
+    sessionStorage.setItem('yaamon_sort_dir', String(sortDir));
+  }
+  renderFavs();
+}
+
+function sortedFavs() {
+  if (!sortCol) return favsData;
+  return [...favsData].sort((a, b) => {
+    const sa = statsData[a.node_number] || {}, sb = statsData[b.node_number] || {};
+    let av, bv;
+    switch (sortCol) {
+      case 'node':     av = parseInt(a.node_number);                              bv = parseInt(b.node_number); break;
+      case 'callsign': av = (sa.callsign || a.callsign || '').toLowerCase();      bv = (sb.callsign || b.callsign || '').toLowerCase(); break;
+      case 'tx':       av = sa.total_tx_time   || 0;                              bv = sb.total_tx_time   || 0; break;
+      case 'lcnt':     av = sa.connected_links || 0;                              bv = sb.connected_links || 0; break;
+      default: return 0;
+    }
+    return av < bv ? -sortDir : av > bv ? sortDir : 0;
+  });
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('#favs-table th.sort-col').forEach(th => {
+    const col = th.onclick?.toString().match(/'(\w+)'/)?.[1];
+    const icon = th.querySelector('.sort-icon');
+    if (!icon) return;
+    const active = col === sortCol;
+    th.classList.toggle('sort-active', active);
+    icon.className = active
+      ? `bi ${sortDir === 1 ? 'bi-chevron-up' : 'bi-chevron-down'} sort-icon`
+      : 'bi bi-chevron-expand sort-icon';
+  });
+}
 
 // --- Favorites ---
 
@@ -192,7 +241,8 @@ function renderFavs() {
   }
 
   renderActiveLinks();
-  tbody.innerHTML = favsData.map(f => {
+  updateSortHeaders();
+  tbody.innerHTML = sortedFavs().map(f => {
     const s = statsData[f.node_number] || {};
     const keyed = s.keyed;
     const txTime = s.total_tx_time != null ? fmtDuration(s.total_tx_time) : '—';
@@ -204,10 +254,13 @@ function renderFavs() {
     const dotClass = keyed ? 'text-danger' : (stale || !s.fetched_at ? 'text-secondary' : 'text-success');
     const dotTitle = keyed ? 'Keyed (transmitting)' : (stale || !s.fetched_at ? 'Status unknown' : 'Online');
     const dot = `<i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem" title="${dotTitle}"></i>`;
+    const numAttrs = CAN_WRITE
+      ? `ondblclick="doConnect('${esc(f.node_number)}','transceive',true)" style="cursor:pointer" title="Double-click to connect"`
+      : '';
 
     return `<tr data-node-num="${esc(f.node_number)}" class="${isConnected(f.node_number) ? 'row-connected' : ''}">
       <td class="text-center">${dot}</td>
-      <td><code>${esc(f.node_number)}</code></td>
+      <td ${numAttrs}><code>${esc(f.node_number)}</code></td>
       <td>${esc(call)}</td>
       <td class="text-truncate d-none d-md-table-cell" style="max-width:200px" title="${esc(desc)}">${esc(desc)}</td>
       <td class="text-truncate d-none d-md-table-cell" style="max-width:150px" title="${esc(loc)}">${esc(loc)}</td>
@@ -261,13 +314,23 @@ function connectSSE() {
       } else if (msg.type === 'links' && msg.links && typeof msg.links === 'object') {
         amiLinks = msg.links;
         amiLinksReceived = true;
+        setAMIBadge(true);
         rebuildAllActionCells();
       }
     } catch {}
   };
   sseSource.onerror = () => {
-    // Browser will reconnect automatically; no extra action needed.
+    setAMIBadge(false);
   };
+}
+
+// --- AMI badge ---
+
+function setAMIBadge(connected) {
+  const badge = document.getElementById('ami-badge');
+  if (!badge) return;
+  badge.className = connected ? 'badge ms-2 bg-success' : 'badge ms-2 bg-secondary';
+  badge.textContent  = connected ? 'AMI ✓' : 'AMI —';
 }
 
 // --- Connection state ---
