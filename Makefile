@@ -72,7 +72,6 @@ run: build
 	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
 	  -v "$(CURDIR)/test/data:/data" \
 	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
-	  -e YAAMON_RESET_PASSWORDS=1 \
 	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
 	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
 	  yaamon:dev
