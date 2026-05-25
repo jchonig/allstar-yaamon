@@ -1,102 +1,129 @@
 APP     := yaamon
-CMD     := .
-DIST    := ./dist
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS := -ldflags "-X main.Version=$(VERSION) -s -w"
 
-.PHONY: all build test test-unit test-integration lint clean run \
-        docker-build docker-build-multi docker-run snapshot install deps
+# Builder image for tests, lint, and deps — Debian-based so the race detector works.
+BUILDER := golang:1.26
 
+# Mount the host Go module and build caches so Docker runs don't re-download modules.
+GOMODCACHE := $(shell go env GOMODCACHE 2>/dev/null || echo $(HOME)/go/pkg/mod)
+GOCACHE    := $(shell go env GOCACHE    2>/dev/null || echo $(HOME)/.cache/go-build)
+
+DOCKER_GO := docker run --rm \
+  -v "$(CURDIR):/src" \
+  -v "$(GOMODCACHE):/go/pkg/mod" \
+  -v "$(GOCACHE):/root/.cache/go-build" \
+  -w /src \
+  $(BUILDER)
+
+# Names used by the integration test setup.
+TEST_NET := yaamon-test-net
+TEST_SUT := yaamon-sut
+
+.PHONY: all build build-multi test test-unit coverage lint deps \
+        run test-integration snapshot \
+        install-service uninstall-service version clean
+
+## Default — build the yaamon Docker image for the current platform.
 all: build
 
+## Build the Docker image.
 build:
-	mkdir -p $(DIST)
-	go build $(LDFLAGS) -o $(DIST)/$(APP) $(CMD)
+	docker build \
+	  --build-arg TARGETOS=linux \
+	  --build-arg TARGETARCH=$(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') \
+	  -t yaamon:dev .
 
-run: build
-	$(DIST)/$(APP) serve --config config.yaml
-
-test: test-unit docker-build test-integration
-
-test-unit:
-	go test ./... -race -count=1
-
-coverage:
-	go test ./... -coverprofile=coverage.out
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report: coverage.html"
-
-lint:
-	golangci-lint run ./...
-
-deps:
-	go mod tidy
-	go mod verify
-
-build-all: build-linux-amd64 build-linux-arm64
-
-build-linux-amd64:
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(DIST)/$(APP)-linux-amd64 $(CMD)
-
-build-linux-arm64:
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(DIST)/$(APP)-linux-arm64 $(CMD)
-
-docker-build:
-	docker build -t yaamon:dev .
-
-docker-build-multi:
+## Build multi-arch Docker image (requires buildx).
+build-multi:
 	docker buildx build --platform linux/amd64,linux/arm64 -t yaamon:dev .
 
-docker-run:
+## Full test suite: unit tests → build image → integration tests.
+test: test-unit build test-integration
+
+## Run unit tests inside Docker.
+test-unit:
+	$(DOCKER_GO) go test ./... -race -count=1
+
+## Run unit tests with coverage report (output written to host via volume mount).
+coverage:
+	$(DOCKER_GO) sh -c "go test ./... -coverprofile=coverage.out && go tool cover -html=coverage.out -o coverage.html"
+	@echo "Coverage report: coverage.html"
+
+## Run linter inside Docker.
+lint:
+	docker run --rm \
+	  -v "$(CURDIR):/src" \
+	  -v "$(GOMODCACHE):/go/pkg/mod" \
+	  -w /src \
+	  golangci/golangci-lint:latest golangci-lint run ./...
+
+## Tidy and verify go.mod/go.sum inside Docker.
+deps:
+	$(DOCKER_GO) sh -c "go mod tidy && go mod verify"
+
+## Run the server using the built image (reads config.yaml from current dir).
+run: build
 	docker run --rm -p 8080:80 \
-	  -v $(PWD)/config.yaml:/etc/yaamon/config.yaml \
-	  -v $(PWD)/state.yaml:/etc/yaamon/state.yaml \
-	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
+	  -v "$(CURDIR)/config.yaml:/etc/yaamon/config.yaml:ro" \
 	  yaamon:dev
 
-# Start container with test/ config+data, run integration tests, stop container.
-# test/data/ is preserved after the run for post-failure inspection.
+## Integration tests: start the yaamon container and a Go test runner on a shared
+## Docker network. test/data/ is preserved after the run for post-failure inspection.
 test-integration:
-	@mkdir -p test/data
-	@echo "Starting test container..."
-	$(eval CID := $(shell docker run -d \
-	  -v $(PWD)/test/config.yaml:/etc/yaamon/config.yaml:ro \
-	  -v $(PWD)/test/data:/data \
-	  -v $(PWD)/test/state.yaml:/etc/yaamon/state.yaml:ro \
+	@docker rm -f $(TEST_SUT) 2>/dev/null; \
+	docker network rm $(TEST_NET) 2>/dev/null; \
+	mkdir -p test/data; \
+	docker network create $(TEST_NET); \
+	docker run -d \
+	  --name $(TEST_SUT) \
+	  --network $(TEST_NET) \
+	  -v "$(CURDIR)/test/config.yaml:/etc/yaamon/config.yaml:ro" \
+	  -v "$(CURDIR)/test/data:/data" \
+	  -v "$(CURDIR)/test/state.yaml:/etc/yaamon/state.yaml:ro" \
 	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
 	  -e TEST_ADMIN_PASSWORD=testpassword \
-	  -p 18080:80 \
-	  yaamon:dev))
-	@trap 'echo "Stopping container $(CID)..."; docker stop $(CID) >/dev/null' EXIT; \
-	  echo "Waiting for container $(CID)..."; \
-	  until curl -sf http://localhost:18080/health >/dev/null 2>&1; do sleep 1; done; \
-	  echo "Container ready."; \
-	  YAAMON_TEST_URL=http://localhost:18080 \
-	  TEST_ADMIN_PASSWORD=testpassword \
-	  go test ./integration_tests/... -v -tags=integration -timeout=120s
+	  -e TEST_VIEWER_PASSWORD=viewerpassword \
+	  yaamon:dev; \
+	echo "Waiting for server..."; \
+	timeout 30 sh -c 'until docker exec $(TEST_SUT) curl -sf http://localhost/health >/dev/null 2>&1; do sleep 1; done'; \
+	echo "Server ready. Running integration tests..."; \
+	docker run --rm \
+	  --network $(TEST_NET) \
+	  -v "$(CURDIR):/src" \
+	  -v "$(GOMODCACHE):/go/pkg/mod" \
+	  -v "$(GOCACHE):/root/.cache/go-build" \
+	  -w /src \
+	  -e YAAMON_TEST_URL=http://$(TEST_SUT):80 \
+	  -e TEST_ADMIN_PASSWORD=testpassword \
+	  -e TEST_VIEWER_PASSWORD=viewerpassword \
+	  $(BUILDER) \
+	  go test ./integration_tests/... -v -tags=integration -timeout=120s; \
+	EXIT=$$?; \
+	docker stop $(TEST_SUT) >/dev/null 2>&1; \
+	docker rm   $(TEST_SUT) >/dev/null 2>&1; \
+	docker network rm $(TEST_NET) >/dev/null 2>&1; \
+	exit $$EXIT
 
+## Local GoReleaser snapshot (builds all release artifacts without publishing).
 snapshot:
 	goreleaser release --snapshot --clean
 
-install: build
-	sudo cp $(DIST)/$(APP) /usr/local/bin/$(APP)
-	sudo chmod 755 /usr/local/bin/$(APP)
-
-install-service: install
+## Install and enable systemd service on a Linux host (not for Docker installs).
+install-service:
 	sudo cp contrib/yaamon.service /etc/systemd/system/
 	sudo systemctl daemon-reload
 	sudo systemctl enable yaamon
 	sudo systemctl start yaamon
-	@echo "Service started. Check status with: sudo systemctl status yaamon"
+	@echo "Service started. Check: sudo systemctl status yaamon"
 
 uninstall-service:
-	sudo systemctl stop yaamon || true
+	sudo systemctl stop yaamon    || true
 	sudo systemctl disable yaamon || true
 	sudo rm -f /etc/systemd/system/yaamon.service
 	sudo systemctl daemon-reload
 
 clean:
-	rm -rf $(DIST) coverage.out coverage.html
+	rm -rf coverage.out coverage.html
 
 version:
 	@echo $(VERSION)
