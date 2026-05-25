@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -139,30 +140,29 @@ func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
 
 	// Actual response shape (stats.allstarlink.org/api/stats/{node}):
 	// {
-	//   "node": { "callsign": "W1AW", "access_webtransceiver": 1, "server": {"Affiliation": "..."} },
+	//   "node": { "callsign": "W1AW", "access_webtransceiver": "1",
+	//             "node_frequency": "Site description" },
 	//   "stats": {
 	//     "data": {
-	//       "keyed": false, "totaltxtime": 1234, "totalkeyups": 56,
-	//       "links": ["12345", "67890"],          // connected node numbers
-	//       "linkedNodes": [{"name": "12345"}, …] // same, as objects
+	//       "keyed": false,
+	//       "totaltxtime": "6001",   // string-encoded seconds
+	//       "totalkeyups": "776",    // string-encoded count
+	//       "links": ["12345", "67890"]  // connected node numbers
 	//     }
 	//   }
 	// }
 	var raw struct {
 		Node struct {
-			Callsign            string `json:"callsign"`
-			AccessWebtransceiver int   `json:"access_webtransceiver"`
-			Server              struct {
-				Affiliation string `json:"Affiliation"`
-				SiteName    string `json:"SiteName"`
-			} `json:"server"`
+			Callsign             string `json:"callsign"`
+			AccessWebtransceiver string `json:"access_webtransceiver"` // "0" or "1"
+			NodeFrequency        string `json:"node_frequency"`        // site/description
 		} `json:"node"`
 		Stats struct {
 			Data struct {
-				Keyed       bool    `json:"keyed"`
-				TotalTxTime float64 `json:"totaltxtime"`
-				TotalKeyups int     `json:"totalkeyups"`
-				Links       []string `json:"links"` // connected node numbers as strings
+				Keyed       bool     `json:"keyed"`
+				TotalTxTime string   `json:"totaltxtime"` // string-encoded seconds
+				TotalKeyups string   `json:"totalkeyups"` // string-encoded count
+				Links       []string `json:"links"`
 			} `json:"data"`
 		} `json:"stats"`
 	}
@@ -172,16 +172,15 @@ func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
 	}
 
 	s.Callsign = raw.Node.Callsign
-	// Use Affiliation as description when available; fall back to SiteName.
-	if raw.Node.Server.Affiliation != "" {
-		s.Description = raw.Node.Server.Affiliation
-	} else {
-		s.Description = raw.Node.Server.SiteName
-	}
-	s.Web = raw.Node.AccessWebtransceiver != 0
+	s.Description = raw.Node.NodeFrequency
+	s.Web = raw.Node.AccessWebtransceiver != "" && raw.Node.AccessWebtransceiver != "0"
 	s.Keyed = raw.Stats.Data.Keyed
-	s.TotalTxTime = raw.Stats.Data.TotalTxTime
-	s.TotalKeyups = raw.Stats.Data.TotalKeyups
+	if v, err := strconv.ParseFloat(raw.Stats.Data.TotalTxTime, 64); err == nil {
+		s.TotalTxTime = v
+	}
+	if v, err := strconv.Atoi(raw.Stats.Data.TotalKeyups); err == nil {
+		s.TotalKeyups = v
+	}
 	s.LinkedNodes = raw.Stats.Data.Links
 	s.ConnectedLinks = len(raw.Stats.Data.Links)
 	return s

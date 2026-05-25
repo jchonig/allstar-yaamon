@@ -24,8 +24,9 @@ func TestMigration(t *testing.T) {
 	if err := db.sql.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&v); err != nil {
 		t.Fatalf("schema_version: %v", err)
 	}
-	if v != 1 {
-		t.Errorf("expected schema version 1, got %d", v)
+	want := migrations[len(migrations)-1].version
+	if v != want {
+		t.Errorf("expected schema version %d, got %d", want, v)
 	}
 }
 
@@ -120,8 +121,9 @@ func TestSchemaVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SchemaVersion: %v", err)
 	}
-	if v != 1 {
-		t.Errorf("expected schema version 1, got %d", v)
+	want := migrations[len(migrations)-1].version
+	if v != want {
+		t.Errorf("expected schema version %d, got %d", want, v)
 	}
 }
 

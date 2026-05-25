@@ -18,17 +18,18 @@ func newTestFetcher(srv *httptest.Server) *Fetcher {
 func TestFetchParsesAPIResponse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		// Matches the real stats.allstarlink.org/api/stats/{node} shape.
 		w.Write([]byte(`{
 			"node": {
 				"callsign": "W1AW",
-				"access_webtransceiver": 1,
-				"server": {"Affiliation": "ARRL HQ", "SiteName": "Fallback"}
+				"access_webtransceiver": "1",
+				"node_frequency": "ARRL HQ"
 			},
 			"stats": {
 				"data": {
 					"keyed": true,
-					"totaltxtime": 123.45,
-					"totalkeyups": 7,
+					"totaltxtime": "123",
+					"totalkeyups": "7",
 					"links": ["12345", "67890"]
 				}
 			}
@@ -46,16 +47,19 @@ func TestFetchParsesAPIResponse(t *testing.T) {
 		t.Errorf("Callsign = %q, want W1AW", s.Callsign)
 	}
 	if s.Description != "ARRL HQ" {
-		t.Errorf("Description = %q, want ARRL HQ (from Affiliation)", s.Description)
+		t.Errorf("Description = %q, want ARRL HQ (from node_frequency)", s.Description)
+	}
+	if !s.Web {
+		t.Error("Web = false, want true (access_webtransceiver=\"1\")")
 	}
 	if !s.Keyed {
 		t.Error("Keyed = false, want true")
 	}
-	if s.TotalTxTime != 123.45 {
-		t.Errorf("TotalTxTime = %v, want 123.45", s.TotalTxTime)
+	if s.TotalTxTime != 123 {
+		t.Errorf("TotalTxTime = %v, want 123 (parsed from string)", s.TotalTxTime)
 	}
 	if s.TotalKeyups != 7 {
-		t.Errorf("TotalKeyups = %d, want 7", s.TotalKeyups)
+		t.Errorf("TotalKeyups = %d, want 7 (parsed from string)", s.TotalKeyups)
 	}
 	if s.ConnectedLinks != 2 {
 		t.Errorf("ConnectedLinks = %d, want 2", s.ConnectedLinks)
@@ -63,19 +67,13 @@ func TestFetchParsesAPIResponse(t *testing.T) {
 	if len(s.LinkedNodes) != 2 || s.LinkedNodes[0] != "12345" || s.LinkedNodes[1] != "67890" {
 		t.Errorf("LinkedNodes = %v, want [12345 67890]", s.LinkedNodes)
 	}
-	if !s.Web {
-		t.Error("Web = false, want true (access_webtransceiver=1)")
-	}
 }
 
-func TestFetchDescriptionFallsBackToSiteName(t *testing.T) {
+func TestFetchWebFalseWhenZero(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{
-			"node": {
-				"callsign": "K0EX",
-				"server": {"Affiliation": "", "SiteName": "Example Site"}
-			},
+			"node": {"callsign": "K0EX", "access_webtransceiver": "0", "node_frequency": ""},
 			"stats": {"data": {}}
 		}`))
 	}))
@@ -85,8 +83,8 @@ func TestFetchDescriptionFallsBackToSiteName(t *testing.T) {
 	if s.Error != "" {
 		t.Fatalf("unexpected error: %s", s.Error)
 	}
-	if s.Description != "Example Site" {
-		t.Errorf("Description = %q, want Example Site (SiteName fallback)", s.Description)
+	if s.Web {
+		t.Error("Web = true, want false (access_webtransceiver=\"0\")")
 	}
 }
 
@@ -106,8 +104,8 @@ func TestFetchHandlesEmptyLinks(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{
-			"node": {"callsign": "N0CALL", "server": {}},
-			"stats": {"data": {"keyed": false, "links": []}}
+			"node": {"callsign": "N0CALL", "access_webtransceiver": "0", "node_frequency": ""},
+			"stats": {"data": {"keyed": false, "totaltxtime": "0", "totalkeyups": "0", "links": []}}
 		}`))
 	}))
 	defer srv.Close()
@@ -134,5 +132,27 @@ func TestFetchNodeNumberPreserved(t *testing.T) {
 	s := newTestFetcher(srv).Fetch(context.Background(), "42042")
 	if s.NodeNumber != "42042" {
 		t.Errorf("NodeNumber = %q, want 42042", s.NodeNumber)
+	}
+}
+
+func TestFetchStringEncodedNumbers(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"node": {"callsign": "W6XYZ", "access_webtransceiver": "0", "node_frequency": ""},
+			"stats": {"data": {"totaltxtime": "9999", "totalkeyups": "42", "links": []}}
+		}`))
+	}))
+	defer srv.Close()
+
+	s := newTestFetcher(srv).Fetch(context.Background(), "77777")
+	if s.Error != "" {
+		t.Fatalf("unexpected error: %s", s.Error)
+	}
+	if s.TotalTxTime != 9999 {
+		t.Errorf("TotalTxTime = %v, want 9999 (API returns string)", s.TotalTxTime)
+	}
+	if s.TotalKeyups != 42 {
+		t.Errorf("TotalKeyups = %d, want 42 (API returns string)", s.TotalKeyups)
 	}
 }
