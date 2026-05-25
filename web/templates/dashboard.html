@@ -175,17 +175,6 @@ function renderFavs() {
     const dotClass = keyed ? 'text-danger' : (stale || !s.fetched_at ? 'text-secondary' : 'text-success');
     const dot = `<i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem"></i>`;
 
-    const connectBtn = CAN_WRITE
-      ? `<button class="btn btn-sm btn-outline-success me-1" onclick="connectNode('${f.node_number}')" title="Connect">
-           <i class="bi bi-link-45deg"></i>
-         </button>`
-      : '';
-    const delBtn = CAN_WRITE
-      ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteFav(${f.id})" title="Remove favorite">
-           <i class="bi bi-trash"></i>
-         </button>`
-      : '';
-
     return `<tr data-node-num="${esc(f.node_number)}">
       <td class="text-center">${dot}</td>
       <td><code>${esc(f.node_number)}</code></td>
@@ -194,7 +183,7 @@ function renderFavs() {
       <td class="text-truncate" style="max-width:150px" title="${esc(loc)}">${esc(loc)}</td>
       <td class="text-nowrap">${txTime}</td>
       <td>${lcnt}</td>
-      <td class="text-end text-nowrap">${connectBtn}${delBtn}</td>
+      <td class="text-end text-nowrap">${actionCell(f.node_number, f.id)}</td>
     </tr>`;
   }).join('');
 }
@@ -216,6 +205,11 @@ function applyStats(stats) {
     if (s.location)    {  cells[4].textContent = s.location;    cells[4].title = s.location; }
     if (s.total_tx_time != null) cells[5].textContent = fmtDuration(s.total_tx_time);
     if (s.connected_links != null) cells[6].textContent = s.connected_links;
+    // Rebuild action cell when connection state may have changed.
+    if (s.linked_nodes !== undefined && CAN_WRITE) {
+      const f = favsData.find(x => x.node_number === num);
+      if (f) cells[7].innerHTML = actionCell(num, f.id);
+    }
   }
 }
 
@@ -237,17 +231,80 @@ function connectSSE() {
   };
 }
 
+// --- Connection state ---
+
+function isConnected(nodeNum) {
+  const s = statsData[nodeNum] || {};
+  return Array.isArray(s.linked_nodes) && s.linked_nodes.includes(NODE_NUM);
+}
+
+function actionCell(nodeNum, favId) {
+  if (!CAN_WRITE) return '';
+  const num = esc(nodeNum);
+  const connected = isConnected(nodeNum);
+  let dropdown;
+  if (connected) {
+    dropdown = `<div class="btn-group btn-group-sm me-1">
+      <button class="btn btn-success btn-sm dropdown-toggle" data-bs-toggle="dropdown"
+              aria-expanded="false" title="Connected — click to manage">
+        <i class="bi bi-plug-fill"></i>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><h6 class="dropdown-header">${num} — Connected</h6></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><button class="dropdown-item text-danger" onclick="doDisconnect('${num}')">
+          <i class="bi bi-x-circle me-1"></i>Disconnect</button></li>
+        <li><button class="dropdown-item text-danger" onclick="doDisconnect('')">
+          <i class="bi bi-x-circle-fill me-1"></i>Disconnect All</button></li>
+      </ul>
+    </div>`;
+  } else {
+    dropdown = `<div class="btn-group btn-group-sm me-1">
+      <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown"
+              aria-expanded="false" title="Not connected — click to connect">
+        <i class="bi bi-plug"></i>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><h6 class="dropdown-header">Connect ${num}</h6></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><button class="dropdown-item" onclick="doConnect('${num}','transceive')">
+          <i class="bi bi-arrow-left-right me-1"></i>Connect</button></li>
+        <li><button class="dropdown-item" onclick="doConnect('${num}','permanent')">
+          <i class="bi bi-pin-angle me-1"></i>Connect Permanent</button></li>
+        <li><button class="dropdown-item" onclick="doConnect('${num}','monitor')">
+          <i class="bi bi-eye me-1"></i>Monitor</button></li>
+        <li><button class="dropdown-item" onclick="doConnect('${num}','monitor_local')">
+          <i class="bi bi-ear me-1"></i>Monitor Local</button></li>
+      </ul>
+    </div>`;
+  }
+  const del = `<button class="btn btn-sm btn-outline-danger" onclick="deleteFav(${favId})" title="Remove favorite">
+    <i class="bi bi-trash"></i></button>`;
+  return dropdown + del;
+}
+
 // --- Connect / Disconnect ---
 
-async function connectNode(targetNum) {
+async function doConnect(targetNum, mode) {
   const r = await fetch(`/api/nodes/${NODE_ID}/connect`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({target: targetNum, mode}),
+  });
+  const data = await r.json();
+  if (!data.ok) showToast('Connect failed: ' + (data.error || 'unknown'), 'danger');
+  else showToast(`Connecting to ${targetNum}…`, 'success');
+}
+
+async function doDisconnect(targetNum) {
+  const r = await fetch(`/api/nodes/${NODE_ID}/disconnect`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({target: targetNum}),
   });
   const data = await r.json();
-  if (!data.ok) showToast('Connect failed: ' + (data.error || 'unknown'), 'danger');
-  else showToast(`Connecting to ${targetNum}…`, 'success');
+  if (!data.ok) showToast('Disconnect failed: ' + (data.error || 'unknown'), 'danger');
+  else showToast(targetNum ? `Disconnecting ${targetNum}…` : 'Disconnecting all…', 'success');
 }
 
 // --- Favorites CRUD ---

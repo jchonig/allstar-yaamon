@@ -195,19 +195,27 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Target  string `json:"target"`
-		Monitor bool   `json:"monitor"` // true = monitor-only (ilink 3), false = transceive (ilink 5)
+		Target string `json:"target"`
+		// mode: "transceive" (default, ilink 5), "permanent" (ilink 11),
+		//       "monitor" (ilink 3), "monitor_local" (ilink 4)
+		Mode string `json:"mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Target == "" {
 		http.Error(w, "body must be {\"target\":\"NNNNN\"}", http.StatusBadRequest)
 		return
 	}
 
-	mode := "5" // transceive (default)
-	if body.Monitor {
-		mode = "3"
+	ilinkMap := map[string]string{
+		"transceive":    "5",
+		"permanent":     "11",
+		"monitor":       "3",
+		"monitor_local": "4",
 	}
-	cmd := fmt.Sprintf("rpt cmd %s ilink %s %s", n.NodeNumber, mode, body.Target)
+	ilink, ok := ilinkMap[body.Mode]
+	if !ok {
+		ilink = "5"
+	}
+	cmd := fmt.Sprintf("rpt cmd %s ilink %s %s", n.NodeNumber, ilink, body.Target)
 	if err := s.amiMgr.SendAction(nodeID, map[string]string{
 		"Action":  "Command",
 		"Command": cmd,

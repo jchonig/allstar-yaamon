@@ -96,9 +96,9 @@ func (db *DB) UpdateNode(ctx context.Context, n Node) error {
 		enabled = 1
 	}
 	_, err := db.sql.ExecContext(ctx,
-		`UPDATE nodes SET name=?, ami_host=?, ami_port=?, ami_user=?, ami_pass=?, enabled=?
+		`UPDATE nodes SET name=?, node_number=?, ami_host=?, ami_port=?, ami_user=?, ami_pass=?, enabled=?
 		 WHERE id=?`,
-		n.Name, n.AMIHost, n.AMIPort, n.AMIUser, n.AMIPass, enabled, n.ID,
+		n.Name, n.NodeNumber, n.AMIHost, n.AMIPort, n.AMIUser, n.AMIPass, enabled, n.ID,
 	)
 	return err
 }
