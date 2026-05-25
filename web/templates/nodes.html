@@ -217,7 +217,7 @@ function toggleNodePass() {
   }
 }
 
-function openEditModal(id) {
+async function openEditModal(id) {
   const n = nodesData.find(x => x.id === id);
   if (!n) return;
   document.getElementById('nodeModalTitle').textContent = 'Edit Node';
