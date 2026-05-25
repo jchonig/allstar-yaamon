@@ -179,6 +179,7 @@ function renderTable() {
                 onclick="openEditModal(${n.id})" title="Edit node">Edit</button>
         <button class="btn btn-sm btn-outline-danger"
                 onclick="openDeleteModal(${n.id}, '${esc(n.name)}')" title="Delete node">Del</button>
+        <div class="text-danger small mt-1 test-error" style="display:none"></div>
       </td>
     </tr>`;
   }).join('');
@@ -265,8 +266,11 @@ async function confirmDelete() {
 
 async function testNode(evt, id) {
   const btn = evt.currentTarget;
+  const errEl = btn.closest('td').querySelector('.test-error');
   btn.disabled = true;
   btn.textContent = '…';
+  errEl.style.display = 'none';
+  errEl.textContent = '';
   try {
     const resp = await fetch(`/api/nodes/${id}/test`, {method: 'POST'});
     const data = await resp.json();
@@ -275,19 +279,24 @@ async function testNode(evt, id) {
       btn.className = 'btn btn-sm btn-success me-1';
     } else {
       btn.textContent = '✗ Fail';
-      btn.title = data.error || 'failed';
       btn.className = 'btn btn-sm btn-danger me-1';
+      errEl.textContent = data.error || 'Connection failed';
+      errEl.style.display = '';
     }
   } catch {
     btn.textContent = '✗ Err';
     btn.className = 'btn btn-sm btn-danger me-1';
+    errEl.textContent = 'Request failed';
+    errEl.style.display = '';
   }
   setTimeout(() => {
     btn.textContent = 'Test';
     btn.className = 'btn btn-sm btn-outline-secondary me-1';
     btn.title = 'Test AMI connection';
     btn.disabled = false;
-  }, 4000);
+    errEl.style.display = 'none';
+    errEl.textContent = '';
+  }, 6000);
 }
 
 function esc(s) {
