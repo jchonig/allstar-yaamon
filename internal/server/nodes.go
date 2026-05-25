@@ -156,6 +156,22 @@ func (s *Server) handleAPIUpdateNode(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.nodeToJSON(updated))
 }
 
+// handleAPINodeSecret returns the stored AMI password for a node.
+// Only accessible to admin+ users so the nodes page can pre-fill the edit form.
+func (s *Server) handleAPINodeSecret(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	n, err := s.db.GetNodeByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "node not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, map[string]string{"secret": n.AMIPass})
+}
+
 // handleAPIDeleteNode deletes a node and removes its AMI client.
 func (s *Server) handleAPIDeleteNode(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

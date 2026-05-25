@@ -180,6 +180,7 @@ func (s *Server) Run() error {
 		r.Put("/api/nodes/{id}", s.handleAPIUpdateNode)
 		r.Delete("/api/nodes/{id}", s.handleAPIDeleteNode)
 		r.Post("/api/nodes/{id}/test", s.handleAPITestNode)
+		r.Get("/api/nodes/{id}/secret", s.handleAPINodeSecret)
 		r.Get("/admin/users", s.handleUsersPage)
 		r.Get("/api/users", s.handleAPIListUsers)
 		r.Post("/api/users", s.handleAPICreateUser)

@@ -89,8 +89,15 @@
           </div>
           <div class="mb-3">
             <label for="node-ami-pass" class="form-label">AMI Password</label>
-            <input type="password" class="form-control" id="node-ami-pass" autocomplete="new-password"
-                   placeholder="leave blank to keep existing">
+            <div class="input-group">
+              <input type="password" class="form-control" id="node-ami-pass" autocomplete="off"
+                     placeholder="leave blank to keep existing">
+              <button class="btn btn-outline-secondary" type="button" id="node-ami-pass-toggle"
+                      onclick="toggleNodePass()" title="Show/hide password">
+                <i class="bi bi-eye" id="node-ami-pass-eye"></i>
+              </button>
+            </div>
+            <div class="form-text" id="node-pass-hint"></div>
           </div>
           <div class="form-check mb-2">
             <input type="checkbox" class="form-check-input" id="node-enabled">
@@ -192,7 +199,22 @@ function openAddModal() {
   document.getElementById('node-ami-host').value = 'localhost';
   document.getElementById('node-ami-port').value = '5038';
   document.getElementById('node-form-error').textContent = '';
+  document.getElementById('node-pass-hint').textContent = '';
+  document.getElementById('node-ami-pass').type = 'password';
+  document.getElementById('node-ami-pass-eye').className = 'bi bi-eye';
   nodeModal.show();
+}
+
+function toggleNodePass() {
+  const inp = document.getElementById('node-ami-pass');
+  const eye = document.getElementById('node-ami-pass-eye');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    eye.className = 'bi bi-eye-slash';
+  } else {
+    inp.type = 'password';
+    eye.className = 'bi bi-eye';
+  }
 }
 
 function openEditModal(id) {
@@ -206,9 +228,26 @@ function openEditModal(id) {
   document.getElementById('node-ami-port').value = n.ami_port;
   document.getElementById('node-ami-user').value = n.ami_user;
   document.getElementById('node-ami-pass').value = '';
+  document.getElementById('node-ami-pass').type = 'password';
+  document.getElementById('node-ami-pass-eye').className = 'bi bi-eye';
   document.getElementById('node-enabled').checked = n.enabled;
   document.getElementById('node-form-error').textContent = '';
+  document.getElementById('node-pass-hint').textContent = 'Loading stored password…';
   nodeModal.show();
+
+  // Fetch and pre-fill the stored password so the admin can verify it.
+  try {
+    const r = await fetch(`/api/nodes/${id}/secret`);
+    if (r.ok) {
+      const { secret } = await r.json();
+      document.getElementById('node-ami-pass').value = secret;
+      document.getElementById('node-pass-hint').textContent = 'Stored password loaded — edit to change.';
+    } else {
+      document.getElementById('node-pass-hint').textContent = '';
+    }
+  } catch {
+    document.getElementById('node-pass-hint').textContent = '';
+  }
 }
 
 async function saveNode() {
