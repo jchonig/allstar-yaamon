@@ -23,8 +23,9 @@ TEST_SUT             := yaamon-sut
 TEST_ADMIN_PASSWORD  := testpassword
 TEST_VIEWER_PASSWORD := viewerpassword
 
-.PHONY: all build build-multi test test-unit coverage lint deps \
-        compile run stop logs watch test-integration e2e e2e-dev snapshot \
+.PHONY: all build build-multi test test-unit coverage lint deps check \
+        check-whitespace check-tidy compile run stop logs watch \
+        test-integration e2e e2e-dev snapshot \
         install-service uninstall-service version clean cleanall
 
 ## Default — build the yaamon Docker image for the current platform.
@@ -41,8 +42,8 @@ build:
 build-multi:
 	docker buildx build --platform linux/amd64,linux/arm64 -t yaamon:dev .
 
-## Full test suite: unit tests → build image → integration tests → e2e.
-test: test-unit build test-integration e2e
+## Full test suite: pre-commit checks → unit tests → build image → integration tests → e2e.
+test: check test-unit build test-integration e2e
 
 ## Run unit tests inside Docker.
 test-unit:
@@ -64,6 +65,20 @@ lint:
 ## Tidy and verify go.mod/go.sum inside Docker.
 deps:
 	$(DOCKER_GO) sh -c "go mod tidy && go mod verify"
+
+## Check for trailing whitespace in tracked source files.
+check-whitespace:
+	@if git grep -In '[[:blank:]]$$' -- '*.go' '*.html' '*.yaml' '*.yml' '*.md'; then \
+	  echo "ERROR: trailing whitespace found (see above)"; exit 1; \
+	fi
+	@echo "Whitespace OK."
+
+## Verify go.mod and go.sum are tidy (fails if go mod tidy would make changes).
+check-tidy:
+	$(DOCKER_GO) sh -c "go mod tidy && git diff --exit-code go.mod go.sum"
+
+## Run all pre-commit checks: whitespace and module tidy.
+check: check-whitespace check-tidy
 
 ## Cross-compile for the dev container (linux, native arch, no CGO).
 ## While 'make watch' is running, this triggers a fast container restart instead of a full image rebuild.
