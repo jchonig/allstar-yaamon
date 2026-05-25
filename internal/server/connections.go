@@ -58,6 +58,18 @@ func (s *Server) handleAPIConnections(w http.ResponseWriter, r *http.Request) {
 	resp.LCnt = stats.ConnectedLinks
 	resp.CacheAgeSeconds = int(time.Since(stats.FetchedAt).Seconds())
 
+	// Fetch stats for any connected nodes not already in the cache.
+	var missing []string
+	for _, ln := range stats.LinkedNodes {
+		if ls, ok2 := s.statsCache.get(ln); !ok2 || ls.Error != "" {
+			missing = append(missing, ln)
+		}
+	}
+	if len(missing) > 0 {
+		fetched := s.fetcher.FetchAll(r.Context(), missing)
+		s.statsCache.update(fetched)
+	}
+
 	for _, ln := range stats.LinkedNodes {
 		e := connEntry{NodeNumber: ln}
 		if ls, ok2 := s.statsCache.get(ln); ok2 && ls.Error == "" {

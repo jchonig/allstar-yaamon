@@ -277,7 +277,12 @@
           </div>
         </div>
         <div id="conn-view-bubble" style="display:none">
-          <iframe id="conn-bubble-iframe" style="width:100%;height:480px;border:0" src="about:blank"></iframe>
+          <div class="text-center p-2">
+            <img id="conn-bubble-img" src="" alt="Bubble chart" style="max-width:100%;height:auto;display:none">
+            <div id="conn-bubble-loading" class="text-muted py-4">
+              <div class="spinner-border spinner-border-sm me-2"></div>Loading…
+            </div>
+          </div>
           <p class="text-muted small px-3 pb-2 mb-0">
             Bubble chart provided by AllStarLink.org —
             <a id="conn-bubble-link" href="#" target="_blank" rel="noopener">open in new tab ↗</a>
@@ -829,7 +834,13 @@ function setConnView(view, triggerLoad = true) {
 
   if (view === 'bubble' && connNodeNum) {
     const url = `https://stats.allstarlink.org/getstatus.cgi?${connNodeNum}`;
-    document.getElementById('conn-bubble-iframe').src = url;
+    const img = document.getElementById('conn-bubble-img');
+    const loading = document.getElementById('conn-bubble-loading');
+    img.style.display = 'none';
+    loading.style.display = '';
+    img.onload = () => { img.style.display = ''; loading.style.display = 'none'; };
+    img.onerror = () => { loading.textContent = 'Bubble chart unavailable.'; };
+    img.src = url;
     document.getElementById('conn-bubble-link').href = url;
   }
 
