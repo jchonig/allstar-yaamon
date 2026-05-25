@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Pre-commit checks (whitespace + module tidy)
+        run: make check
       - name: Unit tests
         run: make test-unit
 
