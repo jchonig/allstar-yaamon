@@ -198,6 +198,42 @@ func TestApplyDryRun(t *testing.T) {
 	}
 }
 
+// TestResolveEnvDoubleDollar verifies that $$ is an escape for a literal $.
+func TestResolveEnvDoubleDollar(t *testing.T) {
+	content := `
+nodes:
+  - name: Test
+    node_number: "11111"
+    ami_pass: $$secret$dollar
+`
+	f := writeTempYAML(t, content)
+	sf, err := Load(f)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := sf.Nodes[0].AMIPass; got != "$secret$dollar" {
+		t.Errorf("ami_pass = %q, want %q", got, "$secret$dollar")
+	}
+}
+
+// TestResolveEnvPlainValue verifies that values without $ are returned unchanged.
+func TestResolveEnvPlainValue(t *testing.T) {
+	content := `
+nodes:
+  - name: Test
+    node_number: "22222"
+    ami_pass: plainpassword
+`
+	f := writeTempYAML(t, content)
+	sf, err := Load(f)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := sf.Nodes[0].AMIPass; got != "plainpassword" {
+		t.Errorf("ami_pass = %q, want %q", got, "plainpassword")
+	}
+}
+
 func writeTempYAML(t *testing.T, content string) string {
 	t.Helper()
 	f, err := os.CreateTemp(t.TempDir(), "state*.yaml")

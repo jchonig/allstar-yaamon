@@ -99,6 +99,141 @@ func TestNodeCreateRequiresNameAndNumber(t *testing.T) {
 	}
 }
 
+func TestNodeCreateRequiresAMIUser(t *testing.T) {
+	c := adminClient(t)
+	resp := do(t, c, http.MethodPost, "/api/nodes", map[string]any{
+		"name":        "No AMI User Node",
+		"node_number": uniqueNum(),
+		"ami_host":    "localhost",
+		"ami_port":    5038,
+		// ami_user intentionally omitted
+		"ami_pass": "pass",
+		"enabled":  false,
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("create without ami_user: expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestNodeUpdatePreservesAMIUser(t *testing.T) {
+	c := adminClient(t)
+	num := uniqueNum()
+
+	// Create with a known ami_user.
+	resp := do(t, c, http.MethodPost, "/api/nodes", map[string]any{
+		"name":        "AMI User Preserve Test",
+		"node_number": num,
+		"ami_host":    "localhost",
+		"ami_port":    5038,
+		"ami_user":    "testadmin",
+		"ami_pass":    "testpass",
+		"enabled":     false,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("create: expected 201, got %d", resp.StatusCode)
+	}
+	var created struct{ ID int64 `json:"id"` }
+	decodeJSON(t, resp, &created)
+	t.Cleanup(func() {
+		r := do(t, c, http.MethodDelete, fmt.Sprintf("/api/nodes/%d", created.ID), nil)
+		r.Body.Close()
+	})
+
+	// Update with only the name — ami_user should be preserved.
+	resp = do(t, c, http.MethodPut, fmt.Sprintf("/api/nodes/%d", created.ID), map[string]any{
+		"name": "AMI User Preserve Test Updated",
+	})
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		t.Fatalf("update: expected 200, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Fetch the secret to confirm ami_user is still in the DB via the node list.
+	resp = do(t, c, http.MethodGet, "/api/nodes", nil)
+	var nodes []struct {
+		ID      int64  `json:"id"`
+		AMIUser string `json:"ami_user"`
+	}
+	decodeJSON(t, resp, &nodes)
+	for _, n := range nodes {
+		if n.ID == created.ID {
+			if n.AMIUser != "testadmin" {
+				t.Errorf("ami_user after partial update = %q, want testadmin", n.AMIUser)
+			}
+			return
+		}
+	}
+	t.Error("updated node not found in /api/nodes list")
+}
+
+func TestNodeSecretReturnsPassword(t *testing.T) {
+	c := adminClient(t)
+	num := uniqueNum()
+
+	resp := do(t, c, http.MethodPost, "/api/nodes", map[string]any{
+		"name":        "Secret Test Node",
+		"node_number": num,
+		"ami_host":    "localhost",
+		"ami_port":    5038,
+		"ami_user":    "admin",
+		"ami_pass":    "s3cr3tP@ss",
+		"enabled":     false,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("create: expected 201, got %d", resp.StatusCode)
+	}
+	var created struct{ ID int64 `json:"id"` }
+	decodeJSON(t, resp, &created)
+	t.Cleanup(func() {
+		r := do(t, c, http.MethodDelete, fmt.Sprintf("/api/nodes/%d", created.ID), nil)
+		r.Body.Close()
+	})
+
+	resp = do(t, c, http.MethodGet, fmt.Sprintf("/api/nodes/%d/secret", created.ID), nil)
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		t.Fatalf("secret: expected 200, got %d", resp.StatusCode)
+	}
+	var result struct{ Secret string `json:"secret"` }
+	decodeJSON(t, resp, &result)
+	if result.Secret != "s3cr3tP@ss" {
+		t.Errorf("secret = %q, want s3cr3tP@ss", result.Secret)
+	}
+}
+
+func TestNodeSecretRequiresAdmin(t *testing.T) {
+	c := viewerClient(t)
+	nid := seedNodeID(t)
+	resp := do(t, c, http.MethodGet, fmt.Sprintf("/api/nodes/%d/secret", nid), nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("viewer accessing /secret: expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestConnectionsEndpointReturnsJSON(t *testing.T) {
+	c := adminClient(t)
+	nid := seedNodeID(t)
+
+	// Request connections for a node number — may not be in cache, but must return valid JSON.
+	resp := do(t, c, http.MethodGet, fmt.Sprintf("/api/nodes/%d/connections/99999", nid), nil)
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var result struct {
+		NodeNumber string `json:"node_number"`
+	}
+	decodeJSON(t, resp, &result)
+	if result.NodeNumber != "99999" {
+		t.Errorf("node_number = %q, want 99999", result.NodeNumber)
+	}
+}
+
 func TestNodeDeleteNotFound(t *testing.T) {
 	c := adminClient(t)
 	resp := do(t, c, http.MethodDelete, "/api/nodes/999999999", nil)

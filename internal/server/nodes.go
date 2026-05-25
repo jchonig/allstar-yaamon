@@ -137,8 +137,7 @@ func (s *Server) handleAPIUpdateNode(w http.ResponseWriter, r *http.Request) {
 		in.AMIPort = existing.AMIPort
 	}
 	if in.AMIUser == "" {
-		http.Error(w, "ami_user is required", http.StatusBadRequest)
-		return
+		in.AMIUser = existing.AMIUser
 	}
 	amiPass := in.AMIPass
 	if amiPass == "" {
