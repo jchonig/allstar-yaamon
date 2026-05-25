@@ -200,8 +200,8 @@
           <th onclick="setSort('callsign')" class="sort-col">Callsign <i class="bi bi-chevron-expand sort-icon"></i></th>
           <th class="d-none d-md-table-cell">Description</th>
           <th class="d-none d-md-table-cell">Location</th>
-          <th onclick="setSort('tx')" class="sort-col" title="Total TX time">TX <i class="bi bi-chevron-expand sort-icon"></i></th>
-          <th onclick="setSort('lcnt')" class="sort-col" title="Connected links">LCnt <i class="bi bi-chevron-expand sort-icon"></i></th>
+          <th onclick="setSort('tx')" class="sort-col" title="Total TX keyups">TX <i class="bi bi-chevron-expand sort-icon"></i></th>
+          <th onclick="setSort('lcnt')" class="sort-col" title="Connected links">Links <i class="bi bi-chevron-expand sort-icon"></i></th>
           <th class="text-end">Action</th>
         </tr>
       </thead>
@@ -351,7 +351,7 @@ function sortedFavs() {
     switch (sortCol) {
       case 'node':     av = parseInt(a.node_number);                              bv = parseInt(b.node_number); break;
       case 'callsign': av = (sa.callsign || a.callsign || '').toLowerCase();      bv = (sb.callsign || b.callsign || '').toLowerCase(); break;
-      case 'tx':       av = sa.total_tx_time   || 0;                              bv = sb.total_tx_time   || 0; break;
+      case 'tx':       av = sa.total_keyups    || 0;                              bv = sb.total_keyups    || 0; break;
       case 'lcnt':     av = sa.connected_links || 0;                              bv = sb.connected_links || 0; break;
       default: return 0;
     }
@@ -401,7 +401,7 @@ function renderFavs() {
   tbody.innerHTML = sortedFavs().map(f => {
     const s = statsData[f.node_number] || {};
     const keyed = s.keyed;
-    const txTime = s.total_tx_time != null ? fmtDuration(s.total_tx_time) : '—';
+    const txTime = s.total_keyups != null ? s.total_keyups : '—';
     const lcnt = s.connected_links != null ? s.connected_links : null;
     const call = s.callsign || f.callsign || '—';
     const desc = s.description || f.description || '—';
@@ -443,7 +443,7 @@ function applyStats(stats) {
     if (s.callsign)       cells[2].textContent = s.callsign;
     if (s.description) { cells[3].textContent = s.description; cells[3].title = s.description; }
     if (s.location)    { cells[4].textContent = s.location;    cells[4].title = s.location; }
-    if (s.total_tx_time != null) cells[5].textContent = fmtDuration(s.total_tx_time);
+    if (s.total_keyups != null) cells[5].textContent = s.total_keyups;
     if (s.connected_links != null) updateLCntCell(cells[6], num, s.connected_links);
     // Rebuild action cell when connection state may have changed.
     if (s.linked_nodes !== undefined && CAN_WRITE) {
@@ -741,27 +741,23 @@ function ctrlKeydown(event) {
 // --- LCnt cell helpers ---
 
 function lcntCell(nodeNum, lcnt) {
-  if (lcnt > 0) {
-    return `<td style="cursor:pointer;color:var(--accent-blue)"
-               title="${lcnt} connection${lcnt !== 1 ? 's' : ''} — click for details"
-               onclick="openConnModal('${esc(nodeNum)}',${lcnt})">${lcnt}</td>`;
-  }
-  return `<td>${lcnt != null ? lcnt : '—'}</td>`;
+  if (lcnt == null) return '<td>—</td>';
+  const color = lcnt > 0 ? 'color:var(--accent-blue);' : '';
+  const title = lcnt > 0
+    ? `${lcnt} link${lcnt !== 1 ? 's' : ''} — click for details`
+    : 'No links — click for bubble chart';
+  return `<td style="cursor:pointer;${color}" title="${title}"
+             onclick="openConnModal('${esc(nodeNum)}',${lcnt})">${lcnt}</td>`;
 }
 
 function updateLCntCell(td, nodeNum, lcnt) {
   td.textContent = lcnt;
-  if (lcnt > 0) {
-    td.style.cursor = 'pointer';
-    td.style.color = 'var(--accent-blue)';
-    td.title = `${lcnt} connection${lcnt !== 1 ? 's' : ''} — click for details`;
-    td.onclick = () => openConnModal(nodeNum, lcnt);
-  } else {
-    td.style.cursor = '';
-    td.style.color = '';
-    td.title = '';
-    td.onclick = null;
-  }
+  td.style.cursor = 'pointer';
+  td.style.color  = lcnt > 0 ? 'var(--accent-blue)' : '';
+  td.title = lcnt > 0
+    ? `${lcnt} link${lcnt !== 1 ? 's' : ''} — click for details`
+    : 'No links — click for bubble chart';
+  td.onclick = () => openConnModal(nodeNum, lcnt);
 }
 
 // --- Connections modal ---
@@ -774,7 +770,7 @@ let connGraphZoom = null;
 let connGraphSvg = null;
 
 async function openConnModal(nodeNum, lcnt) {
-  if (!lcnt || lcnt <= 0) return;
+  if (lcnt == null) return;
   connNodeNum = nodeNum;
   connData = null;
 
@@ -782,7 +778,7 @@ async function openConnModal(nodeNum, lcnt) {
   const call = s.callsign || '';
   document.getElementById('conn-modal-title').textContent =
     (call ? `Node ${nodeNum} (${call})` : `Node ${nodeNum}`) +
-    ` — ${lcnt} Connection${lcnt !== 1 ? 's' : ''}`;
+    (lcnt > 0 ? ` — ${lcnt} Link${lcnt !== 1 ? 's' : ''}` : '');
   document.getElementById('conn-cache-age').textContent = '';
   document.getElementById('conn-fullgraph-link').href = `/graph/${nodeNum}`;
   document.getElementById('conn-bubble-link').href = `https://stats.allstarlink.org/getstatus.cgi?${nodeNum}`;
