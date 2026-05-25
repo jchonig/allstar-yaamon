@@ -90,7 +90,7 @@ func (s *Server) initSessions() error {
 }
 
 func (s *Server) parseTemplates() error {
-	pages := []string{"login", "dashboard", "setup", "nodes"}
+	pages := []string{"login", "dashboard", "setup", "nodes", "users"}
 	s.tmpls = make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		t, err := template.ParseFS(s.webFS,
@@ -172,6 +172,11 @@ func (s *Server) Run() error {
 		r.Put("/api/nodes/{id}", s.handleAPIUpdateNode)
 		r.Delete("/api/nodes/{id}", s.handleAPIDeleteNode)
 		r.Post("/api/nodes/{id}/test", s.handleAPITestNode)
+		r.Get("/admin/users", s.handleUsersPage)
+		r.Get("/api/users", s.handleAPIListUsers)
+		r.Post("/api/users", s.handleAPICreateUser)
+		r.Put("/api/users/{id}", s.handleAPIUpdateUser)
+		r.Delete("/api/users/{id}", s.handleAPIDeleteUser)
 	})
 
 	return s.listenAndServe(r)

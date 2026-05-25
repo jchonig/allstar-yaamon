@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -234,7 +235,7 @@ func (c *Client) readLoop(ctx context.Context, r *bufio.Reader) error {
 // on successful authentication or an error with a descriptive message.
 // The connection is closed immediately after the result is known.
 func TestConnection(host string, port int, user, pass string) error {
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("connection refused: %w", err)

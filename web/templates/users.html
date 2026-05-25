@@ -1,0 +1,280 @@
+{{template "base" .}}
+
+{{define "title"}}Users — YAAMon{{end}}
+
+{{define "nav-extra"}}
+<a class="nav-link text-body" href="/admin/users">
+  <i class="bi bi-people me-1"></i>Users
+</a>
+{{if .Username}}
+<span class="navbar-text small text-muted">{{.Username}}</span>
+<a class="btn btn-sm btn-outline-secondary" href="/logout">Logout</a>
+{{end}}
+{{end}}
+
+{{define "content"}}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0"><i class="bi bi-people me-2"></i>User Management</h5>
+  <button class="btn btn-primary btn-sm" onclick="openAddModal()">
+    <i class="bi bi-plus-circle me-1"></i>Add User
+  </button>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle mb-0" id="users-table">
+    <thead class="table-light">
+      <tr>
+        <th>Username</th>
+        <th>Permission</th>
+        <th class="text-end">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="users-tbody">
+      <tr><td colspan="3" class="text-center text-muted py-4">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalTitle" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="userModalTitle">Add User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="user-form" novalidate>
+          <input type="hidden" id="user-id">
+          <div class="mb-3" id="username-group">
+            <label for="user-username" class="form-label">Username <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="user-username" autocomplete="username">
+          </div>
+          <div class="mb-3">
+            <label for="user-permission" class="form-label">Permission</label>
+            <select class="form-select" id="user-permission">
+              <option value="readonly">Read-Only</option>
+              <option value="readwrite">Read-Write</option>
+              <option value="admin">Admin</option>
+              {{if eq .Permission "superuser"}}
+              <option value="superuser">Superuser</option>
+              {{end}}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="user-password" class="form-label">
+              Password <span class="text-danger" id="pw-required">*</span>
+              <span class="text-muted" id="pw-optional" style="display:none">(leave blank to keep existing)</span>
+            </label>
+            <input type="password" class="form-control" id="user-password" autocomplete="new-password">
+            <div class="mt-1" id="pw-strength-bar" style="display:none">
+              <div class="progress" style="height:4px">
+                <div class="progress-bar" id="pw-bar" role="progressbar" style="width:0"></div>
+              </div>
+              <small class="text-muted" id="pw-label"></small>
+            </div>
+          </div>
+          <div class="text-danger small" id="user-form-error"></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="user-save-btn" onclick="saveUser()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Delete user <strong id="delete-user-name"></strong>?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+const MY_PERMISSION = {{.Permission | printf "%q"}};
+let usersData = [];
+let pendingDeleteID = null;
+let userModal, deleteModal;
+
+document.addEventListener('DOMContentLoaded', () => {
+  userModal = new bootstrap.Modal(document.getElementById('userModal'));
+  deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+  document.getElementById('user-password').addEventListener('input', updateStrength);
+  loadUsers();
+});
+
+async function loadUsers() {
+  try {
+    const resp = await fetch('/api/users');
+    usersData = (await resp.json()) || [];
+  } catch {
+    usersData = [];
+  }
+  renderTable();
+}
+
+function permBadge(p) {
+  const map = {
+    superuser: 'bg-danger',
+    admin:     'bg-warning text-dark',
+    readwrite: 'bg-primary',
+    readonly:  'bg-secondary',
+  };
+  return `<span class="badge ${map[p] || 'bg-secondary'}">${esc(p)}</span>`;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('users-tbody');
+  if (!usersData.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">No users found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = usersData.map(u => `<tr>
+    <td>${esc(u.username)}</td>
+    <td>${permBadge(u.permission)}</td>
+    <td class="text-end">
+      <button class="btn btn-sm btn-outline-primary me-1"
+              onclick="openEditModal(${u.id})">Edit</button>
+      <button class="btn btn-sm btn-outline-danger"
+              onclick="openDeleteModal(${u.id}, '${esc(u.username)}')">Del</button>
+    </td>
+  </tr>`).join('');
+}
+
+function openAddModal() {
+  document.getElementById('userModalTitle').textContent = 'Add User';
+  document.getElementById('user-id').value = '';
+  document.getElementById('user-form').reset();
+  document.getElementById('username-group').style.display = '';
+  document.getElementById('user-username').removeAttribute('disabled');
+  document.getElementById('pw-required').style.display = '';
+  document.getElementById('pw-optional').style.display = 'none';
+  document.getElementById('pw-strength-bar').style.display = 'none';
+  document.getElementById('user-form-error').textContent = '';
+  userModal.show();
+}
+
+function openEditModal(id) {
+  const u = usersData.find(x => x.id === id);
+  if (!u) return;
+  document.getElementById('userModalTitle').textContent = 'Edit User';
+  document.getElementById('user-id').value = id;
+  document.getElementById('user-username').value = u.username;
+  document.getElementById('user-username').setAttribute('disabled', '');
+  document.getElementById('user-permission').value = u.permission;
+  document.getElementById('user-password').value = '';
+  document.getElementById('pw-required').style.display = 'none';
+  document.getElementById('pw-optional').style.display = '';
+  document.getElementById('pw-strength-bar').style.display = 'none';
+  document.getElementById('user-form-error').textContent = '';
+  userModal.show();
+}
+
+async function saveUser() {
+  const id = document.getElementById('user-id').value;
+  const username = document.getElementById('user-username').value.trim();
+  const permission = document.getElementById('user-permission').value;
+  const password = document.getElementById('user-password').value;
+
+  if (!id && !username) {
+    document.getElementById('user-form-error').textContent = 'Username is required.';
+    return;
+  }
+  if (!id && !password) {
+    document.getElementById('user-form-error').textContent = 'Password is required for new users.';
+    return;
+  }
+
+  const body = {permission};
+  if (!id) body.username = username;
+  if (password) body.password = password;
+
+  const saveBtn = document.getElementById('user-save-btn');
+  saveBtn.disabled = true;
+
+  try {
+    const resp = await fetch(id ? `/api/users/${id}` : '/api/users', {
+      method: id ? 'PUT' : 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      document.getElementById('user-form-error').textContent = await resp.text();
+      return;
+    }
+    userModal.hide();
+    loadUsers();
+  } catch (e) {
+    document.getElementById('user-form-error').textContent = 'Network error: ' + e.message;
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+function openDeleteModal(id, name) {
+  pendingDeleteID = id;
+  document.getElementById('delete-user-name').textContent = name;
+  deleteModal.show();
+}
+
+async function confirmDelete() {
+  if (!pendingDeleteID) return;
+  const resp = await fetch(`/api/users/${pendingDeleteID}`, {method: 'DELETE'});
+  pendingDeleteID = null;
+  deleteModal.hide();
+  if (!resp.ok) {
+    alert(await resp.text());
+  }
+  loadUsers();
+}
+
+function updateStrength() {
+  const pw = document.getElementById('user-password').value;
+  const bar = document.getElementById('pw-bar');
+  const label = document.getElementById('pw-label');
+  const wrap = document.getElementById('pw-strength-bar');
+  if (!pw) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+
+  let score = 0;
+  if (pw.length >= 8)  score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+  const levels = [
+    {pct: 20, cls: 'bg-danger',  text: 'Very weak'},
+    {pct: 40, cls: 'bg-danger',  text: 'Weak'},
+    {pct: 60, cls: 'bg-warning', text: 'Fair'},
+    {pct: 80, cls: 'bg-info',    text: 'Strong'},
+    {pct:100, cls: 'bg-success', text: 'Very strong'},
+  ];
+  const lvl = levels[Math.min(score, 4)];
+  bar.style.width = lvl.pct + '%';
+  bar.className = 'progress-bar ' + lvl.cls;
+  label.textContent = lvl.text;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+{{end}}
