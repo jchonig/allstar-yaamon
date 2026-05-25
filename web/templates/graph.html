@@ -1,0 +1,194 @@
+{{template "base" .}}
+
+{{define "title"}}Node {{.NodeNumber}} — Network Graph — YAAMon{{end}}
+
+{{define "nav-extra"}}
+{{if .Username}}
+<div class="dropdown">
+  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+    <i class="bi bi-person-circle me-1"></i>{{.Username}}
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><h6 class="dropdown-header">{{.Permission}}</h6></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><a class="dropdown-item" href="/dashboard"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><a class="dropdown-item text-danger" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
+  </ul>
+</div>
+{{end}}
+{{end}}
+
+{{define "content"}}
+<div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
+  <h5 class="mb-0">Network Graph — Node <code>{{.NodeNumber}}</code></h5>
+  <span id="graph-node-callsign" class="text-muted"></span>
+  <a href="/dashboard" class="btn btn-sm btn-outline-secondary ms-auto">
+    <i class="bi bi-arrow-left me-1"></i>Dashboard
+  </a>
+</div>
+
+<div class="card" style="border-color:var(--accent-blue);border-width:2px">
+  <div class="card-body p-0" style="position:relative">
+    <div id="graph-toolbar" class="position-absolute top-0 end-0 m-2 d-flex align-items-center gap-2" style="z-index:10">
+      <button class="btn btn-sm btn-outline-secondary" onclick="resetZoom()" title="Reset zoom">
+        <i class="bi bi-arrows-angle-expand"></i>
+      </button>
+    </div>
+    <svg id="graph-svg" style="width:100%;height:calc(100vh - 200px);min-height:400px;display:block"></svg>
+    <div id="graph-legend" class="position-absolute bottom-0 start-0 m-2 small text-muted d-flex gap-3">
+      <span><i class="bi bi-circle-fill" style="color:var(--accent-yellow)"></i> This node</span>
+      <span><i class="bi bi-circle-fill" style="color:var(--accent-red)"></i> Keyed</span>
+      <span><i class="bi bi-circle-fill" style="color:var(--accent-blue)"></i> Online</span>
+      <span><i class="bi bi-circle-fill" style="color:var(--text-muted)"></i> Unknown</span>
+    </div>
+    <div id="graph-loading" class="d-flex align-items-center justify-content-center"
+         style="position:absolute;inset:0;background:var(--bg-card)">
+      <div class="text-center text-muted">
+        <div class="spinner-border mb-2" role="status"></div>
+        <div>Loading graph data…</div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="text-muted small mt-2">
+  Data from AllStarLink.org stats cache. Drag to rearrange · scroll to zoom · double-click background to reset.
+  {{if or (eq .Permission "superuser") (eq .Permission "admin") (eq .Permission "readwrite")}}
+  Shift-click a connected node to open its graph.
+  {{end}}
+</p>
+{{end}}
+
+{{define "scripts"}}
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script>
+const NODE_NUMBER = "{{.NodeNumber}}";
+const HOME_NODE_ID = {{.HomeNodeID}};
+const CAN_WRITE = {{if or (eq .Permission "superuser") (eq .Permission "admin") (eq .Permission "readwrite")}}true{{else}}false{{end}};
+
+let gSimulation = null;
+let gZoom = null;
+let gSvg = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const r = await fetch(`/api/nodes/${HOME_NODE_ID}/connections/${NODE_NUMBER}`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if (data.callsign) {
+      document.getElementById('graph-node-callsign').textContent = '(' + data.callsign + ')';
+    }
+    document.getElementById('graph-loading').style.display = 'none';
+    renderGraph(data);
+  } catch (e) {
+    document.getElementById('graph-loading').innerHTML =
+      `<div class="text-danger text-center p-4"><i class="bi bi-exclamation-triangle me-2"></i>Failed to load graph data: ${e.message}</div>`;
+  }
+});
+
+function resetZoom() {
+  if (gSvg && gZoom) gSvg.transition().duration(500).call(gZoom.transform, d3.zoomIdentity);
+}
+
+function renderGraph(data) {
+  const svgEl = document.getElementById('graph-svg');
+  const svg = d3.select(svgEl);
+  svg.selectAll('*').remove();
+  gSvg = svg;
+
+  const width  = svgEl.clientWidth  || 800;
+  const height = svgEl.clientHeight || 600;
+
+  const cs = getComputedStyle(document.documentElement);
+  const cMuted  = cs.getPropertyValue('--text-muted').trim()   || '#888';
+  const cGreen  = cs.getPropertyValue('--accent-green').trim() || '#3fb950';
+  const cRed    = cs.getPropertyValue('--accent-red').trim()   || '#f85149';
+  const cBlue   = cs.getPropertyValue('--accent-blue').trim()  || '#58a6ff';
+  const cYellow = cs.getPropertyValue('--accent-yellow').trim()|| '#d29922';
+  const cText   = cs.getPropertyValue('--text-primary').trim() || '#e6edf3';
+
+  const rootNum = data.node_number;
+  const nodesArr = [{
+    id: rootNum, callsign: data.callsign || '', lcnt: data.lcnt || 0,
+    keyed: false, isRoot: true,
+  }];
+  for (const c of (data.connections || [])) {
+    nodesArr.push({ id: c.node_number, callsign: c.callsign || '', lcnt: 0, keyed: false, isRoot: false });
+  }
+  const linksArr = (data.connections || []).map(c => ({ source: rootNum, target: c.node_number }));
+
+  const nodeR = d => d.isRoot ? 32 : Math.max(18, Math.min(28, 18 + (d.lcnt || 0) * 2));
+  const nodeStroke = d => {
+    if (d.isRoot) return cYellow;
+    if (d.keyed) return cRed;
+    return cBlue;
+  };
+
+  const zoom = d3.zoom().scaleExtent([0.15, 5]).on('zoom', evt => g.attr('transform', evt.transform));
+  gZoom = zoom;
+  svg.call(zoom);
+  svg.on('dblclick.zoom', () => svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity));
+
+  const g = svg.append('g');
+
+  svg.append('defs').append('marker')
+    .attr('id', 'arr')
+    .attr('viewBox', '-0 -5 10 10').attr('refX', 14).attr('refY', 0)
+    .attr('orient', 'auto').attr('markerWidth', 7).attr('markerHeight', 7)
+    .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', cMuted);
+
+  const link = g.append('g').selectAll('line')
+    .data(linksArr).join('line')
+    .attr('stroke', cMuted).attr('stroke-width', 1.5)
+    .attr('stroke-opacity', 0.5).attr('marker-end', 'url(#arr)');
+
+  const node = g.append('g').selectAll('g')
+    .data(nodesArr).join('g')
+    .attr('cursor', 'pointer')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end',   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+  node.append('circle')
+    .attr('r', nodeR)
+    .attr('fill', d => nodeStroke(d))
+    .attr('fill-opacity', 0.12)
+    .attr('stroke', nodeStroke)
+    .attr('stroke-width', d => d.isRoot ? 3 : 2);
+
+  node.append('text')
+    .attr('text-anchor', 'middle').attr('dy', '-0.15em')
+    .attr('fill', cText).attr('font-size', '11px')
+    .attr('font-weight', 'bold').attr('font-family', 'monospace')
+    .text(d => d.id);
+
+  node.append('text')
+    .attr('text-anchor', 'middle').attr('dy', '1.1em')
+    .attr('fill', cMuted).attr('font-size', '9px')
+    .text(d => d.callsign);
+
+  node.append('title')
+    .text(d => `${d.id}${d.callsign ? ' (' + d.callsign + ')' : ''}${d.lcnt ? '\n' + d.lcnt + ' connections' : ''}`);
+
+  node.on('click', (e, d) => {
+    if (d.id !== rootNum && e.shiftKey) {
+      window.location.href = `/graph/${d.id}`;
+    }
+  });
+
+  const sim = d3.forceSimulation(nodesArr)
+    .force('link', d3.forceLink(linksArr).id(d => d.id).distance(130))
+    .force('charge', d3.forceManyBody().strength(-350))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => nodeR(d) + 12));
+  gSimulation = sim;
+
+  sim.on('tick', () => {
+    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+</script>
+{{end}}

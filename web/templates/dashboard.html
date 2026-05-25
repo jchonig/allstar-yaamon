@@ -251,6 +251,60 @@
   </div>
 </div>
 
+{{/* Connections Modal */}}
+<div class="modal fade" id="connModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header flex-wrap gap-2">
+        <h5 class="modal-title" id="conn-modal-title">Connections</h5>
+        <div class="btn-group btn-group-sm ms-2" role="group" id="conn-view-tabs">
+          <button type="button" class="btn btn-outline-secondary" onclick="setConnView('list')">
+            <i class="bi bi-list-ul me-1"></i>List
+          </button>
+          <button type="button" class="btn btn-outline-secondary" onclick="setConnView('bubble')">
+            <i class="bi bi-diagram-3 me-1"></i>Bubble Chart
+          </button>
+          <button type="button" class="btn btn-outline-secondary" onclick="setConnView('graph')">
+            <i class="bi bi-bezier2 me-1"></i>Network Graph
+          </button>
+        </div>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" style="min-height:320px">
+        <div id="conn-view-list" class="p-3">
+          <div id="conn-list-content" class="text-muted text-center py-4">
+            <div class="spinner-border spinner-border-sm me-2"></div>Loading…
+          </div>
+        </div>
+        <div id="conn-view-bubble" style="display:none">
+          <iframe id="conn-bubble-iframe" style="width:100%;height:480px;border:0" src="about:blank"></iframe>
+          <p class="text-muted small px-3 pb-2 mb-0">
+            Bubble chart provided by AllStarLink.org —
+            <a id="conn-bubble-link" href="#" target="_blank" rel="noopener">open in new tab ↗</a>
+          </p>
+        </div>
+        <div id="conn-view-graph" style="display:none;height:480px;position:relative">
+          <svg id="conn-graph-svg" style="width:100%;height:100%;display:block"></svg>
+          <div class="position-absolute bottom-0 start-0 m-2 small text-muted d-flex gap-3">
+            <span><i class="bi bi-circle-fill" style="color:var(--accent-yellow)"></i> This node</span>
+            <span><i class="bi bi-circle-fill" style="color:var(--accent-red)"></i> Keyed</span>
+            <span><i class="bi bi-circle-fill" style="color:var(--accent-blue)"></i> Online</span>
+            <span><i class="bi bi-circle-fill" style="color:var(--text-muted)"></i> Unknown</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <small class="text-muted me-auto" id="conn-cache-age"></small>
+        <a id="conn-fullgraph-link" href="#" target="_blank" rel="noopener"
+           class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-arrows-fullscreen me-1"></i>Full Page
+        </a>
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {{end}}
 {{end}}
 
@@ -267,11 +321,12 @@ let amiLinks = {};           // {nodeNum: typeChar} — from AMI "rpt show varia
 let amiLinksReceived = false; // true once first "links" SSE message arrives
 let sortCol = sessionStorage.getItem('yaamon_sort_col') || null;
 let sortDir = parseInt(sessionStorage.getItem('yaamon_sort_dir') || '1');
-let addFavModal;
+let addFavModal, connModal;
 let sseSource = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   addFavModal = new bootstrap.Modal(document.getElementById('addFavModal'));
+  connModal   = new bootstrap.Modal(document.getElementById('connModal'));
   loadFavs();
   connectSSE();
 });
@@ -353,7 +408,7 @@ function renderFavs() {
     const s = statsData[f.node_number] || {};
     const keyed = s.keyed;
     const txTime = s.total_tx_time != null ? fmtDuration(s.total_tx_time) : '—';
-    const lcnt = s.connected_links != null ? s.connected_links : '—';
+    const lcnt = s.connected_links != null ? s.connected_links : null;
     const call = s.callsign || f.callsign || '—';
     const desc = s.description || f.description || '—';
     const loc  = s.location || f.location || '—';
@@ -372,7 +427,7 @@ function renderFavs() {
       <td class="text-truncate d-none d-md-table-cell" style="max-width:200px" title="${esc(desc)}">${esc(desc)}</td>
       <td class="text-truncate d-none d-md-table-cell" style="max-width:150px" title="${esc(loc)}">${esc(loc)}</td>
       <td class="text-nowrap">${txTime}</td>
-      <td>${lcnt}</td>
+      ${lcntCell(f.node_number, lcnt)}
       <td class="text-end text-nowrap">${actionCell(f.node_number, f.id)}</td>
     </tr>`;
   }).join('');
@@ -395,7 +450,7 @@ function applyStats(stats) {
     if (s.description) { cells[3].textContent = s.description; cells[3].title = s.description; }
     if (s.location)    { cells[4].textContent = s.location;    cells[4].title = s.location; }
     if (s.total_tx_time != null) cells[5].textContent = fmtDuration(s.total_tx_time);
-    if (s.connected_links != null) cells[6].textContent = s.connected_links;
+    if (s.connected_links != null) updateLCntCell(cells[6], num, s.connected_links);
     // Rebuild action cell when connection state may have changed.
     if (s.linked_nodes !== undefined && CAN_WRITE) {
       const f = favsData.find(x => x.node_number === num);
@@ -687,6 +742,243 @@ function ctrlKeydown(event) {
   if (event.key !== 'Enter') return;
   const num = (document.getElementById('ctrl-node-number')?.value || '').trim();
   if (num) doConnect(num, 'transceive', true);
+}
+
+// --- LCnt cell helpers ---
+
+function lcntCell(nodeNum, lcnt) {
+  if (lcnt > 0) {
+    return `<td style="cursor:pointer;color:var(--accent-blue)"
+               title="${lcnt} connection${lcnt !== 1 ? 's' : ''} — click for details"
+               onclick="openConnModal('${esc(nodeNum)}',${lcnt})">${lcnt}</td>`;
+  }
+  return `<td>${lcnt != null ? lcnt : '—'}</td>`;
+}
+
+function updateLCntCell(td, nodeNum, lcnt) {
+  td.textContent = lcnt;
+  if (lcnt > 0) {
+    td.style.cursor = 'pointer';
+    td.style.color = 'var(--accent-blue)';
+    td.title = `${lcnt} connection${lcnt !== 1 ? 's' : ''} — click for details`;
+    td.onclick = () => openConnModal(nodeNum, lcnt);
+  } else {
+    td.style.cursor = '';
+    td.style.color = '';
+    td.title = '';
+    td.onclick = null;
+  }
+}
+
+// --- Connections modal ---
+
+let connNodeNum = null;
+let connData = null;
+let connView = localStorage.getItem('yaamon_lcnt_view') || 'list';
+let d3Loaded = false;
+let connGraphZoom = null;
+let connGraphSvg = null;
+
+async function openConnModal(nodeNum, lcnt) {
+  if (!lcnt || lcnt <= 0) return;
+  connNodeNum = nodeNum;
+  connData = null;
+
+  const s = statsData[nodeNum] || {};
+  const call = s.callsign || '';
+  document.getElementById('conn-modal-title').textContent =
+    (call ? `Node ${nodeNum} (${call})` : `Node ${nodeNum}`) +
+    ` — ${lcnt} Connection${lcnt !== 1 ? 's' : ''}`;
+  document.getElementById('conn-cache-age').textContent = '';
+  document.getElementById('conn-fullgraph-link').href = `/graph/${nodeNum}`;
+  document.getElementById('conn-list-content').innerHTML =
+    '<div class="text-muted text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading…</div>';
+
+  // Clear graph SVG from a prior open
+  d3.select('#conn-graph-svg').selectAll('*').remove();
+
+  connModal.show();
+  setConnView(connView, false); // set tabs without re-triggering graph load
+
+  try {
+    const r = await fetch(`/api/nodes/${NODE_ID}/connections/${nodeNum}`);
+    connData = await r.json();
+    renderConnList();
+    if (connView === 'graph') loadD3ThenGraph();
+    const age = connData.cache_age_seconds;
+    document.getElementById('conn-cache-age').textContent =
+      age >= 0 ? `Data cached ${age}s ago` : '';
+  } catch {
+    document.getElementById('conn-list-content').innerHTML =
+      '<div class="text-danger p-3">Failed to load connection data.</div>';
+  }
+}
+
+function setConnView(view, triggerLoad = true) {
+  connView = view;
+  localStorage.setItem('yaamon_lcnt_view', view);
+
+  document.getElementById('conn-view-list').style.display   = view === 'list'   ? '' : 'none';
+  document.getElementById('conn-view-bubble').style.display = view === 'bubble' ? '' : 'none';
+  document.getElementById('conn-view-graph').style.display  = view === 'graph'  ? '' : 'none';
+
+  const labels = ['list', 'bubble', 'graph'];
+  document.querySelectorAll('#conn-view-tabs button').forEach((btn, i) => {
+    btn.classList.toggle('active', labels[i] === view);
+  });
+
+  if (view === 'bubble' && connNodeNum) {
+    const url = `https://stats.allstarlink.org/getstatus.cgi?${connNodeNum}`;
+    document.getElementById('conn-bubble-iframe').src = url;
+    document.getElementById('conn-bubble-link').href = url;
+  }
+
+  if (view === 'graph' && triggerLoad && connData) {
+    loadD3ThenGraph();
+  }
+}
+
+function renderConnList() {
+  const el = document.getElementById('conn-list-content');
+  if (!connData) return;
+  if (!connData.connections || !connData.connections.length) {
+    el.innerHTML = '<p class="text-muted text-center py-3">No connections reported by AllStarLink</p>';
+    return;
+  }
+  const rows = connData.connections.map(c => {
+    const clickAttrs = CAN_WRITE
+      ? `onclick="doConnect('${esc(c.node_number)}','transceive',true);connModal.hide()"
+         style="cursor:pointer" title="Click to connect (transceive)"`
+      : '';
+    return `<tr>
+      <td><code ${clickAttrs}>${esc(c.node_number)}</code></td>
+      <td>${esc(c.callsign || '—')}</td>
+      <td class="text-truncate d-none d-md-table-cell" style="max-width:200px" title="${esc(c.description || '')}">${esc(c.description || '—')}</td>
+      <td class="text-truncate d-none d-md-table-cell" style="max-width:150px" title="${esc(c.location || '')}">${esc(c.location || '—')}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table class="table table-sm table-hover mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>Node${CAN_WRITE ? ' <small class="text-muted fw-normal">(click to connect)</small>' : ''}</th>
+        <th>Callsign</th>
+        <th class="d-none d-md-table-cell">Description</th>
+        <th class="d-none d-md-table-cell">Location</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function loadD3ThenGraph() {
+  if (window.d3) { renderConnGraph(); return; }
+  if (d3Loaded) return; // already loading
+  d3Loaded = true;
+  const sc = document.createElement('script');
+  sc.src = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
+  sc.onload = renderConnGraph;
+  document.head.appendChild(sc);
+}
+
+function renderConnGraph() {
+  if (!connData || !window.d3) return;
+  const svgEl = document.getElementById('conn-graph-svg');
+  const svg = d3.select(svgEl);
+  svg.selectAll('*').remove();
+  connGraphSvg = svg;
+
+  const width  = svgEl.clientWidth  || 600;
+  const height = svgEl.clientHeight || 480;
+
+  const cs = getComputedStyle(document.documentElement);
+  const cMuted  = cs.getPropertyValue('--text-muted').trim()   || '#888';
+  const cRed    = cs.getPropertyValue('--accent-red').trim()   || '#f85149';
+  const cBlue   = cs.getPropertyValue('--accent-blue').trim()  || '#58a6ff';
+  const cYellow = cs.getPropertyValue('--accent-yellow').trim()|| '#d29922';
+  const cText   = cs.getPropertyValue('--text-primary').trim() || '#e6edf3';
+
+  const rootNum = connData.node_number;
+  const nodesArr = [{
+    id: rootNum, callsign: connData.callsign || '', lcnt: connData.lcnt || 0,
+    keyed: (statsData[rootNum] || {}).keyed, isRoot: true,
+  }];
+  for (const c of (connData.connections || [])) {
+    nodesArr.push({
+      id: c.node_number, callsign: c.callsign || '', lcnt: 0,
+      keyed: (statsData[c.node_number] || {}).keyed, isRoot: false,
+    });
+  }
+  const linksArr = (connData.connections || []).map(c => ({ source: rootNum, target: c.node_number }));
+
+  const nodeR = d => d.isRoot ? 30 : Math.max(16, Math.min(26, 16 + (d.lcnt || 0) * 2));
+  const nodeStroke = d => {
+    if (d.isRoot) return cYellow;
+    if (d.keyed)  return cRed;
+    return cBlue;
+  };
+
+  const zoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', evt => g.attr('transform', evt.transform));
+  connGraphZoom = zoom;
+  svg.call(zoom);
+  svg.on('dblclick.zoom', () => svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity));
+
+  const g = svg.append('g');
+
+  svg.append('defs').append('marker')
+    .attr('id', 'arr-modal').attr('viewBox', '-0 -5 10 10')
+    .attr('refX', 14).attr('refY', 0).attr('orient', 'auto')
+    .attr('markerWidth', 7).attr('markerHeight', 7)
+    .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', cMuted);
+
+  const link = g.append('g').selectAll('line')
+    .data(linksArr).join('line')
+    .attr('stroke', cMuted).attr('stroke-width', 1.5)
+    .attr('stroke-opacity', 0.5).attr('marker-end', 'url(#arr-modal)');
+
+  const node = g.append('g').selectAll('g')
+    .data(nodesArr).join('g').attr('cursor', 'pointer')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end',   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+  node.append('circle')
+    .attr('r', nodeR)
+    .attr('fill', d => nodeStroke(d)).attr('fill-opacity', 0.12)
+    .attr('stroke', nodeStroke).attr('stroke-width', d => d.isRoot ? 3 : 2);
+
+  node.append('text')
+    .attr('text-anchor', 'middle').attr('dy', '-0.15em')
+    .attr('fill', cText).attr('font-size', '10px')
+    .attr('font-weight', 'bold').attr('font-family', 'monospace')
+    .text(d => d.id);
+
+  node.append('text')
+    .attr('text-anchor', 'middle').attr('dy', '1.1em')
+    .attr('fill', cMuted).attr('font-size', '8px').text(d => d.callsign);
+
+  node.append('title').text(d => d.id + (d.callsign ? ' (' + d.callsign + ')' : ''));
+
+  if (CAN_WRITE) {
+    node.on('click', (e, d) => {
+      if (d.id !== rootNum) {
+        doConnect(d.id, 'transceive', true);
+        connModal.hide();
+      }
+    });
+  }
+
+  const sim = d3.forceSimulation(nodesArr)
+    .force('link', d3.forceLink(linksArr).id(d => d.id).distance(110))
+    .force('charge', d3.forceManyBody().strength(-300))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => nodeR(d) + 10));
+
+  sim.on('tick', () => {
+    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
 }
 
 // --- Utilities ---

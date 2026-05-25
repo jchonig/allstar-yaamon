@@ -92,7 +92,7 @@ func (s *Server) initSessions() error {
 }
 
 func (s *Server) parseTemplates() error {
-	pages := []string{"login", "dashboard", "setup", "nodes", "users", "backup", "favorites"}
+	pages := []string{"login", "dashboard", "setup", "nodes", "users", "backup", "favorites", "graph"}
 	s.tmpls = make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
 		t, err := template.ParseFS(s.webFS,
@@ -154,6 +154,8 @@ func (s *Server) Run() error {
 		r.Get("/api/nodes", s.handleAPIListNodes)
 		r.Get("/api/nodes/{id}/favorites", s.handleAPIListFavorites)
 		r.Get("/api/nodes/{id}/stats", s.handleAPINodeStats)
+		r.Get("/api/nodes/{id}/connections/{nodeNumber}", s.handleAPIConnections)
+		r.Get("/graph/{nodeNumber}", s.handleGraphPage)
 	})
 
 	// Readwrite+ routes — can connect/disconnect and manage favorites
