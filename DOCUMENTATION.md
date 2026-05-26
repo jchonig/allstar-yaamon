@@ -85,13 +85,42 @@ After saving, YAAMon connects to the AMI immediately. A green dot on the node ca
 
 ### Minimum manager.conf entry
 
+**When YAAMon runs on the same machine as Asterisk** (AMI host = `localhost`):
+
 ```ini
+[general]
+enabled = yes
+bindaddr = 127.0.0.1        ; listen on loopback only — safest default
+
 [yaamon]
 secret = your-secret-here
 read = system,call,log,verbose,agent,user,config,dtmf,reporting,cdr,dialplan
 write = system,call,agent,user,config,command,reporting,originate
-permit = 127.0.0.1/255.255.255.0     ; restrict to localhost when YAAMon is local
+permit = 127.0.0.1/255.255.255.255
 ```
+
+**When YAAMon runs on a different machine** (e.g., a Docker host or separate server), Asterisk must listen on a network interface and permit connections from the YAAMon host's address:
+
+```ini
+[general]
+enabled = yes
+bindaddr = 0.0.0.0          ; or the specific interface IP facing YAAMon
+
+[yaamon]
+secret = your-secret-here
+read = system,call,log,verbose,agent,user,config,dtmf,reporting,cdr,dialplan
+write = system,call,agent,user,config,command,reporting,originate
+permit = 192.168.1.50/255.255.255.255   ; replace with YAAMon host's IP
+deny = 0.0.0.0/0.0.0.0
+```
+
+Reload the manager module after any changes:
+
+```bash
+sudo asterisk -rx "module reload manager"
+```
+
+> **Security**: AMI has no encryption. If YAAMon is not on the same machine, use a VPN or SSH tunnel and keep `bindaddr` restricted to the VPN/tunnel interface rather than `0.0.0.0`. See [Remote Nodes](#remote-nodes).
 
 ---
 
