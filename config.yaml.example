@@ -25,7 +25,7 @@ log:
 
 ui:
   # Footer left side — shown on every page.
-  footer_text: "Yet Another AllstarLink favorites and MONitor tool"
+  footer_text: "Yet Another Allstarlink MONitor (and favorites)"
   # footer_url: https://github.com/youruser/allstar-yaamon  # GitHub icon link next to footer_text
 
   # Footer right side — attribution link.
