@@ -22,7 +22,7 @@ When you open YAAMon for the first time — before any users exist — you are r
 
 After creating the account you are taken to the login page. Sign in with the credentials you just created.
 
-> If you need to bootstrap a fresh install non-interactively (e.g., in a Docker environment), use `yaamon apply` with a state file instead. See [Declarative State](#declarative-state-yaamon-apply).
+> If you need to bootstrap a fresh install non-interactively (e.g., in a Docker environment), set `YAAMON_STATE_FILE` to the path of a state file — it will be applied automatically on container start. See [Declarative State](#declarative-state-yaamon-apply).
 
 ---
 
@@ -317,6 +317,23 @@ yaamon apply state.yaml
 yaamon apply state.yaml --dry-run          # preview changes without applying
 yaamon apply state.yaml --reset-passwords  # overwrite existing user passwords
 ```
+
+### Automatic apply on Docker startup
+
+Set the `YAAMON_STATE_FILE` environment variable to the path of your state file inside the container. The entrypoint will apply it automatically every time the container starts, before the server comes up:
+
+```yaml
+services:
+  yaamon:
+    image: ghcr.io/jchonig/allstar-yaamon:latest
+    volumes:
+      - ./config:/etc/yaamon
+      - yaamon-data:/data
+    environment:
+      - YAAMON_STATE_FILE=/etc/yaamon/state.yaml
+```
+
+Because `apply` is idempotent by default (it only adds or updates, never deletes unless `purge` is enabled), running it on every start is safe — existing data is not overwritten unless the state file changes.
 
 See [`state.yaml.example`](state.yaml.example) for the full format. Environment variable substitution is supported — any value beginning with `$` is resolved from the environment at apply time, which keeps secrets out of the file:
 

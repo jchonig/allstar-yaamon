@@ -206,6 +206,13 @@ YAAMon can import your existing AllScan favorites using a declarative state file
 yaamon apply state.yaml
 ```
 
+In Docker, set `YAAMON_STATE_FILE` to the path of your state file and it will be applied automatically on every container start:
+
+```yaml
+    environment:
+      - YAAMON_STATE_FILE=/etc/yaamon/state.yaml
+```
+
 YAAMon uses its own database and can run alongside AllScan or Allmon3 during transition.
 
 ---
