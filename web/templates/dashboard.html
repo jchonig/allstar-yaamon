@@ -4,7 +4,7 @@
 
 {{define "nav-center"}}
 {{if and .ActiveNode (gt (len .Nodes) 1)}}
-<div id="nav-switcher" class="ms-2 d-flex align-items-center">
+<div id="nav-switcher" class="ms-2 d-flex align-items-center" style="min-width:0;overflow:hidden">
   {{/* Button group — shown when there is enough navbar space */}}
   <div id="nav-switcher-buttons" class="btn-group btn-group-sm" role="group" style="display:none!important">
     <a href="/dashboard/overview"
@@ -42,33 +42,18 @@
   const drop  = document.getElementById('nav-switcher-dropdown');
   if (!nav || !wrap || !btns || !drop) return;
 
-  const brand = nav.querySelector('.navbar-brand');
-  const extra = nav.querySelector('.ms-auto');
-
   function update() {
-    // Pull buttons out of flex flow to measure their natural (uncompressed) width.
-    // scrollWidth is unreliable in flex-wrap:nowrap containers — the parent
-    // compresses items rather than overflowing, so scrollWidth === clientWidth.
-    btns.style.cssText = 'position:absolute;visibility:hidden';
+    // Show buttons so scrollWidth reflects their natural width.
+    btns.style.cssText = '';
     drop.style.cssText = 'display:none';
-    const btnsWidth = btns.offsetWidth;
-
-    const avail = nav.clientWidth
-      - (brand ? brand.offsetWidth : 0)
-      - (extra ? extra.offsetWidth : 0)
-      - 16; // gap between brand/switcher/extra
-
-    if (btnsWidth <= avail) {
-      btns.style.cssText = '';
-    } else {
-      btns.style.cssText = 'display:none';
-      drop.style.cssText = '';
-    }
+    // wrap has overflow:hidden + min-width:0, so scrollWidth > clientWidth
+    // means the btn-group is wider than the space the flex parent gave us.
+    if (wrap.scrollWidth <= wrap.clientWidth) return;
+    btns.style.cssText = 'display:none';
+    drop.style.cssText = '';
   }
 
-  const ro = new ResizeObserver(update);
-  ro.observe(nav);
-  ro.observe(wrap);
+  new ResizeObserver(update).observe(wrap);
   update();
 })();
 </script>

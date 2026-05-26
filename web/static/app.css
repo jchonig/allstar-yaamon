@@ -77,6 +77,10 @@ body {
 .navbar-yaamon > .container-fluid {
   flex-wrap: nowrap;
 }
+/* Right-side controls never compress; switcher absorbs all available squeeze. */
+.navbar-yaamon > .container-fluid > .ms-auto {
+  flex-shrink: 0;
+}
 
 .navbar-yaamon .navbar-brand,
 .navbar-yaamon .nav-link {
