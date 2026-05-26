@@ -97,8 +97,15 @@ func (s *Server) initSessions() error {
 func (s *Server) parseTemplates() error {
 	pages := []string{"login", "dashboard", "setup", "nodes", "users", "backup", "favorites", "graph"}
 	s.tmpls = make(map[string]*template.Template, len(pages))
+	ui := s.cfg.UI
+	funcMap := template.FuncMap{
+		"siteFooterText":           func() string { return ui.FooterText },
+		"siteFooterURL":            func() string { return ui.FooterURL },
+		"siteFooterAttribution":    func() string { return ui.FooterAttribution },
+		"siteFooterAttributionURL": func() string { return ui.FooterAttributionURL },
+	}
 	for _, page := range pages {
-		t, err := template.ParseFS(s.webFS,
+		t, err := template.New("root").Funcs(funcMap).ParseFS(s.webFS,
 			"web/templates/base.html",
 			"web/templates/"+page+".html",
 		)

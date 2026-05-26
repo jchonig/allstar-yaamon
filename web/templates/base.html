@@ -47,6 +47,18 @@
     {{block "content" .}}{{end}}
   </div>
 
+  <footer class="container-fluid mt-4 py-2 border-top">
+    <div class="d-flex justify-content-between align-items-center small text-muted flex-wrap gap-1">
+      <span>
+        {{siteFooterText}}
+        {{if siteFooterURL}}<a href="{{siteFooterURL}}" target="_blank" rel="noopener" class="ms-1 text-muted"><i class="bi bi-github"></i></a>{{end}}
+      </span>
+      <span>
+        {{if siteFooterAttributionURL}}<a href="{{siteFooterAttributionURL}}" target="_blank" rel="noopener" class="text-muted">{{siteFooterAttribution}}</a>{{else}}{{siteFooterAttribution}}{{end}}
+      </span>
+    </div>
+  </footer>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/static/app.js"></script>
   {{block "scripts" .}}{{end}}

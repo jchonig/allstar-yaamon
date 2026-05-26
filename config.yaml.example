@@ -22,3 +22,12 @@ db:
 
 log:
   level: info                # debug | info | warn | error
+
+ui:
+  # Footer left side — shown on every page.
+  footer_text: "Yet Another AllstarLink favorites and MONitor tool"
+  # footer_url: https://github.com/youruser/allstar-yaamon  # GitHub icon link next to footer_text
+
+  # Footer right side — attribution link.
+  footer_attribution: N2VLV
+  footer_attribution_url: https://n2vlv.net

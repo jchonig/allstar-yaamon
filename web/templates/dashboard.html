@@ -40,8 +40,8 @@
 
 {{/* Node selector tabs */}}
 {{if gt (len .Nodes) 1}}
-<div class="mb-3">
-  <div class="btn-group btn-group-sm" role="group">
+<div class="mb-3" style="overflow-x:auto">
+  <div class="btn-group btn-group-sm flex-nowrap" role="group">
     {{range .Nodes}}
     <a href="/dashboard/{{.ID}}"
        class="btn {{if eq .ID $.ActiveNode.ID}}btn-primary{{else}}btn-outline-secondary{{end}}">

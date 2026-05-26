@@ -12,6 +12,14 @@ type Config struct {
 	TLS    TLSConfig    `mapstructure:"tls"`
 	DB     DBConfig     `mapstructure:"db"`
 	Log    LogConfig    `mapstructure:"log"`
+	UI     UIConfig     `mapstructure:"ui"`
+}
+
+type UIConfig struct {
+	FooterText           string `mapstructure:"footer_text"`
+	FooterURL            string `mapstructure:"footer_url"`
+	FooterAttribution    string `mapstructure:"footer_attribution"`
+	FooterAttributionURL string `mapstructure:"footer_attribution_url"`
 }
 
 type ServerConfig struct {
@@ -46,6 +54,10 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("tls.acme_cache_dir", "/etc/yaamon/acme")
 	v.SetDefault("db.path", "/etc/yaamon/yaamon.db")
 	v.SetDefault("log.level", "info")
+	v.SetDefault("ui.footer_text", "Yet Another AllstarLink favorites and MONitor tool")
+	v.SetDefault("ui.footer_url", "")
+	v.SetDefault("ui.footer_attribution", "N2VLV")
+	v.SetDefault("ui.footer_attribution_url", "https://n2vlv.net")
 
 	if cfgFile != "" {
 		v.SetConfigFile(cfgFile)
