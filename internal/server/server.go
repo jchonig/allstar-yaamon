@@ -179,6 +179,9 @@ func (s *Server) Run() error {
 		r.Get("/api/nodes/{id}/connections/{nodeNumber}", s.handleAPIConnections)
 		r.Get("/graph/{nodeNumber}", s.handleGraphPage)
 		r.Put("/api/profile", s.handleAPIUpdateProfile)
+		r.Post("/api/profile/avatar", s.handleAPIUploadAvatar)
+		r.Delete("/api/profile/avatar", s.handleAPIDeleteAvatar)
+		r.Get("/api/users/{id}/avatar", s.handleAPIGetAvatar)
 	})
 
 	// Readwrite+ routes — can connect/disconnect and manage favorites

@@ -86,3 +86,5 @@ func (s *Server) handleAPIDeleteFavicon(w http.ResponseWriter, r *http.Request) 
 func isPNG(b []byte)  bool { return len(b) >= 4 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 }
 func isICO(b []byte)  bool { return len(b) >= 4 && b[0] == 0x00 && b[1] == 0x00 && b[2] == 0x01 && b[3] == 0x00 }
 func isJPEG(b []byte) bool { return len(b) >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF }
+func isGIF(b []byte)  bool { return len(b) >= 6 && b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46 }
+func isWEBP(b []byte) bool { return len(b) >= 12 && b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 && b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50 }

@@ -31,7 +31,7 @@
         <div class="dropdown">
           <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
             {{if .AvatarURL}}
-            <img src="{{.AvatarURL}}" class="rounded-circle me-1" style="width:20px;height:20px;object-fit:cover" alt="">
+            <img src="{{.AvatarURL}}" class="rounded-circle me-1" style="width:20px;height:20px;object-fit:cover" alt="" data-nav-avatar>
             {{else}}
             <i class="bi bi-person-circle me-1"></i>
             {{end}}
@@ -105,16 +105,39 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
+          {{/* Avatar section */}}
+          <div class="text-center mb-3">
+            <div style="position:relative;display:inline-block">
+              {{if .AvatarURL}}
+              <img id="profile-avatar-preview" src="{{.AvatarURL}}"
+                   class="rounded-circle" style="width:80px;height:80px;object-fit:cover;border:2px solid var(--border)"
+                   onerror="this.style.display='none';document.getElementById('profile-avatar-icon').style.display='block'">
+              <i id="profile-avatar-icon" class="bi bi-person-circle" style="font-size:5rem;display:none"></i>
+              {{else}}
+              <img id="profile-avatar-preview" class="rounded-circle" style="width:80px;height:80px;object-fit:cover;border:2px solid var(--border);display:none">
+              <i id="profile-avatar-icon" class="bi bi-person-circle" style="font-size:5rem"></i>
+              {{end}}
+            </div>
+            <div class="mt-2 d-flex justify-content-center gap-2 flex-wrap">
+              <label class="btn btn-sm btn-outline-secondary mb-0">
+                <i class="bi bi-image me-1"></i>Choose…
+                <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
+              </label>
+              <button class="btn btn-sm btn-primary" id="avatar-upload-btn" style="display:none" onclick="uploadAvatar()">
+                <i class="bi bi-upload me-1"></i>Upload
+              </button>
+              <button class="btn btn-sm btn-outline-danger" id="avatar-remove-btn"
+                      style="{{if not .AvatarURL}}display:none{{end}}" onclick="removeAvatar()">
+                <i class="bi bi-trash me-1"></i>Remove
+              </button>
+            </div>
+            <div class="text-danger small mt-1" id="avatar-error"></div>
+          </div>
+          <hr>
           <div class="mb-3">
             <label for="profile-fullname" class="form-label">Full Name</label>
             <input type="text" class="form-control" id="profile-fullname"
                    placeholder="Your name" value="{{.FullName}}">
-          </div>
-          <div class="mb-3">
-            <label for="profile-avatar" class="form-label">Avatar URL</label>
-            <input type="url" class="form-control" id="profile-avatar"
-                   placeholder="https://…" value="{{.AvatarURL}}">
-            <div class="form-text">Link to a profile image (JPEG or PNG).</div>
           </div>
           <hr>
           <div class="mb-3">
@@ -141,12 +164,88 @@
   document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('profileModal');
     if (el) _profileModal = new bootstrap.Modal(el);
+    const fileInput = document.getElementById('avatar-file');
+    if (fileInput) fileInput.addEventListener('change', onAvatarFileChosen);
   });
   function openProfileModal() {
     document.getElementById('profile-error').textContent = '';
+    document.getElementById('avatar-error').textContent = '';
     document.getElementById('profile-current-pw').value = '';
     document.getElementById('profile-new-pw').value = '';
+    document.getElementById('avatar-file').value = '';
+    document.getElementById('avatar-upload-btn').style.display = 'none';
     _profileModal.show();
+  }
+  function onAvatarFileChosen(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const prev = document.getElementById('profile-avatar-preview');
+      const icon = document.getElementById('profile-avatar-icon');
+      prev.src = ev.target.result;
+      prev.style.display = '';
+      icon.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+    document.getElementById('avatar-upload-btn').style.display = '';
+  }
+  async function uploadAvatar() {
+    const input = document.getElementById('avatar-file');
+    if (!input.files.length) return;
+    const btn = document.getElementById('avatar-upload-btn');
+    btn.disabled = true;
+    document.getElementById('avatar-error').textContent = '';
+    try {
+      const file = input.files[0];
+      const resp = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        headers: {'Content-Type': file.type || 'application/octet-stream'},
+        body: file,
+      });
+      if (!resp.ok) {
+        document.getElementById('avatar-error').textContent = await resp.text();
+        return;
+      }
+      const {avatar_url} = await resp.json();
+      // Update the navbar avatar (may be multiple if page has one)
+      document.querySelectorAll('img[data-nav-avatar]').forEach(img => {
+        img.src = avatar_url + '?' + Date.now();
+        img.style.display = '';
+      });
+      document.getElementById('avatar-upload-btn').style.display = 'none';
+      document.getElementById('avatar-remove-btn').style.display = '';
+      input.value = '';
+    } catch (e) {
+      document.getElementById('avatar-error').textContent = 'Network error: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  async function removeAvatar() {
+    const btn = document.getElementById('avatar-remove-btn');
+    btn.disabled = true;
+    document.getElementById('avatar-error').textContent = '';
+    try {
+      const resp = await fetch('/api/profile/avatar', {method: 'DELETE'});
+      if (!resp.ok) {
+        document.getElementById('avatar-error').textContent = await resp.text();
+        return;
+      }
+      const prev = document.getElementById('profile-avatar-preview');
+      const icon = document.getElementById('profile-avatar-icon');
+      prev.style.display = 'none';
+      icon.style.display = '';
+      document.getElementById('avatar-file').value = '';
+      document.getElementById('avatar-upload-btn').style.display = 'none';
+      btn.style.display = 'none';
+      // Clear the navbar avatar
+      document.querySelectorAll('img[data-nav-avatar]').forEach(img => img.style.display = 'none');
+    } catch (e) {
+      document.getElementById('avatar-error').textContent = 'Network error: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
   }
   async function saveProfile() {
     const newPw = document.getElementById('profile-new-pw').value;
@@ -155,10 +254,7 @@
       document.getElementById('profile-error').textContent = 'Current password is required to set a new password.';
       return;
     }
-    const body = {
-      full_name:  document.getElementById('profile-fullname').value.trim(),
-      avatar_url: document.getElementById('profile-avatar').value.trim(),
-    };
+    const body = {full_name: document.getElementById('profile-fullname').value.trim()};
     if (newPw) { body.current_password = currentPw; body.new_password = newPw; }
     const btn = document.getElementById('profile-save-btn');
     btn.disabled = true;
