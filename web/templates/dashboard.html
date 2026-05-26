@@ -87,8 +87,9 @@
       <div class="card h-100 summary-node-card">
         <div class="card-body">
           <div class="d-flex align-items-center gap-2 mb-1">
-            <i id="summary-dot-{{.ID}}" class="bi bi-circle-fill text-secondary" style="font-size:.65rem" title="Connecting…"></i>
-            <h5 class="card-title mb-0 text-truncate" title="{{.Name}}">{{.Name}}</h5>
+            <i id="summary-ami-{{.ID}}" class="bi bi-circle-fill text-secondary" style="font-size:.65rem" title="AMI: connecting…"></i>
+            <i id="summary-asl-{{.ID}}" class="bi bi-circle-fill text-secondary" style="font-size:.65rem" title="ASL: unknown"></i>
+            <h5 class="card-title mb-0 text-truncate flex-grow-1" title="{{.Name}}">{{.Name}}</h5>
           </div>
           <p class="card-text mb-2"><code class="text-muted">{{.NodeNumber}}</code></p>
           <p id="summary-links-{{.ID}}" class="card-text small text-muted mb-0">
@@ -120,6 +121,7 @@
     <h5 class="mb-0 d-inline">{{.ActiveNode.Name}}</h5>
     <code class="text-muted ms-2">{{.ActiveNode.NodeNumber}}</code>
     <span id="ami-badge" class="badge ms-2 bg-secondary">AMI —</span>
+    <span id="asl-badge" class="badge ms-2 bg-secondary">ASL —</span>
   </div>
   {{if or (eq .Permission "superuser") (eq .Permission "admin") (eq .Permission "readwrite")}}
   <div class="d-flex align-items-center gap-2">
@@ -373,16 +375,25 @@
   es.onmessage = evt => {
     try {
       const msg = JSON.parse(evt.data);
-      if (msg.type !== 'links') return;
-      const cnt = Object.keys(msg.links || {}).length;
-      const dot = document.getElementById('summary-dot-' + n.id);
-      const lnk = document.getElementById('summary-links-' + n.id);
-      if (dot) { dot.className = 'bi bi-circle-fill text-success'; dot.title = 'AMI connected'; }
-      if (lnk) lnk.textContent = cnt > 0 ? cnt + ' active link' + (cnt !== 1 ? 's' : '') : 'No active links';
+      if (msg.type === 'links') {
+        const cnt = Object.keys(msg.links || {}).length;
+        const dot = document.getElementById('summary-ami-' + n.id);
+        const lnk = document.getElementById('summary-links-' + n.id);
+        if (dot) { dot.className = 'bi bi-circle-fill text-success'; dot.title = 'AMI connected'; }
+        if (lnk) lnk.textContent = cnt > 0 ? cnt + ' active link' + (cnt !== 1 ? 's' : '') : 'No active links';
+      } else if (msg.type === 'stats') {
+        const hs = (msg.stats || {})[n.num];
+        const dot = document.getElementById('summary-asl-' + n.id);
+        if (dot && hs && hs.fetched_at) {
+          const stale = Date.now() - new Date(hs.fetched_at).getTime() > 90000;
+          dot.className = 'bi bi-circle-fill ' + (stale ? 'text-secondary' : 'text-success');
+          dot.title = stale ? 'ASL: no recent data' : 'AllStarLink connected';
+        }
+      }
     } catch {}
   };
   es.onerror = () => {
-    const dot = document.getElementById('summary-dot-' + n.id);
+    const dot = document.getElementById('summary-ami-' + n.id);
     if (dot) { dot.className = 'bi bi-circle-fill text-secondary'; dot.title = 'AMI disconnected'; }
   };
 });
@@ -486,6 +497,7 @@ async function loadFavs() {
     statsData = (await r2.json()) || {};
   } catch { statsData = {}; }
 
+  if (statsData[NODE_NUM]) setASLBadge(!isStale(statsData[NODE_NUM].fetched_at));
   renderFavs();
 }
 
@@ -529,6 +541,7 @@ function renderFavs() {
 
 function applyStats(stats) {
   statsData = Object.assign(statsData, stats);
+  if (stats[NODE_NUM]) setASLBadge(!isStale(statsData[NODE_NUM].fetched_at));
   // Update existing rows in-place without full re-render.
   const tbody = document.getElementById('favs-tbody');
   for (const [num, s] of Object.entries(stats)) {
@@ -604,6 +617,13 @@ function setAMIBadge(connected) {
   if (!badge) return;
   badge.className = connected ? 'badge ms-2 bg-success' : 'badge ms-2 bg-secondary';
   badge.textContent  = connected ? 'AMI ✓' : 'AMI —';
+}
+
+function setASLBadge(connected) {
+  const badge = document.getElementById('asl-badge');
+  if (!badge) return;
+  badge.className = connected ? 'badge ms-2 bg-success' : 'badge ms-2 bg-secondary';
+  badge.textContent = connected ? 'ASL ✓' : 'ASL —';
 }
 
 // --- Connection state ---

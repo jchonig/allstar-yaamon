@@ -92,14 +92,16 @@ func (s *Server) pollStats(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		nums := make([]string, 0, len(favs))
+		// Always include the home node's own number so its AllStarLink
+		// connectivity status is available on the dashboard and summary page.
+		nums := make([]string, 0, len(favs)+1)
+		nums = append(nums, n.NodeNumber)
+		allNums[n.NodeNumber] = struct{}{}
 		for _, f := range favs {
 			nums = append(nums, f.NodeNumber)
 			allNums[f.NodeNumber] = struct{}{}
 		}
-		if len(nums) > 0 {
-			work = append(work, nodeWork{id: n.ID, nums: nums})
-		}
+		work = append(work, nodeWork{id: n.ID, nums: nums})
 	}
 
 	if len(allNums) == 0 {
@@ -142,20 +144,29 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send cached stats immediately as the first event.
+	// Include the home node's own number so its AllStarLink status is visible.
 	var statsMsg []byte
-	favs, err := s.db.ListFavoritesByNode(r.Context(), nodeID)
-	if err == nil && len(favs) > 0 {
-		nums := make([]string, len(favs))
-		for i, f := range favs {
-			nums[i] = f.NodeNumber
+	{
+		hn, hnerr := s.db.GetNodeByID(r.Context(), nodeID)
+		favs, ferr := s.db.ListFavoritesByNode(r.Context(), nodeID)
+		nums := make([]string, 0)
+		if hnerr == nil {
+			nums = append(nums, hn.NodeNumber)
 		}
-		current := s.statsCache.getMany(nums)
-		if len(current) > 0 {
-			statsMsg, _ = json.Marshal(map[string]any{
-				"type":   "stats",
-				"nodeID": nodeID,
-				"stats":  current,
-			})
+		if ferr == nil {
+			for _, f := range favs {
+				nums = append(nums, f.NodeNumber)
+			}
+		}
+		if len(nums) > 0 {
+			current := s.statsCache.getMany(nums)
+			if len(current) > 0 {
+				statsMsg, _ = json.Marshal(map[string]any{
+					"type":   "stats",
+					"nodeID": nodeID,
+					"stats":  current,
+				})
+			}
 		}
 	}
 
@@ -172,11 +183,17 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	s.sseBroker.Stream(w, r, nodeID, statsMsg, linksMsg)
 }
 
-// handleAPINodeStats returns the current cached stats for all favorites of a node.
+// handleAPINodeStats returns the current cached stats for all favorites of a node,
+// plus the home node's own stats (for AllStarLink connectivity display).
 func (s *Server) handleAPINodeStats(w http.ResponseWriter, r *http.Request) {
 	nodeID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid node id", http.StatusBadRequest)
+		return
+	}
+	n, err := s.db.GetNodeByID(r.Context(), nodeID)
+	if err != nil {
+		http.Error(w, "node not found", http.StatusNotFound)
 		return
 	}
 	favs, err := s.db.ListFavoritesByNode(r.Context(), nodeID)
@@ -184,9 +201,10 @@ func (s *Server) handleAPINodeStats(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
 	}
-	nums := make([]string, len(favs))
-	for i, f := range favs {
-		nums[i] = f.NodeNumber
+	nums := make([]string, 0, len(favs)+1)
+	nums = append(nums, n.NodeNumber)
+	for _, f := range favs {
+		nums = append(nums, f.NodeNumber)
 	}
 	writeJSON(w, s.statsCache.getMany(nums))
 }
