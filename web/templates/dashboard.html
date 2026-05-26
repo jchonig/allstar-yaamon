@@ -2,6 +2,57 @@
 
 {{define "title"}}Dashboard — YAAMon{{end}}
 
+{{define "nav-center"}}
+{{if gt (len .Nodes) 1}}
+  {{if le (len .Nodes) 3}}
+  {{/* ≤3 nodes: buttons on md+, dropdown on mobile */}}
+  <div class="d-none d-md-flex ms-2">
+    <div class="btn-group btn-group-sm" role="group">
+      {{range .Nodes}}
+      <a href="/dashboard/{{.ID}}"
+         class="btn {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}btn-primary{{else}}btn-outline-secondary{{end}}"
+         title="{{.Name}}">{{.Name}}</a>
+      {{end}}
+    </div>
+  </div>
+  <div class="d-md-none ms-2">
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle text-truncate" style="max-width:8rem"
+              data-bs-toggle="dropdown" aria-expanded="false">
+        {{if .ActiveNode}}{{.ActiveNode.Name}}{{else}}Select Node{{end}}
+      </button>
+      <ul class="dropdown-menu">
+        {{range .Nodes}}
+        <li><a class="dropdown-item {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}active{{end}}"
+               href="/dashboard/{{.ID}}">
+          {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}<i class="bi bi-check2 me-1"></i>{{end}}{{.Name}}
+        </a></li>
+        {{end}}
+      </ul>
+    </div>
+  </div>
+  {{else}}
+  {{/* >3 nodes: always dropdown */}}
+  <div class="ms-2">
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle text-truncate" style="max-width:10rem"
+              data-bs-toggle="dropdown" aria-expanded="false">
+        {{if .ActiveNode}}{{.ActiveNode.Name}}{{else}}Select Node{{end}}
+      </button>
+      <ul class="dropdown-menu">
+        {{range .Nodes}}
+        <li><a class="dropdown-item {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}active{{end}}"
+               href="/dashboard/{{.ID}}">
+          {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}<i class="bi bi-check2 me-1"></i>{{end}}{{.Name}}
+        </a></li>
+        {{end}}
+      </ul>
+    </div>
+  </div>
+  {{end}}
+{{end}}
+{{end}}
+
 {{define "nav-extra"}}
 <div class="dropdown">
   <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
@@ -37,20 +88,6 @@
   {{end}}
 </div>
 {{else}}
-
-{{/* Node selector tabs */}}
-{{if gt (len .Nodes) 1}}
-<div class="mb-3" style="overflow-x:auto">
-  <div class="btn-group btn-group-sm flex-nowrap" role="group">
-    {{range .Nodes}}
-    <a href="/dashboard/{{.ID}}"
-       class="btn {{if eq .ID $.ActiveNode.ID}}btn-primary{{else}}btn-outline-secondary{{end}}">
-      {{.Name}}
-    </a>
-    {{end}}
-  </div>
-</div>
-{{end}}
 
 {{/* Active node header */}}
 <div class="d-flex flex-wrap align-items-center mb-2 gap-2">

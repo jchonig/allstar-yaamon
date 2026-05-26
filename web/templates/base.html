@@ -19,9 +19,10 @@
 <body>
   <nav class="navbar navbar-expand-lg navbar-yaamon">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold" href="/dashboard">
+      <a class="navbar-brand fw-bold flex-shrink-0" href="/dashboard">
         <i class="bi bi-broadcast-pin me-1"></i>YAAMon
       </a>
+      {{block "nav-center" .}}{{end}}
       <div class="ms-auto d-flex align-items-center gap-2">
         {{block "nav-extra" .}}{{end}}
         <div class="dropdown">
