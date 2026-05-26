@@ -58,6 +58,13 @@
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+body > .container-fluid {
+  flex: 1;
 }
 
 .navbar-yaamon {
