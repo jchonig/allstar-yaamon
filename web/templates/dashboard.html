@@ -36,21 +36,34 @@
 </div>
 <script>
 (function () {
-  const nav    = document.querySelector('.navbar-yaamon .container-fluid');
-  const wrap   = document.getElementById('nav-switcher');
-  const btns   = document.getElementById('nav-switcher-buttons');
-  const drop   = document.getElementById('nav-switcher-dropdown');
+  const nav   = document.querySelector('.navbar-yaamon .container-fluid');
+  const wrap  = document.getElementById('nav-switcher');
+  const btns  = document.getElementById('nav-switcher-buttons');
+  const drop  = document.getElementById('nav-switcher-dropdown');
   if (!nav || !wrap || !btns || !drop) return;
 
+  const brand = nav.querySelector('.navbar-brand');
+  const extra = nav.querySelector('.ms-auto');
+
   function update() {
-    // Measure with buttons visible
-    btns.style.cssText = '';
+    // Pull buttons out of flex flow to measure their natural (uncompressed) width.
+    // scrollWidth is unreliable in flex-wrap:nowrap containers — the parent
+    // compresses items rather than overflowing, so scrollWidth === clientWidth.
+    btns.style.cssText = 'position:absolute;visibility:hidden';
     drop.style.cssText = 'display:none';
-    const fits = nav.scrollWidth <= nav.clientWidth;
-    if (fits) return;
-    // Buttons overflow — switch to dropdown
-    btns.style.cssText = 'display:none';
-    drop.style.cssText = '';
+    const btnsWidth = btns.offsetWidth;
+
+    const avail = nav.clientWidth
+      - (brand ? brand.offsetWidth : 0)
+      - (extra ? extra.offsetWidth : 0)
+      - 16; // gap between brand/switcher/extra
+
+    if (btnsWidth <= avail) {
+      btns.style.cssText = '';
+    } else {
+      btns.style.cssText = 'display:none';
+      drop.style.cssText = '';
+    }
   }
 
   new ResizeObserver(update).observe(nav);
