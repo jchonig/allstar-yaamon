@@ -86,8 +86,8 @@
     <div class="card h-100 summary-node-card position-relative">
       <div class="card-body">
         <div class="d-flex align-items-center gap-2 mb-1">
-          <i id="summary-ami-{{.ID}}" class="bi bi-asterisk text-secondary" style="font-size:.8rem" title="AMI: connecting…"></i>
-          <img id="summary-asl-{{.ID}}" src="/static/asl-logo.png" class="asl-logo"
+          <i id="summary-ami-{{.ID}}" class="bi bi-asterisk text-secondary" style="font-size:.85rem" title="AMI: connecting…"></i>
+          <img id="summary-asl-{{.ID}}" src="/static/asl-favicon.ico" class="asl-logo"
                style="height:.85rem;width:auto;vertical-align:middle" title="ASL: unknown" alt="ASL">
           <h5 class="card-title mb-0 text-truncate flex-grow-1" title="{{.Name}}">{{.Name}}</h5>
           {{if or (eq $.Permission "superuser") (eq $.Permission "admin")}}
@@ -128,8 +128,8 @@
   <div class="me-auto text-nowrap">
     <h5 class="mb-0 d-inline">{{.ActiveNode.Name}}</h5>
     <code class="text-muted ms-2">{{.ActiveNode.NodeNumber}}</code>
-    <i id="ami-badge" class="bi bi-asterisk ms-2 text-secondary" title="AMI: not connected"></i>
-    <img id="asl-badge" src="/static/asl-logo.png" class="asl-logo ms-2"
+    <i id="ami-badge" class="bi bi-asterisk ms-2 text-secondary" title="AMI: not connected" style="font-size:.9rem"></i>
+    <img id="asl-badge" src="/static/asl-favicon.ico" class="asl-logo ms-2"
          style="height:1rem;width:auto;vertical-align:middle" title="ASL: unknown" alt="ASL">
   </div>
   {{if or (eq .Permission "superuser") (eq .Permission "admin") (eq .Permission "readwrite")}}
@@ -388,7 +388,7 @@
         const cnt = Object.keys(msg.links || {}).length;
         const dot = document.getElementById('summary-ami-' + n.id);
         const lnk = document.getElementById('summary-links-' + n.id);
-        if (dot) { dot.className = 'bi bi-asterisk text-success'; dot.title = 'AMI connected'; }
+        if (dot) { dot.className = 'bi bi-asterisk text-asterisk'; dot.title = 'AMI connected'; }
         if (lnk) lnk.textContent = cnt > 0 ? cnt + ' active link' + (cnt !== 1 ? 's' : '') : 'No active links';
       } else if (msg.type === 'stats') {
         const hs = (msg.stats || {})[n.num];
@@ -630,7 +630,7 @@ function connectSSE() {
 function setAMIBadge(connected) {
   const el = document.getElementById('ami-badge');
   if (!el) return;
-  el.className = 'bi bi-asterisk ms-2 ' + (connected ? 'text-success' : 'text-secondary');
+  el.className = 'bi bi-asterisk ms-2 ' + (connected ? 'text-asterisk' : 'text-secondary');
   el.title = connected ? 'Asterisk AMI connected' : 'Asterisk AMI not connected';
 }
 
