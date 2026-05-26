@@ -203,4 +203,4 @@ Please include your YAAMon version (`yaamon --version`), OS, and relevant log ou
 
 ## License
 
-GPL-3.0 — matching the upstream [AllScan](https://github.com/davidgsd/AllScan) license.
+BSD 3-Clause — see [LICENSE](LICENSE).
