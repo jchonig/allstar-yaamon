@@ -211,11 +211,22 @@ th.sort-col.sort-active .sort-icon { opacity: 1; }
   opacity: 0.4;
 }
 
+/* AllStarLink logo indicator — grey when disconnected, full colour when connected */
+.asl-logo {
+  filter: grayscale(1);
+  opacity: 0.35;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+.asl-logo.connected {
+  filter: none;
+  opacity: 1;
+}
+
 /* Summary landing page node cards */
-a .summary-node-card {
+.summary-node-card {
   transition: border-color 0.15s ease;
 }
-a:hover .summary-node-card {
+.summary-node-card:hover {
   border-color: var(--accent-blue);
 }
 

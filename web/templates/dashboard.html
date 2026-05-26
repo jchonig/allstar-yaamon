@@ -83,21 +83,29 @@
 <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 mt-1">
   {{range .Nodes}}
   <div class="col">
-    <a href="/dashboard/{{.ID}}" class="text-decoration-none">
-      <div class="card h-100 summary-node-card">
-        <div class="card-body">
-          <div class="d-flex align-items-center gap-2 mb-1">
-            <i id="summary-ami-{{.ID}}" class="bi bi-circle-fill text-secondary" style="font-size:.65rem" title="AMI: connecting…"></i>
-            <i id="summary-asl-{{.ID}}" class="bi bi-circle-fill text-secondary" style="font-size:.65rem" title="ASL: unknown"></i>
-            <h5 class="card-title mb-0 text-truncate flex-grow-1" title="{{.Name}}">{{.Name}}</h5>
-          </div>
-          <p class="card-text mb-2"><code class="text-muted">{{.NodeNumber}}</code></p>
-          <p id="summary-links-{{.ID}}" class="card-text small text-muted mb-0">
-            <span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem"></span> Connecting…
-          </p>
+    <div class="card h-100 summary-node-card position-relative">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <i id="summary-ami-{{.ID}}" class="bi bi-asterisk text-secondary" style="font-size:.8rem" title="AMI: connecting…"></i>
+          <img id="summary-asl-{{.ID}}" src="/static/asl-logo.png" class="asl-logo"
+               style="height:.85rem;width:auto;vertical-align:middle" title="ASL: unknown" alt="ASL">
+          <h5 class="card-title mb-0 text-truncate flex-grow-1" title="{{.Name}}">{{.Name}}</h5>
+          {{if or (eq $.Permission "superuser") (eq $.Permission "admin")}}
+          <a href="/admin/nodes" class="btn btn-sm btn-outline-secondary flex-shrink-0"
+             style="position:relative;z-index:2" title="Edit node settings">
+            <i class="bi bi-pencil"></i>
+          </a>
+          {{end}}
         </div>
+        <p class="card-text mb-1"><code class="text-muted small">{{.NodeNumber}}</code></p>
+        <p id="summary-desc-{{.ID}}" class="card-text small text-muted mb-0 text-truncate" style="display:none"></p>
+        <p id="summary-loc-{{.ID}}" class="card-text small text-muted mb-0 text-truncate" style="display:none"></p>
+        <p id="summary-links-{{.ID}}" class="card-text small text-muted mb-0 mt-1">
+          <span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem"></span> Connecting…
+        </p>
+        <a href="/dashboard/{{.ID}}" class="stretched-link" aria-label="Go to {{.Name}} dashboard"></a>
       </div>
-    </a>
+    </div>
   </div>
   {{end}}
 </div>
@@ -120,8 +128,9 @@
   <div class="me-auto text-nowrap">
     <h5 class="mb-0 d-inline">{{.ActiveNode.Name}}</h5>
     <code class="text-muted ms-2">{{.ActiveNode.NodeNumber}}</code>
-    <span id="ami-badge" class="badge ms-2 bg-secondary">AMI —</span>
-    <span id="asl-badge" class="badge ms-2 bg-secondary">ASL —</span>
+    <i id="ami-badge" class="bi bi-asterisk ms-2 text-secondary" title="AMI: not connected"></i>
+    <img id="asl-badge" src="/static/asl-logo.png" class="asl-logo ms-2"
+         style="height:1rem;width:auto;vertical-align:middle" title="ASL: unknown" alt="ASL">
   </div>
   {{if or (eq .Permission "superuser") (eq .Permission "admin") (eq .Permission "readwrite")}}
   <div class="d-flex align-items-center gap-2">
@@ -379,22 +388,28 @@
         const cnt = Object.keys(msg.links || {}).length;
         const dot = document.getElementById('summary-ami-' + n.id);
         const lnk = document.getElementById('summary-links-' + n.id);
-        if (dot) { dot.className = 'bi bi-circle-fill text-success'; dot.title = 'AMI connected'; }
+        if (dot) { dot.className = 'bi bi-asterisk text-success'; dot.title = 'AMI connected'; }
         if (lnk) lnk.textContent = cnt > 0 ? cnt + ' active link' + (cnt !== 1 ? 's' : '') : 'No active links';
       } else if (msg.type === 'stats') {
         const hs = (msg.stats || {})[n.num];
-        const dot = document.getElementById('summary-asl-' + n.id);
-        if (dot && hs && hs.fetched_at) {
+        const img = document.getElementById('summary-asl-' + n.id);
+        if (img && hs && hs.fetched_at) {
           const stale = Date.now() - new Date(hs.fetched_at).getTime() > 90000;
-          dot.className = 'bi bi-circle-fill ' + (stale ? 'text-secondary' : 'text-success');
-          dot.title = stale ? 'ASL: no recent data' : 'AllStarLink connected';
+          img.classList.toggle('connected', !stale);
+          img.title = stale ? 'ASL: no recent data' : 'AllStarLink connected';
+        }
+        if (hs) {
+          const desc = document.getElementById('summary-desc-' + n.id);
+          const loc  = document.getElementById('summary-loc-' + n.id);
+          if (desc && hs.description) { desc.textContent = hs.description; desc.style.display = ''; }
+          if (loc  && hs.location)    { loc.textContent  = hs.location;    loc.style.display  = ''; }
         }
       }
     } catch {}
   };
   es.onerror = () => {
     const dot = document.getElementById('summary-ami-' + n.id);
-    if (dot) { dot.className = 'bi bi-circle-fill text-secondary'; dot.title = 'AMI disconnected'; }
+    if (dot) { dot.className = 'bi bi-asterisk text-secondary'; dot.title = 'AMI disconnected'; }
   };
 });
 </script>
@@ -613,17 +628,17 @@ function connectSSE() {
 // --- AMI badge ---
 
 function setAMIBadge(connected) {
-  const badge = document.getElementById('ami-badge');
-  if (!badge) return;
-  badge.className = connected ? 'badge ms-2 bg-success' : 'badge ms-2 bg-secondary';
-  badge.textContent  = connected ? 'AMI ✓' : 'AMI —';
+  const el = document.getElementById('ami-badge');
+  if (!el) return;
+  el.className = 'bi bi-asterisk ms-2 ' + (connected ? 'text-success' : 'text-secondary');
+  el.title = connected ? 'Asterisk AMI connected' : 'Asterisk AMI not connected';
 }
 
 function setASLBadge(connected) {
-  const badge = document.getElementById('asl-badge');
-  if (!badge) return;
-  badge.className = connected ? 'badge ms-2 bg-success' : 'badge ms-2 bg-secondary';
-  badge.textContent = connected ? 'ASL ✓' : 'ASL —';
+  const el = document.getElementById('asl-badge');
+  if (!el) return;
+  el.classList.toggle('connected', connected);
+  el.title = connected ? 'AllStarLink connected' : 'AllStarLink: no recent data';
 }
 
 // --- Connection state ---
