@@ -28,6 +28,12 @@ import (
 	tlsserver "allstar-yaamon/internal/tls"
 )
 
+// nodeDBer is the subset of astdb.DB used by the server so tests can stub it.
+type nodeDBer interface {
+	Lookup(nodeNumber string) (astdb.Node, bool)
+	Start(ctx context.Context, interval time.Duration)
+}
+
 type Server struct {
 	cfg        *config.Config
 	webFS      embed.FS
@@ -35,7 +41,7 @@ type Server struct {
 	sessions   *auth.Manager
 	amiMgr     *ami.Manager
 	fetcher    *aslstats.Fetcher
-	nodeDB     *astdb.DB
+	nodeDB     nodeDBer
 	statsCache *statsCache
 	linksCache *linksCache
 	sseBroker  *sse.Broker
@@ -159,6 +165,7 @@ func (s *Server) Run() error {
 			http.Redirect(w, r, "/dashboard", http.StatusFound)
 		})
 		r.Get("/dashboard", s.handleDashboard)
+		r.Get("/dashboard/overview", s.handleDashboardOverview)
 		r.Get("/dashboard/{nodeID}", s.handleDashboard)
 		r.Get("/sse/{nodeID}", s.handleSSE)
 		r.Get("/api/nodes", s.handleAPIListNodes)
@@ -227,6 +234,7 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 
 	s.startStatsPoller(ctx)
 	s.startLinksPoller(ctx)
+	s.startAMIEventListener(ctx)
 	s.nodeDB.Start(ctx, 1*time.Hour)
 
 	var mainServer *http.Server

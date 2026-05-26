@@ -8,20 +8,22 @@ import (
 )
 
 type Node struct {
-	ID         int64
-	Name       string
-	NodeNumber string
-	AMIHost    string
-	AMIPort    int
-	AMIUser    string
-	AMIPass    string
-	Enabled    bool
+	ID          int64
+	Name        string
+	NodeNumber  string
+	AMIHost     string
+	AMIPort     int
+	AMIUser     string
+	AMIPass     string
+	Enabled     bool
+	Description string
+	Location    string
 }
 
 func scanNode(row interface{ Scan(...any) error }) (*Node, error) {
 	var n Node
 	var enabled int
-	err := row.Scan(&n.ID, &n.Name, &n.NodeNumber, &n.AMIHost, &n.AMIPort, &n.AMIUser, &n.AMIPass, &enabled)
+	err := row.Scan(&n.ID, &n.Name, &n.NodeNumber, &n.AMIHost, &n.AMIPort, &n.AMIUser, &n.AMIPass, &enabled, &n.Description, &n.Location)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -32,7 +34,7 @@ func scanNode(row interface{ Scan(...any) error }) (*Node, error) {
 	return &n, nil
 }
 
-const nodeColumns = `id, name, node_number, ami_host, ami_port, ami_user, ami_pass, enabled`
+const nodeColumns = `id, name, node_number, ami_host, ami_port, ami_user, ami_pass, enabled, description, location`
 
 func (db *DB) GetNodeByNumber(ctx context.Context, nodeNumber string) (*Node, error) {
 	row := db.sql.QueryRowContext(ctx,
@@ -78,9 +80,9 @@ func (db *DB) CreateNode(ctx context.Context, n Node) (*Node, error) {
 		enabled = 1
 	}
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO nodes (name, node_number, ami_host, ami_port, ami_user, ami_pass, enabled)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		n.Name, n.NodeNumber, n.AMIHost, n.AMIPort, n.AMIUser, n.AMIPass, enabled,
+		`INSERT INTO nodes (name, node_number, ami_host, ami_port, ami_user, ami_pass, enabled, description, location)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		n.Name, n.NodeNumber, n.AMIHost, n.AMIPort, n.AMIUser, n.AMIPass, enabled, n.Description, n.Location,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create node: %w", err)
@@ -96,9 +98,9 @@ func (db *DB) UpdateNode(ctx context.Context, n Node) error {
 		enabled = 1
 	}
 	_, err := db.sql.ExecContext(ctx,
-		`UPDATE nodes SET name=?, node_number=?, ami_host=?, ami_port=?, ami_user=?, ami_pass=?, enabled=?
+		`UPDATE nodes SET name=?, node_number=?, ami_host=?, ami_port=?, ami_user=?, ami_pass=?, enabled=?, description=?, location=?
 		 WHERE id=?`,
-		n.Name, n.NodeNumber, n.AMIHost, n.AMIPort, n.AMIUser, n.AMIPass, enabled, n.ID,
+		n.Name, n.NodeNumber, n.AMIHost, n.AMIPort, n.AMIUser, n.AMIPass, enabled, n.Description, n.Location, n.ID,
 	)
 	return err
 }

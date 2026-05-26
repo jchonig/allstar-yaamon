@@ -9,12 +9,20 @@ import (
 	"allstar-yaamon/internal/db"
 )
 
+// NodeEvent pairs an AMI event with the ID of the node it came from.
+type NodeEvent struct {
+	NodeID int64
+	Event  Event
+}
+
 // Manager maintains one AMI Client per enabled node.
 type Manager struct {
-	mu      sync.RWMutex
-	clients map[int64]*Client
-	ctx     context.Context
-	cancel  context.CancelFunc
+	mu          sync.RWMutex
+	clients     map[int64]*Client
+	ctx         context.Context
+	cancel      context.CancelFunc
+	subscribers []chan NodeEvent
+	subMu       sync.RWMutex
 }
 
 // NewManager creates a new Manager.
@@ -63,6 +71,15 @@ func (m *Manager) Add(n db.Node) {
 	c := NewClient(n.ID, n.Name, n.NodeNumber, host, port, n.AMIUser, n.AMIPass)
 	c.Start(m.ctx)
 	m.clients[n.ID] = c
+
+	// Drain this client's events and fan them out to all subscribers.
+	nodeID := n.ID
+	go func() {
+		for evt := range c.Events() {
+			m.publish(nodeID, evt)
+		}
+	}()
+
 }
 
 // Remove stops and removes the client for nodeID.
@@ -103,6 +120,30 @@ func (m *Manager) SendActionWait(nodeID int64, headers map[string]string, timeou
 		return Event{}, fmt.Errorf("no AMI client for node %d", nodeID)
 	}
 	return c.SendActionWait(headers, timeout)
+}
+
+// Subscribe returns a channel that receives events from all managed nodes.
+// The caller must read from the channel promptly; slow consumers cause events to be dropped.
+func (m *Manager) Subscribe() <-chan NodeEvent {
+	ch := make(chan NodeEvent, 256)
+	m.subMu.Lock()
+	m.subscribers = append(m.subscribers, ch)
+	m.subMu.Unlock()
+	return ch
+}
+
+// publish fans out an event to all subscribers (non-blocking, drops on slow consumers).
+func (m *Manager) publish(nodeID int64, evt Event) {
+	m.subMu.RLock()
+	subs := m.subscribers
+	m.subMu.RUnlock()
+	ne := NodeEvent{NodeID: nodeID, Event: evt}
+	for _, ch := range subs {
+		select {
+		case ch <- ne:
+		default:
+		}
+	}
 }
 
 // Shutdown stops all managed clients.

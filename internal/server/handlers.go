@@ -138,6 +138,25 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
+const lastDashboardCookie = "yaamon_last_dashboard"
+
+// handleDashboardOverview sets the last-dashboard cookie to "overview" and
+// redirects to /dashboard, which will then show the summary page.
+func (s *Server) handleDashboardOverview(w http.ResponseWriter, r *http.Request) {
+	setLastDashboard(w, "overview")
+	http.Redirect(w, r, "/dashboard", http.StatusFound)
+}
+
+func setLastDashboard(w http.ResponseWriter, value string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     lastDashboardCookie,
+		Value:    value,
+		Path:     "/",
+		MaxAge:   30 * 24 * 3600,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 // --- Dashboard ---
 
 type dashboardData struct {
@@ -155,6 +174,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		data.Permission = sess.Permission
 	}
 	data.Nodes, _ = s.db.ListNodes(r.Context())
+	s.fillNodeInfo(data.Nodes)
 
 	// Determine active node from URL param or default to first.
 	if idStr := chi.URLParam(r, "nodeID"); idStr != "" {
@@ -163,6 +183,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 				if data.Nodes[i].ID == id {
 					n := data.Nodes[i]
 					data.ActiveNode = &n
+					setLastDashboard(w, idStr)
 					break
 				}
 			}
@@ -174,10 +195,42 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, fmt.Sprintf("/dashboard/%d", data.Nodes[0].ID), http.StatusFound)
 			return
 		}
-		// 0 nodes: show empty state; 2+ nodes: show summary (ActiveNode stays nil).
+		if len(data.Nodes) > 1 {
+			// Multi-node: check cookie for last visited page.
+			if c, err := r.Cookie(lastDashboardCookie); err == nil && c.Value != "overview" {
+				if id, err := strconv.ParseInt(c.Value, 10, 64); err == nil {
+					for i := range data.Nodes {
+						if data.Nodes[i].ID == id {
+							http.Redirect(w, r, fmt.Sprintf("/dashboard/%d", id), http.StatusFound)
+							return
+						}
+					}
+				}
+			}
+			// No cookie, invalid cookie, or "overview" — show summary and record it.
+			setLastDashboard(w, "overview")
+		}
+		// 0 nodes: show empty state (ActiveNode stays nil, no cookie set).
 	}
 
 	s.render(w, "dashboard", data)
+}
+
+// fillNodeInfo fills in Description and Location from the astdb for any node
+// that has those fields empty.
+func (s *Server) fillNodeInfo(nodes []db.Node) {
+	for i := range nodes {
+		if nodes[i].Description == "" || nodes[i].Location == "" {
+			if entry, ok := s.nodeDB.Lookup(nodes[i].NodeNumber); ok {
+				if nodes[i].Description == "" {
+					nodes[i].Description = entry.Description
+				}
+				if nodes[i].Location == "" {
+					nodes[i].Location = entry.Location
+				}
+			}
+		}
+	}
 }
 
 // setupGuard redirects every request to /setup when no users exist,

@@ -159,4 +159,6 @@ var migrations = []migration{
 	`},
 	{2, `ALTER TABLE favorites ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
 	     UPDATE favorites SET position = id WHERE position = 0;`},
+	{3, `ALTER TABLE nodes ADD COLUMN description TEXT NOT NULL DEFAULT '';
+	     ALTER TABLE nodes ADD COLUMN location TEXT NOT NULL DEFAULT '';`},
 }

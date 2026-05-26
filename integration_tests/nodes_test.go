@@ -254,3 +254,123 @@ func TestNodeDeleteNotFound(t *testing.T) {
 		t.Error("deleting nonexistent node should not return 200")
 	}
 }
+
+func TestNodeDescriptionAndLocation(t *testing.T) {
+	c := adminClient(t)
+	num := uniqueNum()
+
+	// Create with description and location.
+	resp := do(t, c, http.MethodPost, "/api/nodes", map[string]any{
+		"name":        fmt.Sprintf("Desc/Loc Test %s", num),
+		"node_number": num,
+		"ami_host":    "localhost",
+		"ami_port":    5038,
+		"ami_user":    "admin",
+		"ami_pass":    "pass",
+		"enabled":     false,
+		"description": "146.520 MHz",
+		"location":    "Testville, TS",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("create: expected 201, got %d", resp.StatusCode)
+	}
+	var created struct {
+		ID          int64  `json:"id"`
+		Description string `json:"description"`
+		Location    string `json:"location"`
+	}
+	decodeJSON(t, resp, &created)
+	t.Cleanup(func() {
+		r := do(t, c, http.MethodDelete, fmt.Sprintf("/api/nodes/%d", created.ID), nil)
+		r.Body.Close()
+	})
+
+	if created.Description != "146.520 MHz" {
+		t.Errorf("create: Description = %q, want %q", created.Description, "146.520 MHz")
+	}
+	if created.Location != "Testville, TS" {
+		t.Errorf("create: Location = %q, want %q", created.Location, "Testville, TS")
+	}
+
+	// Verify they appear in the list.
+	resp = do(t, c, http.MethodGet, "/api/nodes", nil)
+	var nodes []struct {
+		ID          int64  `json:"id"`
+		Description string `json:"description"`
+		Location    string `json:"location"`
+	}
+	decodeJSON(t, resp, &nodes)
+	var found bool
+	for _, n := range nodes {
+		if n.ID == created.ID {
+			found = true
+			if n.Description != "146.520 MHz" {
+				t.Errorf("list: Description = %q, want %q", n.Description, "146.520 MHz")
+			}
+			if n.Location != "Testville, TS" {
+				t.Errorf("list: Location = %q, want %q", n.Location, "Testville, TS")
+			}
+		}
+	}
+	if !found {
+		t.Error("created node not found in list")
+	}
+
+	// Update description and location.
+	resp = do(t, c, http.MethodPut, fmt.Sprintf("/api/nodes/%d", created.ID), map[string]any{
+		"description": "Updated desc",
+		"location":    "Updated loc",
+	})
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		t.Fatalf("update: expected 200, got %d", resp.StatusCode)
+	}
+	var updated struct {
+		Description string `json:"description"`
+		Location    string `json:"location"`
+	}
+	decodeJSON(t, resp, &updated)
+	if updated.Description != "Updated desc" {
+		t.Errorf("update: Description = %q, want %q", updated.Description, "Updated desc")
+	}
+	if updated.Location != "Updated loc" {
+		t.Errorf("update: Location = %q, want %q", updated.Location, "Updated loc")
+	}
+}
+
+func TestNodeDescriptionDefaultsEmpty(t *testing.T) {
+	c := adminClient(t)
+	num := uniqueNum()
+
+	resp := do(t, c, http.MethodPost, "/api/nodes", map[string]any{
+		"name":        fmt.Sprintf("No Desc Node %s", num),
+		"node_number": num,
+		"ami_host":    "localhost",
+		"ami_port":    5038,
+		"ami_user":    "admin",
+		"ami_pass":    "pass",
+		"enabled":     false,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("create: expected 201, got %d", resp.StatusCode)
+	}
+	var created struct {
+		ID          int64  `json:"id"`
+		Description string `json:"description"`
+		Location    string `json:"location"`
+	}
+	decodeJSON(t, resp, &created)
+	t.Cleanup(func() {
+		r := do(t, c, http.MethodDelete, fmt.Sprintf("/api/nodes/%d", created.ID), nil)
+		r.Body.Close()
+	})
+
+	if created.Description != "" {
+		t.Errorf("Description should default empty, got %q", created.Description)
+	}
+	if created.Location != "" {
+		t.Errorf("Location should default empty, got %q", created.Location)
+	}
+}

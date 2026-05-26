@@ -4,52 +4,59 @@
 
 {{define "nav-center"}}
 {{if and .ActiveNode (gt (len .Nodes) 1)}}
-  {{if le (len .Nodes) 3}}
-  {{/* ≤3 nodes: buttons on md+, dropdown on mobile */}}
-  <div class="d-none d-md-flex ms-2">
-    <div class="btn-group btn-group-sm" role="group">
+<div id="nav-switcher" class="ms-2 d-flex align-items-center">
+  {{/* Button group — shown when there is enough navbar space */}}
+  <div id="nav-switcher-buttons" class="btn-group btn-group-sm" role="group" style="display:none!important">
+    <a href="/dashboard/overview"
+       class="btn btn-outline-secondary"
+       title="Overview">Overview</a>
+    {{range .Nodes}}
+    <a href="/dashboard/{{.ID}}"
+       class="btn {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}btn-primary{{else}}btn-outline-secondary{{end}}"
+       title="{{.Name}}">{{.Name}}</a>
+    {{end}}
+  </div>
+  {{/* Dropdown — shown when buttons do not fit */}}
+  <div id="nav-switcher-dropdown" class="dropdown" style="display:none!important">
+    <button class="btn btn-sm btn-outline-secondary dropdown-toggle text-truncate" style="max-width:12rem"
+            data-bs-toggle="dropdown" aria-expanded="false">
+      {{.ActiveNode.Name}}
+    </button>
+    <ul class="dropdown-menu">
+      <li><a class="dropdown-item" href="/dashboard/overview">Overview</a></li>
+      <li><hr class="dropdown-divider"></li>
       {{range .Nodes}}
-      <a href="/dashboard/{{.ID}}"
-         class="btn {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}btn-primary{{else}}btn-outline-secondary{{end}}"
-         title="{{.Name}}">{{.Name}}</a>
+      <li><a class="dropdown-item {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}active{{end}}"
+             href="/dashboard/{{.ID}}">
+        {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}<i class="bi bi-check2 me-1"></i>{{end}}{{.Name}}
+      </a></li>
       {{end}}
-    </div>
+    </ul>
   </div>
-  <div class="d-md-none ms-2">
-    <div class="dropdown">
-      <button class="btn btn-sm btn-outline-secondary dropdown-toggle text-truncate" style="max-width:8rem"
-              data-bs-toggle="dropdown" aria-expanded="false">
-        {{if .ActiveNode}}{{.ActiveNode.Name}}{{else}}Select Node{{end}}
-      </button>
-      <ul class="dropdown-menu">
-        {{range .Nodes}}
-        <li><a class="dropdown-item {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}active{{end}}"
-               href="/dashboard/{{.ID}}">
-          {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}<i class="bi bi-check2 me-1"></i>{{end}}{{.Name}}
-        </a></li>
-        {{end}}
-      </ul>
-    </div>
-  </div>
-  {{else}}
-  {{/* >3 nodes: always dropdown */}}
-  <div class="ms-2">
-    <div class="dropdown">
-      <button class="btn btn-sm btn-outline-secondary dropdown-toggle text-truncate" style="max-width:10rem"
-              data-bs-toggle="dropdown" aria-expanded="false">
-        {{if .ActiveNode}}{{.ActiveNode.Name}}{{else}}Select Node{{end}}
-      </button>
-      <ul class="dropdown-menu">
-        {{range .Nodes}}
-        <li><a class="dropdown-item {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}active{{end}}"
-               href="/dashboard/{{.ID}}">
-          {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}<i class="bi bi-check2 me-1"></i>{{end}}{{.Name}}
-        </a></li>
-        {{end}}
-      </ul>
-    </div>
-  </div>
-  {{end}}
+</div>
+<script>
+(function () {
+  const nav    = document.querySelector('.navbar-yaamon .container-fluid');
+  const wrap   = document.getElementById('nav-switcher');
+  const btns   = document.getElementById('nav-switcher-buttons');
+  const drop   = document.getElementById('nav-switcher-dropdown');
+  if (!nav || !wrap || !btns || !drop) return;
+
+  function update() {
+    // Measure with buttons visible
+    btns.style.cssText = '';
+    drop.style.cssText = 'display:none';
+    const fits = nav.scrollWidth <= nav.clientWidth;
+    if (fits) return;
+    // Buttons overflow — switch to dropdown
+    btns.style.cssText = 'display:none';
+    drop.style.cssText = '';
+  }
+
+  new ResizeObserver(update).observe(nav);
+  update();
+})();
+</script>
 {{end}}
 {{end}}
 
@@ -80,14 +87,18 @@
 {{if not .ActiveNode}}
 {{if .Nodes}}
 {{/* Multiple nodes configured, none selected — summary grid */}}
+<div class="text-center mb-4">
+  <img src="/static/logo.svg" alt="YAAMon" style="max-height:12rem;max-width:100%;width:auto">
+</div>
 <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 mt-1">
   {{range .Nodes}}
   <div class="col">
     <div class="card h-100 summary-node-card position-relative">
       <div class="card-body">
         <div class="d-flex align-items-center gap-2 mb-1">
-          <i id="summary-ami-{{.ID}}" class="bi bi-asterisk text-secondary" style="font-size:.85rem" title="AMI: connecting…"></i>
-          <img id="summary-asl-{{.ID}}" src="/static/asl-favicon.ico" class="asl-logo"
+          <img id="summary-ami-{{.ID}}" src="/static/asterisk-logo.png" class="asl-logo"
+               style="height:.85rem;width:auto;vertical-align:middle" title="AMI: connecting…" alt="AMI">
+          <img id="summary-asl-{{.ID}}" src="/static/asl-logo.png" class="asl-logo"
                style="height:.85rem;width:auto;vertical-align:middle" title="ASL: unknown" alt="ASL">
           <h5 class="card-title mb-0 text-truncate flex-grow-1" title="{{.Name}}">{{.Name}}</h5>
           {{if or (eq $.Permission "superuser") (eq $.Permission "admin")}}
@@ -98,8 +109,8 @@
           {{end}}
         </div>
         <p class="card-text mb-1"><code class="text-muted small">{{.NodeNumber}}</code></p>
-        <p id="summary-desc-{{.ID}}" class="card-text small text-muted mb-0 text-truncate" style="display:none"></p>
-        <p id="summary-loc-{{.ID}}" class="card-text small text-muted mb-0 text-truncate" style="display:none"></p>
+        {{if .Description}}<p class="card-text small text-muted mb-0 text-truncate">{{.Description}}</p>{{end}}
+        {{if .Location}}<p class="card-text small text-muted mb-0 text-truncate">{{.Location}}</p>{{end}}
         <p id="summary-links-{{.ID}}" class="card-text small text-muted mb-0 mt-1">
           <span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem"></span> Connecting…
         </p>
@@ -128,9 +139,15 @@
   <div class="me-auto text-nowrap">
     <h5 class="mb-0 d-inline">{{.ActiveNode.Name}}</h5>
     <code class="text-muted ms-2">{{.ActiveNode.NodeNumber}}</code>
-    <i id="ami-badge" class="bi bi-asterisk ms-2 text-secondary" title="AMI: not connected" style="font-size:.9rem"></i>
-    <img id="asl-badge" src="/static/asl-favicon.ico" class="asl-logo ms-2"
+    <img id="ami-badge" src="/static/asterisk-logo.png" class="asl-logo ms-2"
+         style="height:1rem;width:auto;vertical-align:middle" title="AMI: not connected" alt="AMI">
+    <img id="asl-badge" src="/static/asl-logo.png" class="asl-logo ms-2"
          style="height:1rem;width:auto;vertical-align:middle" title="ASL: unknown" alt="ASL">
+    <span id="dtmf-display" class="badge bg-warning text-dark ms-2"
+          style="display:none;font-size:.85rem;font-family:monospace;min-width:1.6rem"
+          title="DTMF digit received"></span>
+    {{if .ActiveNode.Description}}<span class="text-muted ms-3 small">{{.ActiveNode.Description}}</span>{{end}}
+    {{if .ActiveNode.Location}}<span class="text-muted ms-2 small">— {{.ActiveNode.Location}}</span>{{end}}
   </div>
   {{if or (eq .Permission "superuser") (eq .Permission "admin") (eq .Permission "readwrite")}}
   <div class="d-flex align-items-center gap-2">
@@ -388,7 +405,7 @@
         const cnt = Object.keys(msg.links || {}).length;
         const dot = document.getElementById('summary-ami-' + n.id);
         const lnk = document.getElementById('summary-links-' + n.id);
-        if (dot) { dot.className = 'bi bi-asterisk text-asterisk'; dot.title = 'AMI connected'; }
+        if (dot) { dot.classList.add('connected'); dot.title = 'AMI connected'; }
         if (lnk) lnk.textContent = cnt > 0 ? cnt + ' active link' + (cnt !== 1 ? 's' : '') : 'No active links';
       } else if (msg.type === 'stats') {
         const hs = (msg.stats || {})[n.num];
@@ -398,18 +415,12 @@
           img.classList.toggle('connected', !stale);
           img.title = stale ? 'ASL: no recent data' : 'AllStarLink connected';
         }
-        if (hs) {
-          const desc = document.getElementById('summary-desc-' + n.id);
-          const loc  = document.getElementById('summary-loc-' + n.id);
-          if (desc && hs.description) { desc.textContent = hs.description; desc.style.display = ''; }
-          if (loc  && hs.location)    { loc.textContent  = hs.location;    loc.style.display  = ''; }
-        }
       }
     } catch {}
   };
   es.onerror = () => {
     const dot = document.getElementById('summary-ami-' + n.id);
-    if (dot) { dot.className = 'bi bi-asterisk text-secondary'; dot.title = 'AMI disconnected'; }
+    if (dot) { dot.classList.remove('connected'); dot.title = 'AMI disconnected'; }
   };
 });
 </script>
@@ -422,8 +433,9 @@ const CAN_WRITE = {{if or (eq .Permission "superuser") (eq .Permission "admin") 
 
 let favsData = [];
 let statsData = {};
-let amiLinks = {};           // {nodeNum: typeChar} — from AMI "rpt show variables"
+let amiLinks = {};           // {nodeNum: LinkState} — from AMI "rpt show variables"
 let amiLinksReceived = false; // true once first "links" SSE message arrives
+let amiTxKeyed = false;      // home node transmitter currently keyed
 let linksSince = {};         // {nodeNum: Date} — when each link first appeared in SSE stream
 let astdbCache = {};         // {nodeNum: {callsign, description, location}} from connections API
 let connModalOpen = false;
@@ -527,16 +539,12 @@ function renderFavs() {
   updateSortHeaders();
   tbody.innerHTML = sortedFavs().map(f => {
     const s = statsData[f.node_number] || {};
-    const keyed = s.keyed;
     const txTime = s.total_keyups != null ? s.total_keyups : '—';
     const lcnt = s.connected_links != null ? s.connected_links : null;
     const call = s.callsign || f.callsign || '—';
     const desc = s.description || f.description || '—';
     const loc  = s.location || f.location || '—';
-    const stale = s.fetched_at && isStale(s.fetched_at);
-    const dotClass = keyed ? 'text-danger' : (stale || !s.fetched_at ? 'text-secondary' : 'text-success');
-    const dotTitle = keyed ? 'Keyed (transmitting)' : (stale || !s.fetched_at ? 'Status unknown' : 'Online');
-    const dot = `<i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem" title="${dotTitle}"></i>`;
+    const dot = keyedDot(f.node_number);
     const numAttrs = CAN_WRITE
       ? `ondblclick="doConnect('${esc(f.node_number)}','transceive',true)" style="cursor:pointer" title="Double-click to connect"`
       : '';
@@ -563,11 +571,7 @@ function applyStats(stats) {
     const row = tbody.querySelector(`tr[data-node-num="${num}"]`);
     if (!row) continue;
     const cells = row.cells;
-    const keyed = s.keyed;
-    const stale = s.fetched_at && isStale(s.fetched_at);
-    const dotClass = keyed ? 'text-danger' : (stale ? 'text-secondary' : 'text-success');
-    const dotTitle = keyed ? 'Keyed (transmitting)' : (stale ? 'Status unknown' : 'Online');
-    cells[0].innerHTML = `<i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem" title="${dotTitle}"></i>`;
+    cells[0].innerHTML = keyedDot(num);
     if (s.callsign)       cells[2].textContent = s.callsign;
     if (s.description) { cells[3].textContent = s.description; cells[3].title = s.description; }
     if (s.location)    { cells[4].textContent = s.location;    cells[4].title = s.location; }
@@ -612,11 +616,14 @@ function connectSSE() {
           if (!(nodeNum in msg.links)) delete linksSince[nodeNum];
         }
         amiLinks = msg.links;
+        amiTxKeyed = !!msg.tx_keyed;
         amiLinksReceived = true;
         setAMIBadge(true);
         rebuildAllActionCells();
         refreshAstdbCache();
         if (connModalOpen && connData) renderConnList();
+      } else if (msg.type === 'dtmf' && msg.digit) {
+        showDTMF(msg.digit);
       }
     } catch {}
   };
@@ -630,7 +637,7 @@ function connectSSE() {
 function setAMIBadge(connected) {
   const el = document.getElementById('ami-badge');
   if (!el) return;
-  el.className = 'bi bi-asterisk ms-2 ' + (connected ? 'text-asterisk' : 'text-secondary');
+  el.classList.toggle('connected', connected);
   el.title = connected ? 'Asterisk AMI connected' : 'Asterisk AMI not connected';
 }
 
@@ -653,8 +660,23 @@ function isConnected(nodeNum) {
 }
 
 function isPermanent(nodeNum) {
-  // 'P' is the expected type char for permanent links; confirm once tested.
-  return amiLinks[nodeNum] === 'P';
+  return (amiLinks[nodeNum] || {}).type === 'P';
+}
+
+function isKeyed(nodeNum) {
+  // AMI real-time: remote node is transmitting to us (takes precedence).
+  if (amiLinksReceived && nodeNum in amiLinks) return !!amiLinks[nodeNum].keyed;
+  // Fallback: AllStarLink stats keyed flag.
+  return !!(statsData[nodeNum] || {}).keyed;
+}
+
+function keyedDot(nodeNum) {
+  const s = statsData[nodeNum] || {};
+  const keyed = isKeyed(nodeNum);
+  const stale = s.fetched_at && isStale(s.fetched_at);
+  const cls   = keyed ? 'text-danger' : (stale || !s.fetched_at ? 'text-secondary' : 'text-success');
+  const title = keyed ? 'Keyed (transmitting)' : (stale || !s.fetched_at ? 'Status unknown' : 'Online');
+  return `<i class="bi bi-circle-fill ${cls}" style="font-size:.6rem" title="${title}"></i>`;
 }
 
 function rebuildAllActionCells() {
@@ -662,6 +684,7 @@ function rebuildAllActionCells() {
   favsData.forEach(f => {
     const row = tbody.querySelector(`tr[data-node-num="${f.node_number}"]`);
     if (!row) return;
+    row.cells[0].innerHTML = keyedDot(f.node_number);
     if (CAN_WRITE) row.cells[7].innerHTML = actionCell(f.node_number, f.id);
     row.classList.toggle('row-connected', isConnected(f.node_number));
   });
@@ -698,16 +721,18 @@ function renderActiveLinks() {
     return;
   }
 
-  const rows = entries.map(([nodeNum, typeChar]) => {
+  const rows = entries.map(([nodeNum, link]) => {
+    const typeChar = link.type || link; // handle legacy string fallback
     const s    = statsData[nodeNum] || {};
     const fav  = favsData.find(f => f.node_number === nodeNum);
     const adb  = astdbCache[nodeNum] || {};
     const call = s.callsign || adb.callsign || (fav && fav.callsign) || '';
     const desc = s.description || adb.description || (fav && fav.description) || '';
     const loc  = s.location   || adb.location    || (fav && fav.location)    || '';
-    const keyed = s.keyed;
-    const dotClass  = keyed ? 'text-danger' : (s.fetched_at ? 'text-success' : 'text-secondary');
-    const dotTitle  = keyed ? 'Keyed (transmitting)' : (s.fetched_at ? 'Idle' : 'Status unknown');
+    // AMI keyed state (real-time, from RPT_ALINKS) takes precedence over ASL stats keyed.
+    const amiKeyed = !!link.keyed;
+    const dotClass  = amiKeyed ? 'text-danger' : (s.fetched_at ? 'text-success' : 'text-secondary');
+    const dotTitle  = amiKeyed ? 'Keyed (transmitting to us)' : (s.fetched_at ? 'Idle' : 'Status unknown');
     const typeLabel = TYPE_LABEL[typeChar] || typeChar;
 
     const actions = CAN_WRITE
@@ -1189,6 +1214,18 @@ function isStale(fetchedAt) {
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// --- DTMF display ---
+
+let dtmfTimer = null;
+function showDTMF(digit) {
+  const el = document.getElementById('dtmf-display');
+  if (!el) return;
+  el.textContent = digit;
+  el.style.display = '';
+  clearTimeout(dtmfTimer);
+  dtmfTimer = setTimeout(() => { el.style.display = 'none'; }, 2000);
 }
 
 let toastContainer;

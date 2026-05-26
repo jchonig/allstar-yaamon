@@ -99,6 +99,14 @@
             </div>
             <div class="form-text" id="node-pass-hint"></div>
           </div>
+          <div class="mb-3">
+            <label for="node-description" class="form-label">Description</label>
+            <input type="text" class="form-control" id="node-description" placeholder="146.520 MHz simplex">
+          </div>
+          <div class="mb-3">
+            <label for="node-location" class="form-label">Location</label>
+            <input type="text" class="form-control" id="node-location" placeholder="Anytown, ST">
+          </div>
           <div class="form-check mb-2">
             <input type="checkbox" class="form-check-input" id="node-enabled">
             <label for="node-enabled" class="form-check-label">Enabled (connect AMI on start)</label>
@@ -200,6 +208,8 @@ function openAddModal() {
   document.getElementById('node-form').reset();
   document.getElementById('node-ami-host').value = 'localhost';
   document.getElementById('node-ami-port').value = '5038';
+  document.getElementById('node-description').value = '';
+  document.getElementById('node-location').value = '';
   document.getElementById('node-form-error').textContent = '';
   document.getElementById('node-pass-hint').textContent = '';
   document.getElementById('node-ami-pass').type = 'password';
@@ -229,6 +239,8 @@ async function openEditModal(id) {
   document.getElementById('node-ami-host').value = n.ami_host;
   document.getElementById('node-ami-port').value = n.ami_port;
   document.getElementById('node-ami-user').value = n.ami_user;
+  document.getElementById('node-description').value = n.description || '';
+  document.getElementById('node-location').value = n.location || '';
   document.getElementById('node-ami-pass').value = '';
   document.getElementById('node-ami-pass').type = 'password';
   document.getElementById('node-ami-pass-eye').className = 'bi bi-eye';
@@ -262,6 +274,8 @@ async function saveNode() {
     ami_user:    document.getElementById('node-ami-user').value.trim(),
     ami_pass:    document.getElementById('node-ami-pass').value,
     enabled:     document.getElementById('node-enabled').checked,
+    description: document.getElementById('node-description').value.trim(),
+    location:    document.getElementById('node-location').value.trim(),
   };
 
   if (!body.name || !body.node_number) {

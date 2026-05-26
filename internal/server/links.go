@@ -9,47 +9,68 @@ import (
 	"time"
 )
 
+// LinkState holds the real-time state of one connected node as reported by
+// AMI's "rpt show variables" output.
+type LinkState struct {
+	Type        string    `json:"type"`         // T=transceive M=monitor L=local P=permanent
+	Keyed       bool      `json:"keyed"`        // remote node is currently transmitting to us
+	ConnectedAt time.Time `json:"connected_at"` // when the link was first seen
+}
+
 // linksCache stores the current link state of each home node as reported by
-// "rpt show variables" via AMI. The value maps node number → connection type
-// character (e.g. "T"=transceive, "M"=monitor, "L"=local, "P"=permanent).
+// "rpt show variables" via AMI.
 type linksCache struct {
 	mu    sync.RWMutex
-	links map[int64]map[string]string // nodeID → {nodeNum: typeChar}
+	links map[int64]map[string]LinkState // nodeID → {nodeNum: LinkState}
 }
 
 func newLinksCache() *linksCache {
-	return &linksCache{links: make(map[int64]map[string]string)}
+	return &linksCache{links: make(map[int64]map[string]LinkState)}
 }
 
 // get returns the cached link map and whether a poll result has ever been stored.
-func (c *linksCache) get(nodeID int64) (links map[string]string, ok bool) {
+func (c *linksCache) get(nodeID int64) (links map[string]LinkState, ok bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	v, exists := c.links[nodeID]
 	return v, exists
 }
 
-// set stores the link map and returns true if the value changed (including first store).
-func (c *linksCache) set(nodeID int64, linked map[string]string) bool {
+// set stores the link map, preserving ConnectedAt for links that were already
+// present. Returns true if the visible state changed (including first store).
+func (c *linksCache) set(nodeID int64, linked map[string]LinkState) bool {
 	if linked == nil {
-		linked = map[string]string{} // normalise: "no links" != "never polled"
+		linked = map[string]LinkState{}
 	}
+	now := time.Now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	old, exists := c.links[nodeID]
+	// Preserve ConnectedAt for existing links; stamp new ones with now.
+	for num, ls := range linked {
+		if prev, had := old[num]; had && !prev.ConnectedAt.IsZero() {
+			ls.ConnectedAt = prev.ConnectedAt
+		} else {
+			ls.ConnectedAt = now
+		}
+		linked[num] = ls
+	}
 	c.links[nodeID] = linked
 	if !exists {
-		return true // first poll — always publish
+		return true
 	}
-	return !eqStringMaps(old, linked)
+	return !eqLinkMaps(old, linked)
 }
 
-func eqStringMaps(a, b map[string]string) bool {
+// eqLinkMaps compares two link maps, ignoring ConnectedAt (timestamp changes
+// should not trigger a re-render).
+func eqLinkMaps(a, b map[string]LinkState) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for k, v := range a {
-		if b[k] != v {
+	for k, va := range a {
+		vb, ok := b[k]
+		if !ok || va.Type != vb.Type || va.Keyed != vb.Keyed {
 			return false
 		}
 	}
@@ -83,34 +104,53 @@ func (s *Server) pollLinks(ctx context.Context) {
 		if !n.Enabled || !s.amiMgr.IsConnected(n.ID) {
 			continue
 		}
-		resp, err := s.amiMgr.SendActionWait(n.ID, map[string]string{
-			"Action":  "Command",
-			"Command": "rpt show variables " + n.NodeNumber,
-		}, 5*time.Second)
-		if err != nil {
-			slog.Debug("links poll failed", "node_id", n.ID, "err", err)
-			continue
-		}
-		linked := parseRPTALinks(resp.Get("Output"))
-		slog.Debug("AMI links", "node_id", n.ID, "links", linked)
-		if s.linksCache.set(n.ID, linked) {
-			// Publish as {"nodeNum": "typeChar"} so the client knows connection type.
-			data, _ := json.Marshal(map[string]any{
-				"type":   "links",
-				"nodeID": n.ID,
-				"links":  linked,
-			})
-			s.sseBroker.Publish(n.ID, data)
-		}
+		s.pollNodeLinksInner(ctx, n.ID, n.NodeNumber)
+	}
+}
+
+// pollNodeLinks re-polls link state for a single node and publishes an SSE
+// update if anything changed. Used by the AMI event listener for immediate
+// reaction to NodeConn/NodeDisconn/Hangup events.
+func (s *Server) pollNodeLinks(ctx context.Context, nodeID int64) {
+	n, err := s.db.GetNodeByID(ctx, nodeID)
+	if err != nil || !n.Enabled || !s.amiMgr.IsConnected(nodeID) {
+		return
+	}
+	s.pollNodeLinksInner(ctx, nodeID, n.NodeNumber)
+}
+
+// pollNodeLinksInner runs the AMI command, parses the result, and publishes SSE
+// when anything changed. Shared by the poller and the event-triggered path.
+func (s *Server) pollNodeLinksInner(ctx context.Context, nodeID int64, nodeNumber string) {
+	resp, err := s.amiMgr.SendActionWait(nodeID, map[string]string{
+		"Action":  "Command",
+		"Command": "rpt show variables " + nodeNumber,
+	}, 5*time.Second)
+	if err != nil {
+		slog.Debug("links poll failed", "node_id", nodeID, "err", err)
+		return
+	}
+	output := resp.Get("Output")
+	linked := parseRPTALinks(output)
+	txKeyed := parseRPTTXKeyed(output)
+	slog.Debug("AMI links", "node_id", nodeID, "links", linked, "tx_keyed", txKeyed)
+	if s.linksCache.set(nodeID, linked) {
+		data, _ := json.Marshal(map[string]any{
+			"type":     "links",
+			"nodeID":   nodeID,
+			"links":    linked,
+			"tx_keyed": txKeyed,
+		})
+		s.sseBroker.Publish(nodeID, data)
 	}
 }
 
 // parseRPTALinks parses the RPT_ALINKS variable from "rpt show variables" output.
 // RPT_ALINKS format: "<count>,<nodenum><typechar><keyedstate>[,...]"
-// e.g. "1,41522TU" → {"41522":"T"}
-// Known type chars: T=transceive, M=monitor, L=local monitor, P=permanent transceive.
-// Known keyed states: U=unkeyed, K=keyed (not exposed in the returned map).
-func parseRPTALinks(output string) map[string]string {
+// e.g. "1,41522TK" → {"41522": {Type:"T", Keyed:true}}
+// Type chars: T=transceive, M=monitor, L=local monitor, P=permanent transceive.
+// Keyed state: K=keyed/transmitting, U=unkeyed/idle.
+func parseRPTALinks(output string) map[string]LinkState {
 	const marker = "RPT_ALINKS="
 	idx := strings.Index(output, marker)
 	if idx < 0 {
@@ -127,10 +167,10 @@ func parseRPTALinks(output string) map[string]string {
 		return nil // "0" — no links
 	}
 
-	result := make(map[string]string, len(parts)-1)
+	result := make(map[string]LinkState, len(parts)-1)
 	for _, p := range parts[1:] {
 		p = strings.TrimSpace(p)
-		// Format: <nodenum><typechar><keyedstate> — digits first, then type char.
+		// Format: <nodenum><typechar><keyedstate> — digits, then type char, then K or U.
 		i := 0
 		for i < len(p) && p[i] >= '0' && p[i] <= '9' {
 			i++
@@ -138,7 +178,26 @@ func parseRPTALinks(output string) map[string]string {
 		if i == 0 || i >= len(p) {
 			continue
 		}
-		result[p[:i]] = string(p[i])
+		ls := LinkState{Type: string(p[i])}
+		if i+1 < len(p) {
+			ls.Keyed = p[i+1] == 'K'
+		}
+		result[p[:i]] = ls
 	}
 	return result
+}
+
+// parseRPTTXKeyed extracts the RPT_TXKEYED flag from "rpt show variables" output.
+// Returns true when the home node's transmitter is currently keyed.
+func parseRPTTXKeyed(output string) bool {
+	const marker = "RPT_TXKEYED="
+	idx := strings.Index(output, marker)
+	if idx < 0 {
+		return false
+	}
+	val := output[idx+len(marker):]
+	if nl := strings.IndexAny(val, "\r\n"); nl >= 0 {
+		val = val[:nl]
+	}
+	return strings.TrimSpace(val) == "1"
 }

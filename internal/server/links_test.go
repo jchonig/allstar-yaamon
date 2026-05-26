@@ -5,14 +5,20 @@ import (
 )
 
 func TestParseRPTALinks_OneLink(t *testing.T) {
-	// Real-world output from a node with one active AllStar connection.
 	output := "Value: RPT_ALINKS=1,41522TU\n"
 	links := parseRPTALinks(output)
 	if len(links) != 1 {
 		t.Fatalf("expected 1 link, got %d: %v", len(links), links)
 	}
-	if tc, ok := links["41522"]; !ok || tc != "T" {
-		t.Errorf("expected 41522→T, got %v", links)
+	ls, ok := links["41522"]
+	if !ok {
+		t.Fatalf("expected key 41522, got %v", links)
+	}
+	if ls.Type != "T" {
+		t.Errorf("expected Type T, got %q", ls.Type)
+	}
+	if ls.Keyed {
+		t.Errorf("expected Keyed=false for U suffix")
 	}
 }
 
@@ -30,14 +36,14 @@ func TestParseRPTALinks_MultipleLinks(t *testing.T) {
 	if len(links) != 3 {
 		t.Fatalf("expected 3, got %d: %v", len(links), links)
 	}
-	if links["41522"] != "T" {
-		t.Errorf("41522: expected T, got %q", links["41522"])
+	if links["41522"].Type != "T" || links["41522"].Keyed {
+		t.Errorf("41522: expected T/unkeyed, got %+v", links["41522"])
 	}
-	if links["27339"] != "R" {
-		t.Errorf("27339: expected R, got %q", links["27339"])
+	if links["27339"].Type != "R" || links["27339"].Keyed {
+		t.Errorf("27339: expected R/unkeyed, got %+v", links["27339"])
 	}
-	if links["12345"] != "T" {
-		t.Errorf("12345: expected T, got %q", links["12345"])
+	if links["12345"].Type != "T" || !links["12345"].Keyed {
+		t.Errorf("12345: expected T/keyed, got %+v", links["12345"])
 	}
 }
 
@@ -50,7 +56,6 @@ func TestParseRPTALinks_MarkerAbsent(t *testing.T) {
 }
 
 func TestParseRPTALinks_FullAMIBlock(t *testing.T) {
-	// Simulate the multi-line block returned by "rpt show variables".
 	output := `
 Value: RPT_TXKEYED=0
 Value: RPT_LINKS=1,T41522
@@ -61,14 +66,12 @@ Value: RPT_NUMALINKS=1
 	if len(links) != 1 {
 		t.Fatalf("expected 1, got %d: %v", len(links), links)
 	}
-	if links["41522"] != "T" {
-		t.Errorf("expected 41522→T, got %v", links)
+	if links["41522"].Type != "T" {
+		t.Errorf("expected 41522→T, got %v", links["41522"])
 	}
 }
 
 func TestParseRPTALinks_IgnoresRPTLinks(t *testing.T) {
-	// RPT_LINKS lists 168 EchoLink nodes; RPT_ALINKS has only 1 real link.
-	// We must parse RPT_ALINKS only.
 	output := "RPT_LINKS=168,T41522\nRPT_ALINKS=1,41522TU\n"
 	links := parseRPTALinks(output)
 	if len(links) != 1 {
@@ -83,8 +86,6 @@ func TestParseRPTALinks_EmptyString(t *testing.T) {
 }
 
 func TestParseRPTALinks_AllTypeChars(t *testing.T) {
-	// Verify each type char used for Direction is preserved exactly.
-	// T=transceive, M/R=monitor, L=local monitor, P=permanent transceive.
 	output := "RPT_ALINKS=4,11111TU,22222MU,33333LU,44444PU\n"
 	links := parseRPTALinks(output)
 	cases := map[string]string{
@@ -94,20 +95,50 @@ func TestParseRPTALinks_AllTypeChars(t *testing.T) {
 		"44444": "P",
 	}
 	for nodeNum, want := range cases {
-		if got := links[nodeNum]; got != want {
+		if got := links[nodeNum].Type; got != want {
 			t.Errorf("node %s: expected type %q, got %q", nodeNum, want, got)
 		}
 	}
 }
 
 func TestParseRPTALinks_KeyedState(t *testing.T) {
-	// Keyed state (K/U) must be stripped; only the type char returned.
 	output := "RPT_ALINKS=2,55555TK,66666MU\n"
 	links := parseRPTALinks(output)
-	if links["55555"] != "T" {
-		t.Errorf("keyed node 55555: expected T, got %q", links["55555"])
+	if !links["55555"].Keyed {
+		t.Errorf("node 55555 (K suffix): expected Keyed=true")
 	}
-	if links["66666"] != "M" {
-		t.Errorf("unkeyed node 66666: expected M, got %q", links["66666"])
+	if links["66666"].Keyed {
+		t.Errorf("node 66666 (U suffix): expected Keyed=false")
+	}
+}
+
+func TestParseRPTTXKeyed_Keyed(t *testing.T) {
+	output := "Value: RPT_TXKEYED=1\n"
+	if !parseRPTTXKeyed(output) {
+		t.Error("expected true when RPT_TXKEYED=1")
+	}
+}
+
+func TestParseRPTTXKeyed_NotKeyed(t *testing.T) {
+	output := "Value: RPT_TXKEYED=0\n"
+	if parseRPTTXKeyed(output) {
+		t.Error("expected false when RPT_TXKEYED=0")
+	}
+}
+
+func TestParseRPTTXKeyed_Absent(t *testing.T) {
+	output := "Value: RPT_ALINKS=1,41522TU\n"
+	if parseRPTTXKeyed(output) {
+		t.Error("expected false when RPT_TXKEYED is absent")
+	}
+}
+
+func TestParseRPTTXKeyed_FullBlock(t *testing.T) {
+	output := `
+Value: RPT_TXKEYED=1
+Value: RPT_ALINKS=1,41522TU
+`
+	if !parseRPTTXKeyed(output) {
+		t.Error("expected true in full AMI block with RPT_TXKEYED=1")
 	}
 }

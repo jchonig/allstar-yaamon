@@ -14,37 +14,43 @@ import (
 
 // nodeJSON is the JSON representation of a node with its live AMI status.
 type nodeJSON struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	NodeNumber string `json:"node_number"`
-	AMIHost    string `json:"ami_host"`
-	AMIPort    int    `json:"ami_port"`
-	AMIUser    string `json:"ami_user"`
-	Enabled    bool   `json:"enabled"`
-	Connected  bool   `json:"connected"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	NodeNumber  string `json:"node_number"`
+	AMIHost     string `json:"ami_host"`
+	AMIPort     int    `json:"ami_port"`
+	AMIUser     string `json:"ami_user"`
+	Enabled     bool   `json:"enabled"`
+	Connected   bool   `json:"connected"`
+	Description string `json:"description"`
+	Location    string `json:"location"`
 }
 
 // nodeInput is the shape of node create/update request bodies (AMIPass not in nodeJSON).
 type nodeInput struct {
-	Name       string `json:"name"`
-	NodeNumber string `json:"node_number"`
-	AMIHost    string `json:"ami_host"`
-	AMIPort    int    `json:"ami_port"`
-	AMIUser    string `json:"ami_user"`
-	AMIPass    string `json:"ami_pass"`
-	Enabled    bool   `json:"enabled"`
+	Name        string `json:"name"`
+	NodeNumber  string `json:"node_number"`
+	AMIHost     string `json:"ami_host"`
+	AMIPort     int    `json:"ami_port"`
+	AMIUser     string `json:"ami_user"`
+	AMIPass     string `json:"ami_pass"`
+	Enabled     bool   `json:"enabled"`
+	Description string `json:"description"`
+	Location    string `json:"location"`
 }
 
 func (s *Server) nodeToJSON(n db.Node) nodeJSON {
 	return nodeJSON{
-		ID:         n.ID,
-		Name:       n.Name,
-		NodeNumber: n.NodeNumber,
-		AMIHost:    n.AMIHost,
-		AMIPort:    n.AMIPort,
-		AMIUser:    n.AMIUser,
-		Enabled:    n.Enabled,
-		Connected:  s.amiMgr.IsConnected(n.ID),
+		ID:          n.ID,
+		Name:        n.Name,
+		NodeNumber:  n.NodeNumber,
+		AMIHost:     n.AMIHost,
+		AMIPort:     n.AMIPort,
+		AMIUser:     n.AMIUser,
+		Enabled:     n.Enabled,
+		Connected:   s.amiMgr.IsConnected(n.ID),
+		Description: n.Description,
+		Location:    n.Location,
 	}
 }
 
@@ -85,13 +91,15 @@ func (s *Server) handleAPICreateNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	n, err := s.db.CreateNode(r.Context(), db.Node{
-		Name:       in.Name,
-		NodeNumber: in.NodeNumber,
-		AMIHost:    in.AMIHost,
-		AMIPort:    in.AMIPort,
-		AMIUser:    in.AMIUser,
-		AMIPass:    in.AMIPass,
-		Enabled:    in.Enabled,
+		Name:        in.Name,
+		NodeNumber:  in.NodeNumber,
+		AMIHost:     in.AMIHost,
+		AMIPort:     in.AMIPort,
+		AMIUser:     in.AMIUser,
+		AMIPass:     in.AMIPass,
+		Enabled:     in.Enabled,
+		Description: in.Description,
+		Location:    in.Location,
 	})
 	if err != nil {
 		http.Error(w, "create node: "+err.Error(), http.StatusInternalServerError)
@@ -145,14 +153,16 @@ func (s *Server) handleAPIUpdateNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updated := db.Node{
-		ID:         id,
-		Name:       in.Name,
-		NodeNumber: in.NodeNumber,
-		AMIHost:    in.AMIHost,
-		AMIPort:    in.AMIPort,
-		AMIUser:    in.AMIUser,
-		AMIPass:    amiPass,
-		Enabled:    in.Enabled,
+		ID:          id,
+		Name:        in.Name,
+		NodeNumber:  in.NodeNumber,
+		AMIHost:     in.AMIHost,
+		AMIPort:     in.AMIPort,
+		AMIUser:     in.AMIUser,
+		AMIPass:     amiPass,
+		Enabled:     in.Enabled,
+		Description: in.Description,
+		Location:    in.Location,
 	}
 	if err := s.db.UpdateNode(r.Context(), updated); err != nil {
 		http.Error(w, "update node: "+err.Error(), http.StatusInternalServerError)
