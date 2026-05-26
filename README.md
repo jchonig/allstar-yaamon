@@ -1,2 +1,206 @@
-# allstar-yamon
-Yet Another Allstar favorites and monitor
+# YAAMon — Yet Another AllStar MONitor
+
+YAAMon is a modern web application for managing and monitoring [AllStarLink](https://allstarlink.org) amateur radio nodes. It replaces the PHP/Apache-based [AllScan](https://github.com/davidgsd/AllScan) with a single self-contained binary that needs no web server, no PHP runtime, and no external database engine.
+
+**Key differences from AllScan:**
+
+- Manages multiple Asterisk/AMI nodes from one interface
+- Built-in TLS with automatic Let's Encrypt certificates
+- Single static binary — drop it on a Pi and run it
+- Docker and docker-compose ready
+- Multi-user with role-based access (superuser / admin / readwrite / readonly)
+- Parallel AllStarLink stats fetching — no waiting for one node to block another
+- Live dashboard with SSE-pushed updates (no page refresh needed)
+- Encrypted backup and restore
+- Dark, light, solarized, and high-contrast themes
+
+---
+
+## Installation
+
+### Option 1 — Debian / Ubuntu package (recommended for ASL3 nodes)
+
+Download the `.deb` for your architecture from the [Releases page](https://github.com/jchonig/allstar-yaamon/releases/latest):
+
+| Platform | File |
+|----------|------|
+| Raspberry Pi 4 / Pi 5 (64-bit OS) | `yaamon_*_linux_arm64.deb` |
+| Raspberry Pi 3 / Zero 2 W (32-bit OS) | `yaamon_*_linux_armhf.deb` |
+| x86-64 server / VM | `yaamon_*_linux_amd64.deb` |
+
+```bash
+# Example — replace version and arch as appropriate
+wget https://github.com/jchonig/allstar-yaamon/releases/download/v1.0.0/yaamon_1.0.0_linux_arm64.deb
+sudo dpkg -i yaamon_1.0.0_linux_arm64.deb
+```
+
+The package installs the binary to `/usr/local/bin/yaamon`, a systemd unit, and a starter config at `/etc/yaamon/config.yaml`. The service starts automatically on install.
+
+```bash
+# Check it started
+sudo systemctl status yaamon
+
+# View logs
+sudo journalctl -u yaamon -f
+```
+
+Open `http://<your-node-ip>/` in a browser. On first visit you will be directed to the setup page to create your admin account.
+
+### Option 2 — Pre-built binary (tarball)
+
+Download the tarball for your platform from the [Releases page](https://github.com/jchonig/allstar-yaamon/releases/latest), extract, and run:
+
+```bash
+tar xzf yaamon_*_linux_arm64.tar.gz
+sudo mv yaamon /usr/local/bin/
+yaamon serve --config /etc/yaamon/config.yaml
+```
+
+For persistent operation copy the [contrib/yaamon.service](contrib/yaamon.service) systemd unit to `/etc/systemd/system/` and enable it:
+
+```bash
+sudo cp contrib/yaamon.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now yaamon
+```
+
+### Option 3 — Docker
+
+```bash
+docker run -d \
+  --name yaamon \
+  --restart unless-stopped \
+  -p 80:80 \
+  -v /etc/yaamon:/etc/yaamon \
+  -v /data/yaamon:/data \
+  ghcr.io/jchonig/allstar-yaamon:latest
+```
+
+Mount your config file at `/etc/yaamon/config.yaml` and a persistent data volume at `/data`. The database is created at `/data/yaamon.db` on first run.
+
+### Option 4 — docker-compose
+
+```yaml
+services:
+  yaamon:
+    image: ghcr.io/jchonig/allstar-yaamon:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config:/etc/yaamon       # config.yaml lives here
+      - ./data:/data               # SQLite database lives here
+    environment:
+      # Override any config.yaml value with YAAMON_<SECTION>_<KEY>
+      - YAAMON_LOG_LEVEL=info
+```
+
+```bash
+docker compose up -d
+docker compose logs -f
+```
+
+---
+
+## Configuration
+
+Copy `config.yaml.example` to `config.yaml` and edit it before first run:
+
+```yaml
+server:
+  http_port: 80
+  https_port: 443
+
+tls:
+  mode: disabled             # disabled | self_signed | provided | acme
+
+db:
+  path: /data/yaamon.db
+
+log:
+  level: info
+```
+
+Any config value can be overridden with an environment variable using the pattern `YAAMON_<SECTION>_<KEY>` — for example `YAAMON_DB_PATH=/data/yaamon.db`.
+
+See [`config.yaml.example`](config.yaml.example) for all options including TLS and UI footer customization.
+
+---
+
+## TLS / HTTPS
+
+YAAMon has four TLS modes set in `config.yaml`:
+
+| Mode | When to use |
+|------|-------------|
+| `disabled` | HTTP only — local LAN, behind a reverse proxy |
+| `self_signed` | Generates a self-signed cert on first run — quick setup, browser warning |
+| `provided` | Supply your own `cert_file` and `key_file` |
+| `acme` | Automatic Let's Encrypt via ACME — requires a public domain name and port 443 reachable from the internet |
+
+---
+
+## Building from Source
+
+Requires Go 1.24+.
+
+```bash
+git clone https://github.com/jchonig/allstar-yaamon.git
+cd allstar-yaamon
+make build          # builds ./yaamon for the current platform
+make test           # unit + integration tests
+make snapshot       # GoReleaser cross-compile snapshot (all platforms + .deb)
+```
+
+---
+
+## Systemd Quick Reference
+
+```bash
+sudo systemctl start yaamon
+sudo systemctl stop yaamon
+sudo systemctl restart yaamon
+sudo systemctl status yaamon
+sudo journalctl -u yaamon -f        # live logs
+sudo journalctl -u yaamon --since today
+```
+
+---
+
+## AMI Security Note
+
+The Asterisk Manager Interface (AMI) used to connect to your nodes transmits credentials and commands in plain text by default. **Do not expose AMI port 5038 directly to the internet.** For remote nodes, use one of:
+
+- A VPN (WireGuard, OpenVPN) between the YAAMon host and the remote node
+- An SSH tunnel: `ssh -L 5038:localhost:5038 user@remote-node`
+
+See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed setup guidance.
+
+---
+
+## Migrating from AllScan
+
+YAAMon can import your existing AllScan favorites using a declarative state file:
+
+```bash
+# See state.yaml.example for the format
+yaamon apply state.yaml
+```
+
+AllScan and YAAMon use separate databases and can run side by side during transition.
+
+---
+
+## Bugs & Discussion
+
+- **Bug reports**: [GitHub Issues](https://github.com/jchonig/allstar-yaamon/issues)
+- **Discussion & questions**: [GitHub Discussions](https://github.com/jchonig/allstar-yaamon/discussions)
+
+Please include your YAAMon version (`yaamon --version`), OS, and relevant log output when filing a bug.
+
+---
+
+## License
+
+GPL-3.0 — matching the upstream [AllScan](https://github.com/davidgsd/AllScan) license.
