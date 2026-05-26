@@ -398,6 +398,8 @@
 <script>
 [{{range .Nodes}}{"id":{{.ID}},"num":"{{.NodeNumber}}"},{{end}}].forEach(n => {
   const es = new EventSource('/sse/' + n.id);
+  document.getElementById('summary-ami-' + n.id)?.classList.add('polling');
+  document.getElementById('summary-asl-' + n.id)?.classList.add('polling');
   es.onmessage = evt => {
     try {
       const msg = JSON.parse(evt.data);
@@ -405,22 +407,26 @@
         const cnt = Object.keys(msg.links || {}).length;
         const dot = document.getElementById('summary-ami-' + n.id);
         const lnk = document.getElementById('summary-links-' + n.id);
-        if (dot) { dot.classList.add('connected'); dot.title = 'AMI connected'; }
+        if (dot) { dot.classList.add('connected'); dot.classList.remove('polling'); dot.title = 'AMI connected'; }
         if (lnk) lnk.textContent = cnt > 0 ? cnt + ' active link' + (cnt !== 1 ? 's' : '') : 'No active links';
       } else if (msg.type === 'stats') {
         const hs = (msg.stats || {})[n.num];
         const img = document.getElementById('summary-asl-' + n.id);
-        if (img && hs && hs.fetched_at) {
-          const stale = Date.now() - new Date(hs.fetched_at).getTime() > 90000;
-          img.classList.toggle('connected', !stale);
-          img.title = stale ? 'ASL: no recent data' : 'AllStarLink connected';
+        if (img) {
+          img.classList.remove('polling');
+          if (hs && hs.fetched_at) {
+            const stale = Date.now() - new Date(hs.fetched_at).getTime() > 90000;
+            img.classList.toggle('connected', !stale);
+            img.title = stale ? 'ASL: no recent data' : 'AllStarLink connected';
+          }
         }
       }
     } catch {}
   };
   es.onerror = () => {
     const dot = document.getElementById('summary-ami-' + n.id);
-    if (dot) { dot.classList.remove('connected'); dot.title = 'AMI disconnected'; }
+    if (dot) { dot.classList.remove('connected', 'polling'); dot.title = 'AMI disconnected'; }
+    document.getElementById('summary-asl-' + n.id)?.classList.remove('polling');
   };
 });
 </script>
@@ -601,10 +607,13 @@ function applyStats(stats) {
 function connectSSE() {
   if (sseSource) sseSource.close();
   sseSource = new EventSource(`/sse/${NODE_ID}`);
+  document.getElementById('ami-badge')?.classList.add('polling');
+  document.getElementById('asl-badge')?.classList.add('polling');
   sseSource.onmessage = evt => {
     try {
       const msg = JSON.parse(evt.data);
       if (msg.type === 'stats' && msg.stats) {
+        document.getElementById('asl-badge')?.classList.remove('polling');
         applyStats(msg.stats);
       } else if (msg.type === 'links' && msg.links && typeof msg.links === 'object') {
         const now = new Date();
@@ -629,6 +638,7 @@ function connectSSE() {
   };
   sseSource.onerror = () => {
     setAMIBadge(false);
+    document.getElementById('asl-badge')?.classList.remove('polling');
   };
 }
 
@@ -638,6 +648,7 @@ function setAMIBadge(connected) {
   const el = document.getElementById('ami-badge');
   if (!el) return;
   el.classList.toggle('connected', connected);
+  el.classList.remove('polling');
   el.title = connected ? 'Asterisk AMI connected' : 'Asterisk AMI not connected';
 }
 
@@ -645,6 +656,7 @@ function setASLBadge(connected) {
   const el = document.getElementById('asl-badge');
   if (!el) return;
   el.classList.toggle('connected', connected);
+  el.classList.remove('polling');
   el.title = connected ? 'AllStarLink connected' : 'AllStarLink: no recent data';
 }
 

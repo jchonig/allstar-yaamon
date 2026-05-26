@@ -224,6 +224,13 @@ th.sort-col.sort-active .sort-icon { opacity: 1; }
   filter: none;
   opacity: 1;
 }
+@keyframes yaamon-spin {
+  to { transform: rotate(360deg); }
+}
+.asl-logo.polling {
+  animation: yaamon-spin 1.2s linear infinite;
+  opacity: 0.5;
+}
 
 /* Summary landing page node cards */
 .summary-node-card {

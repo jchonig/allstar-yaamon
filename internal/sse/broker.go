@@ -39,6 +39,14 @@ func (b *Broker) Subscribe(topicID int64) (<-chan []byte, func()) {
 	}
 }
 
+// HasSubscribers reports whether topicID has at least one active subscriber.
+func (b *Broker) HasSubscribers(topicID int64) bool {
+	b.mu.RLock()
+	n := len(b.topics[topicID])
+	b.mu.RUnlock()
+	return n > 0
+}
+
 // Publish sends data to all current subscribers of topicID (non-blocking; slow clients are dropped).
 func (b *Broker) Publish(topicID int64, data []byte) {
 	b.mu.RLock()
@@ -52,9 +60,10 @@ func (b *Broker) Publish(topicID int64, data []byte) {
 	}
 }
 
-// Stream writes SSE events from topicID to w until r.Context() is cancelled.
-// Any non-nil initial payloads are sent immediately before waiting for published events.
-func (b *Broker) Stream(w http.ResponseWriter, r *http.Request, topicID int64, initial ...[]byte) {
+// StreamFrom writes SSE events from an already-subscribed channel to w until
+// r.Context() is cancelled. Any non-nil initial payloads are sent first.
+// Use this when you need to subscribe before triggering the first data fetch.
+func (b *Broker) StreamFrom(w http.ResponseWriter, r *http.Request, ch <-chan []byte, initial ...[]byte) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -64,9 +73,6 @@ func (b *Broker) Stream(w http.ResponseWriter, r *http.Request, topicID int64, i
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
 		return
 	}
-
-	ch, cancel := b.Subscribe(topicID)
-	defer cancel()
 
 	for _, msg := range initial {
 		if len(msg) > 0 {
@@ -87,4 +93,12 @@ func (b *Broker) Stream(w http.ResponseWriter, r *http.Request, topicID int64, i
 			return
 		}
 	}
+}
+
+// Stream writes SSE events from topicID to w until r.Context() is cancelled.
+// Any non-nil initial payloads are sent immediately before waiting for published events.
+func (b *Broker) Stream(w http.ResponseWriter, r *http.Request, topicID int64, initial ...[]byte) {
+	ch, cancel := b.Subscribe(topicID)
+	defer cancel()
+	b.StreamFrom(w, r, ch, initial...)
 }

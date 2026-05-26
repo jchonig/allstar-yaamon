@@ -75,64 +75,49 @@ func (s *Server) pollStats(ctx context.Context) {
 	if err != nil {
 		return
 	}
-
-	// Collect unique favorite node numbers per home node.
-	type nodeWork struct {
-		id   int64
-		nums []string
-	}
-	var work []nodeWork
-	allNums := make(map[string]struct{})
-
 	for _, n := range nodes {
-		if !n.Enabled {
-			continue
+		if n.Enabled && s.sseBroker.HasSubscribers(n.ID) {
+			s.pollNodeStats(ctx, n.ID)
 		}
-		favs, err := s.db.ListFavoritesByNode(ctx, n.ID)
-		if err != nil {
-			continue
-		}
-		// Always include the home node's own number so its AllStarLink
-		// connectivity status is available on the dashboard and summary page.
-		nums := make([]string, 0, len(favs)+1)
-		nums = append(nums, n.NodeNumber)
-		allNums[n.NodeNumber] = struct{}{}
-		for _, f := range favs {
-			nums = append(nums, f.NodeNumber)
-			allNums[f.NodeNumber] = struct{}{}
-		}
-		work = append(work, nodeWork{id: n.ID, nums: nums})
 	}
+}
 
-	if len(allNums) == 0 {
+// pollNodeStats fetches fresh ASL stats for a single node's favorites, updates
+// the cache, and publishes an SSE event. Called both by the periodic poller
+// (for nodes with active viewers) and immediately when a client connects.
+func (s *Server) pollNodeStats(ctx context.Context, nodeID int64) {
+	n, err := s.db.GetNodeByID(ctx, nodeID)
+	if err != nil {
 		return
 	}
-
-	unique := make([]string, 0, len(allNums))
-	for n := range allNums {
-		unique = append(unique, n)
+	favs, err := s.db.ListFavoritesByNode(ctx, nodeID)
+	if err != nil {
+		return
 	}
-
-	results := s.fetcher.FetchAll(ctx, unique)
+	// Always include the home node's own number.
+	nums := make([]string, 0, len(favs)+1)
+	nums = append(nums, n.NodeNumber)
+	for _, f := range favs {
+		nums = append(nums, f.NodeNumber)
+	}
+	results := s.fetcher.FetchAll(ctx, nums)
 	s.statsCache.update(results)
 
-	// Notify SSE subscribers per home node.
-	for _, nw := range work {
-		subset := make(map[string]aslstats.NodeStats, len(nw.nums))
-		for _, num := range nw.nums {
-			if st, ok := results[num]; ok {
-				subset[num] = st
-			}
-		}
-		data, err := json.Marshal(map[string]any{
-			"type":   "stats",
-			"nodeID": nw.id,
-			"stats":  subset,
-		})
-		if err == nil {
-			s.sseBroker.Publish(nw.id, data)
+	subset := make(map[string]aslstats.NodeStats, len(nums))
+	for _, num := range nums {
+		if st, ok := results[num]; ok {
+			subset[num] = st
 		}
 	}
+	data, err := json.Marshal(map[string]any{
+		"type":   "stats",
+		"nodeID": nodeID,
+		"stats":  subset,
+	})
+	if err == nil {
+		s.sseBroker.Publish(nodeID, data)
+	}
+	slog.Debug("stats poll", "node_id", nodeID, "count", len(subset))
 }
 
 // handleSSE streams live stats updates for a node to the browser.
@@ -143,9 +128,17 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send cached stats immediately as the first event.
-	// Include the home node's own number so its AllStarLink status is visible.
-	var statsMsg []byte
+	// Subscribe before triggering the fresh fetch so no published events are
+	// dropped between the fetch completing and the stream starting.
+	ch, cancel := s.sseBroker.Subscribe(nodeID)
+	defer cancel()
+
+	// Trigger an immediate fresh stats fetch for this node in the background.
+	// Because we subscribed above, the result will arrive on ch.
+	go s.pollNodeStats(r.Context(), nodeID)
+
+	// Send cached state as the initial SSE burst while the fresh fetch is in flight.
+	var initial [][]byte
 	{
 		hn, hnerr := s.db.GetNodeByID(r.Context(), nodeID)
 		favs, ferr := s.db.ListFavoritesByNode(r.Context(), nodeID)
@@ -159,28 +152,26 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if len(nums) > 0 {
-			current := s.statsCache.getMany(nums)
-			if len(current) > 0 {
-				statsMsg, _ = json.Marshal(map[string]any{
+			if current := s.statsCache.getMany(nums); len(current) > 0 {
+				msg, _ := json.Marshal(map[string]any{
 					"type":   "stats",
 					"nodeID": nodeID,
 					"stats":  current,
 				})
+				initial = append(initial, msg)
 			}
 		}
 	}
-
-	// Send cached link state immediately as the second event (if already polled).
-	var linksMsg []byte
 	if links, ok := s.linksCache.get(nodeID); ok {
-		linksMsg, _ = json.Marshal(map[string]any{
+		msg, _ := json.Marshal(map[string]any{
 			"type":   "links",
 			"nodeID": nodeID,
 			"links":  links,
 		})
+		initial = append(initial, msg)
 	}
 
-	s.sseBroker.Stream(w, r, nodeID, statsMsg, linksMsg)
+	s.sseBroker.StreamFrom(w, r, ch, initial...)
 }
 
 // handleAPINodeStats returns the current cached stats for all favorites of a node,
