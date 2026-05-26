@@ -347,6 +347,65 @@ func TestSnapshot(t *testing.T) {
 	}
 }
 
+func TestUpdateUserProfile(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	u, err := db.CreateUser(ctx, "bob", "hash", PermReadOnly)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := db.UpdateUserProfile(ctx, u.ID, "Bob Smith", "https://example.com/bob.jpg"); err != nil {
+		t.Fatalf("UpdateUserProfile: %v", err)
+	}
+
+	got, err := db.GetUserByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if got.FullName != "Bob Smith" {
+		t.Errorf("FullName = %q, want %q", got.FullName, "Bob Smith")
+	}
+	if got.AvatarURL != "https://example.com/bob.jpg" {
+		t.Errorf("AvatarURL = %q, want %q", got.AvatarURL, "https://example.com/bob.jpg")
+	}
+}
+
+func TestUserProfileFieldsRoundTrip(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	u, _ := db.CreateUser(ctx, "carol", "hash", PermAdmin)
+	db.UpdateUserProfile(ctx, u.ID, "Carol Jones", "https://example.com/carol.png") //nolint:errcheck
+
+	// GetUser
+	got, err := db.GetUser(ctx, "carol")
+	if err != nil {
+		t.Fatalf("GetUser: %v", err)
+	}
+	if got.FullName != "Carol Jones" || got.AvatarURL != "https://example.com/carol.png" {
+		t.Errorf("GetUser profile mismatch: %+v", got)
+	}
+
+	// GetUserByID
+	got, err = db.GetUserByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if got.FullName != "Carol Jones" || got.AvatarURL != "https://example.com/carol.png" {
+		t.Errorf("GetUserByID profile mismatch: %+v", got)
+	}
+
+	// ListUsers
+	users, err := db.ListUsers(ctx)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) != 1 || users[0].FullName != "Carol Jones" || users[0].AvatarURL != "https://example.com/carol.png" {
+		t.Errorf("ListUsers profile mismatch: %+v", users)
+	}
+}
+
 func TestPermissionHelpers(t *testing.T) {
 	if !ValidPermission(PermReadOnly) {
 		t.Error("readonly should be valid")
