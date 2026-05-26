@@ -4,22 +4,24 @@
 
 {{define "nav-center"}}
 {{if and .ActiveNode (gt (len .Nodes) 1)}}
-<div id="nav-switcher" class="ms-2 d-flex align-items-center" style="min-width:0;overflow:hidden">
-  {{/* Button group — shown when there is enough navbar space */}}
-  <div id="nav-switcher-buttons" class="btn-group btn-group-sm" role="group"
-       style="display:none!important;min-width:0;white-space:nowrap">
-    <a href="/dashboard/overview"
-       class="btn btn-outline-secondary"
-       style="white-space:nowrap"
-       title="Overview">Overview</a>
-    {{range .Nodes}}
-    <a href="/dashboard/{{.ID}}"
-       class="btn {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}btn-primary{{else}}btn-outline-secondary{{end}}"
-       style="white-space:nowrap"
-       title="{{.Name}}">{{.Name}}</a>
-    {{end}}
+<div id="nav-switcher" class="ms-2 d-flex align-items-center" style="min-width:0">
+  {{/* overflow:hidden wrapper for button measurement only — dropdown is a sibling so it isn't clipped */}}
+  <div id="nav-switcher-wrap" style="min-width:0;overflow:hidden">
+    <div id="nav-switcher-buttons" class="btn-group btn-group-sm" role="group"
+         style="display:none!important;white-space:nowrap">
+      <a href="/dashboard/overview"
+         class="btn btn-outline-secondary"
+         style="white-space:nowrap"
+         title="Overview">Overview</a>
+      {{range .Nodes}}
+      <a href="/dashboard/{{.ID}}"
+         class="btn {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}btn-primary{{else}}btn-outline-secondary{{end}}"
+         style="white-space:nowrap"
+         title="{{.Name}}">{{.Name}}</a>
+      {{end}}
+    </div>
   </div>
-  {{/* Dropdown — shown when buttons do not fit */}}
+  {{/* Dropdown — shown when buttons do not fit — outside overflow:hidden so menu renders fully */}}
   <div id="nav-switcher-dropdown" class="dropdown" style="display:none!important">
     <button class="btn btn-sm btn-outline-secondary dropdown-toggle text-truncate" style="max-width:12rem"
             data-bs-toggle="dropdown" aria-expanded="false">
@@ -39,26 +41,24 @@
 </div>
 <script>
 (function () {
-  const nav   = document.querySelector('.navbar-yaamon .container-fluid');
-  const wrap  = document.getElementById('nav-switcher');
-  const btns  = document.getElementById('nav-switcher-buttons');
-  const drop  = document.getElementById('nav-switcher-dropdown');
+  const nav  = document.querySelector('.navbar-yaamon .container-fluid');
+  const wrap = document.getElementById('nav-switcher-wrap');
+  const btns = document.getElementById('nav-switcher-buttons');
+  const drop = document.getElementById('nav-switcher-dropdown');
   if (!nav || !wrap || !btns || !drop) return;
 
   function update() {
-    // Show buttons so scrollWidth reflects their natural width.
     btns.style.cssText = '';
     drop.style.cssText = 'display:none';
-    // wrap has overflow:hidden + min-width:0, so scrollWidth > clientWidth
-    // means the btn-group is wider than the space the flex parent gave us.
     if (wrap.scrollWidth <= wrap.clientWidth) return;
     btns.style.cssText = 'display:none';
     drop.style.cssText = '';
   }
 
   const ro = new ResizeObserver(update);
-  ro.observe(wrap); // fires as wrap is compressed when viewport narrows
-  ro.observe(nav);  // fires as nav grows when viewport widens (wrap doesn't grow)
+  ro.observe(wrap);
+  ro.observe(nav);
+  document.addEventListener('DOMContentLoaded', update);
   update();
 })();
 </script>
