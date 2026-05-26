@@ -24,8 +24,7 @@ Download the `.deb` for your architecture from the [Releases page](https://githu
 
 | Platform | File |
 |----------|------|
-| Raspberry Pi 4 / Pi 5 (64-bit OS) | `yaamon_*_linux_arm64.deb` |
-| Raspberry Pi 3 / Zero 2 W (32-bit OS) | `yaamon_*_linux_armhf.deb` |
+| Raspberry Pi 3B+ / Zero 2 W / Pi 4 / Pi 5 | `yaamon_*_linux_arm64.deb` |
 | x86-64 server / VM | `yaamon_*_linux_amd64.deb` |
 
 ```bash
