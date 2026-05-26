@@ -207,6 +207,8 @@ func (s *Server) Run() error {
 		r.Use(s.sessions.RequirePermission(db.PermAdmin))
 		r.Post("/api/admin/favicon", s.handleAPIUploadFavicon)
 		r.Delete("/api/admin/favicon", s.handleAPIDeleteFavicon)
+		r.Post("/api/admin/import/allmon3/preview", s.handleAPIImportAllmon3Preview)
+		r.Post("/api/admin/import/allmon3", s.handleAPIImportAllmon3)
 		r.Get("/admin/nodes", s.handleNodesPage)
 		r.Post("/api/nodes", s.handleAPICreateNode)
 		r.Put("/api/nodes/{id}", s.handleAPIUpdateNode)

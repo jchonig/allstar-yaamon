@@ -210,8 +210,10 @@ func (s *Server) handleAPIFavoritesImport(w http.ResponseWriter, r *http.Request
 			continue
 		}
 		if _, err := s.db.CreateFavorite(r.Context(), db.Favorite{
-			NodeID:     nodeID,
-			NodeNumber: f.NodeNumber,
+			NodeID:      nodeID,
+			NodeNumber:  f.NodeNumber,
+			Callsign:    f.Callsign,
+			Description: f.Description,
 		}); err != nil {
 			slog.Warn("import favorite failed", "node_number", f.NodeNumber, "err", err)
 			continue
@@ -219,4 +221,71 @@ func (s *Server) handleAPIFavoritesImport(w http.ResponseWriter, r *http.Request
 		added++
 	}
 	writeJSON(w, map[string]any{"added": added, "skipped": len(imported) - added})
+}
+
+// handleAPIImportAllmon3Preview parses an uploaded allmon3.ini and returns the nodes found.
+// POST /api/admin/import/allmon3/preview — body: raw allmon3.ini bytes
+func (s *Server) handleAPIImportAllmon3Preview(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "read error", http.StatusBadRequest)
+		return
+	}
+	nodes, err := backup.ParseAllmon3INI(data)
+	if err != nil {
+		http.Error(w, "parse error: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(nodes) == 0 {
+		http.Error(w, "no nodes found in file", http.StatusBadRequest)
+		return
+	}
+
+	type nodePreview struct {
+		backup.AllmonNode
+		Exists bool `json:"exists"`
+	}
+	preview := make([]nodePreview, 0, len(nodes))
+	for _, n := range nodes {
+		_, err := s.db.GetNodeByNumber(r.Context(), n.NodeNumber)
+		preview = append(preview, nodePreview{n, err == nil})
+	}
+	writeJSON(w, preview)
+}
+
+// handleAPIImportAllmon3 creates nodes from a selected subset of a parsed allmon3.ini.
+// POST /api/admin/import/allmon3 — body: JSON array of AllmonNode (the selected ones)
+func (s *Server) handleAPIImportAllmon3(w http.ResponseWriter, r *http.Request) {
+	var nodes []backup.AllmonNode
+	if err := json.NewDecoder(r.Body).Decode(&nodes); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	added := 0
+	for _, n := range nodes {
+		if n.AMIPort == 0 {
+			n.AMIPort = 5038
+		}
+		if n.AMIHost == "" {
+			n.AMIHost = "localhost"
+		}
+		created, err := s.db.CreateNode(r.Context(), db.Node{
+			Name:       n.NodeNumber, // admin can rename afterwards
+			NodeNumber: n.NodeNumber,
+			AMIHost:    n.AMIHost,
+			AMIPort:    n.AMIPort,
+			AMIUser:    n.AMIUser,
+			AMIPass:    n.AMIPass,
+			Enabled:    true,
+		})
+		if err != nil {
+			slog.Warn("allmon3 import: create node failed", "node", n.NodeNumber, "err", err)
+			continue
+		}
+		s.amiMgr.Add(*created)
+		added++
+	}
+	writeJSON(w, map[string]any{"added": added})
 }

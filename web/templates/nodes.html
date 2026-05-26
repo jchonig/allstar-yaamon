@@ -7,9 +7,14 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Node Management</h5>
   {{if or (eq .Permission "superuser") (eq .Permission "admin")}}
-  <button class="btn btn-primary btn-sm" onclick="openAddModal()">
-    <i class="bi bi-plus-circle me-1"></i>Add Node
-  </button>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" onclick="openAllmon3ImportModal()">
+      <i class="bi bi-upload me-1"></i>Import from Allmon3
+    </button>
+    <button class="btn btn-primary btn-sm" onclick="openAddModal()">
+      <i class="bi bi-plus-circle me-1"></i>Add Node
+    </button>
+  </div>
   {{end}}
 </div>
 
@@ -340,5 +345,117 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
+// --- Allmon3 import ---
+let allmon3Modal, allmon3Parsed = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+  const el = document.getElementById('allmon3ImportModal');
+  if (el) allmon3Modal = new bootstrap.Modal(el);
+});
+
+function openAllmon3ImportModal() {
+  allmon3Parsed = [];
+  document.getElementById('allmon3-file').value = '';
+  document.getElementById('allmon3-preview').innerHTML = '';
+  document.getElementById('allmon3-error').textContent = '';
+  document.getElementById('allmon3-import-btn').style.display = 'none';
+  allmon3Modal.show();
+}
+
+async function previewAllmon3() {
+  const file = document.getElementById('allmon3-file').files[0];
+  const errEl = document.getElementById('allmon3-error');
+  const previewEl = document.getElementById('allmon3-preview');
+  errEl.textContent = '';
+  previewEl.innerHTML = '';
+  document.getElementById('allmon3-import-btn').style.display = 'none';
+  if (!file) return;
+
+  const resp = await fetch('/api/admin/import/allmon3/preview', {method: 'POST', body: file});
+  if (!resp.ok) { errEl.textContent = await resp.text(); return; }
+  allmon3Parsed = await resp.json();
+
+  previewEl.innerHTML = `
+    <p class="small text-muted mb-2">Select nodes to import. Nodes already in YAAMon are unchecked by default.</p>
+    <div class="list-group list-group-flush">
+      ${allmon3Parsed.map((n, i) => `
+      <label class="list-group-item list-group-item-action py-2 px-0">
+        <div class="d-flex align-items-center gap-2">
+          <input class="form-check-input allmon3-check" type="checkbox" value="${i}"
+                 ${n.exists ? '' : 'checked'} id="am3n${i}">
+          <div class="small">
+            <strong>${esc(n.node_number)}</strong>
+            <span class="text-muted ms-2">${esc(n.ami_host)}:${n.ami_port}</span>
+            ${n.exists ? '<span class="badge bg-warning text-dark ms-1">already exists</span>' : ''}
+          </div>
+        </div>
+      </label>`).join('')}
+    </div>`;
+  document.getElementById('allmon3-import-btn').style.display = '';
+}
+
+async function confirmAllmon3Import() {
+  const errEl = document.getElementById('allmon3-error');
+  errEl.textContent = '';
+  const selected = [...document.querySelectorAll('.allmon3-check:checked')]
+    .map(cb => allmon3Parsed[parseInt(cb.value)]);
+  if (!selected.length) { errEl.textContent = 'No nodes selected.'; return; }
+
+  const btn = document.getElementById('allmon3-import-btn');
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/admin/import/allmon3', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(selected),
+    });
+    if (!resp.ok) { errEl.textContent = await resp.text(); return; }
+    const {added} = await resp.json();
+    allmon3Modal.hide();
+    loadNodes();
+    // Brief success banner
+    const banner = document.createElement('div');
+    banner.className = 'alert alert-success alert-dismissible fade show mt-2';
+    banner.innerHTML = `Imported ${added} node${added !== 1 ? 's' : ''} from Allmon3. Rename them as needed.
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+    document.querySelector('.page-content')?.prepend(banner);
+  } catch (e) {
+    errEl.textContent = 'Network error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
 </script>
+
+<!-- Allmon3 Import Modal -->
+<div class="modal fade" id="allmon3ImportModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Import from Allmon3</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Select <code>allmon3.ini</code> file</label>
+          <input type="file" class="form-control" id="allmon3-file" accept=".ini,text/plain"
+                 onchange="previewAllmon3()">
+          <div class="form-text">Usually found at <code>/etc/allmon3/allmon3.ini</code></div>
+        </div>
+        <div id="allmon3-preview"></div>
+        <div class="text-danger small mt-2" id="allmon3-error"></div>
+        <p class="small text-muted mt-3 mb-0">
+          Imported nodes use their node number as the display name — rename them after importing.
+          AMI passwords from the file are stored as-is.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="allmon3-import-btn"
+                style="display:none" onclick="confirmAllmon3Import()">Import Selected</button>
+      </div>
+    </div>
+  </div>
+</div>
 {{end}}

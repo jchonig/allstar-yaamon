@@ -69,6 +69,14 @@ Users can change their own password from [My Profile](#your-profile). Admins and
 
 Go to **Admin → Nodes** (top-right menu, admin and superuser accounts only).
 
+### Importing from Allmon3
+
+If you are migrating from Allmon3, click **Import from Allmon3** and select your `allmon3.ini` file (usually `/etc/allmon3/allmon3.ini`). YAAMon parses the file and lists all nodes found. Nodes already present in YAAMon are unchecked by default. Check the ones you want to import and click **Import Selected**.
+
+Imported nodes use their node number as the display name — rename them afterwards using the edit button. AMI credentials are read directly from the file.
+
+### Adding a node manually
+
 Click **Add Node** and fill in:
 
 | Field | Description |
@@ -205,9 +213,11 @@ Drag and drop favorites within a group to reorder them. The order is saved immed
 
 You can copy all favorites from one node to another using the **Copy from node** button at the top of the Favorites page. Useful when you add a second node and want the same set of favorites.
 
-### Importing from AllScan
+### Importing favorites from AllScan
 
-Use the `yaamon apply` command with a state file to bulk-import favorites. See [Declarative State](#declarative-state-yaamon-apply).
+On the Favorites page, click **Import**. Select your AllScan `favorites.ini` file (usually `/var/www/html/allscan/favorites.ini`). YAAMon parses the file, extracts node numbers and labels, and attempts to split each label into a callsign and description. A preview shows how many entries will be added and how many will be skipped (already exist). Confirm to import.
+
+AllScan labels often follow the pattern `CALLSIGN Description` — YAAMon recognises a leading word as a callsign if it is 3–7 alphanumeric characters and contains at least one digit. You can edit any favorite after import to correct the split.
 
 ---
 

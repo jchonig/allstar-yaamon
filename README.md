@@ -199,19 +199,11 @@ See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed setup guidance.
 
 ## Migrating from AllScan or Allmon3
 
-YAAMon can import your existing AllScan favorites using a declarative state file:
+YAAMon has built-in import support — no conversion scripts needed.
 
-```bash
-# See state.yaml.example for the format
-yaamon apply state.yaml
-```
+**From Allmon3**: go to **Admin → Nodes**, click **Import from Allmon3**, and upload your `allmon3.ini` file. YAAMon lists the nodes found; select the ones to import and confirm. AMI credentials are read from the file.
 
-In Docker, set `YAAMON_STATE_FILE` to the path of your state file and it will be applied automatically on every container start:
-
-```yaml
-    environment:
-      - YAAMON_STATE_FILE=/etc/yaamon/state.yaml
-```
+**From AllScan**: go to **Favorites**, click **Import**, and upload your `favorites.ini` file. YAAMon extracts node numbers and labels (splitting callsign from description where possible) and imports them as favorites for the selected node.
 
 YAAMon uses its own database and can run alongside AllScan or Allmon3 during transition.
 
