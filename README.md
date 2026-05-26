@@ -1,8 +1,8 @@
 # YAAMon — Yet Another AllStar MONitor
 
-YAAMon is a modern web application for managing and monitoring [AllStarLink](https://allstarlink.org) amateur radio nodes. It replaces the PHP/Apache-based [AllScan](https://github.com/davidgsd/AllScan) with a single self-contained binary that needs no web server, no PHP runtime, and no external database engine.
+YAAMon is a modern, responsive web application for managing and monitoring [AllStarLink](https://allstarlink.org) amateur radio nodes. It replaces the PHP/Apache-based [AllScan](https://github.com/davidgsd/AllScan) and [Allmon3](https://github.com/AllStarLink/Allmon3) with a single self-contained binary that needs no web server, no PHP runtime, and no external database engine. The interface works on desktops, tablets, and phones.
 
-**Key differences from AllScan:**
+**Key differences from AllScan and Allmon3:**
 
 - Manages multiple Asterisk/AMI nodes from one interface
 - Built-in TLS with automatic Let's Encrypt certificates
@@ -194,7 +194,7 @@ See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed setup guidance.
 
 ---
 
-## Migrating from AllScan
+## Migrating from AllScan or Allmon3
 
 YAAMon can import your existing AllScan favorites using a declarative state file:
 
@@ -203,7 +203,7 @@ YAAMon can import your existing AllScan favorites using a declarative state file
 yaamon apply state.yaml
 ```
 
-AllScan and YAAMon use separate databases and can run side by side during transition.
+YAAMon uses its own database and can run alongside AllScan or Allmon3 during transition.
 
 ---
 
