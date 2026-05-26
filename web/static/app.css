@@ -63,7 +63,7 @@ body {
   min-height: 100vh;
 }
 
-body > .container-fluid {
+.page-content {
   flex: 1;
 }
 
