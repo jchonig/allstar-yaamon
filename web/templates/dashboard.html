@@ -91,7 +91,7 @@
                style="height:.85rem;width:auto;vertical-align:middle" title="ASL: unknown" alt="ASL">
           <h5 class="card-title mb-0 text-truncate flex-grow-1" title="{{.Name}}">{{.Name}}</h5>
           {{if or (eq $.Permission "superuser") (eq $.Permission "admin")}}
-          <a href="/admin/nodes" class="btn btn-sm btn-outline-secondary flex-shrink-0"
+          <a href="/admin/nodes?edit={{.ID}}" class="btn btn-sm btn-outline-secondary flex-shrink-0"
              style="position:relative;z-index:2" title="Edit node settings">
             <i class="bi bi-pencil"></i>
           </a>

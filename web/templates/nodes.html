@@ -155,6 +155,8 @@ async function loadNodes() {
     nodesData = [];
   }
   renderTable();
+  const editID = parseInt(new URLSearchParams(location.search).get('edit'));
+  if (editID) openEditModal(editID);
 }
 
 function renderTable() {
