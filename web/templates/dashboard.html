@@ -3,7 +3,7 @@
 {{define "title"}}Dashboard — YAAMon{{end}}
 
 {{define "nav-center"}}
-{{if gt (len .Nodes) 1}}
+{{if and .ActiveNode (gt (len .Nodes) 1)}}
   {{if le (len .Nodes) 3}}
   {{/* ≤3 nodes: buttons on md+, dropdown on mobile */}}
   <div class="d-none d-md-flex ms-2">
