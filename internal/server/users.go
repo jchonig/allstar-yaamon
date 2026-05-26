@@ -15,6 +15,8 @@ type userJSON struct {
 	ID         int64  `json:"id"`
 	Username   string `json:"username"`
 	Permission string `json:"permission"`
+	FullName   string `json:"full_name,omitempty"`
+	AvatarURL  string `json:"avatar_url,omitempty"`
 }
 
 type userInput struct {
@@ -24,7 +26,7 @@ type userInput struct {
 }
 
 func userToJSON(u db.User) userJSON {
-	return userJSON{ID: u.ID, Username: u.Username, Permission: u.Permission}
+	return userJSON{ID: u.ID, Username: u.Username, Permission: u.Permission, FullName: u.FullName, AvatarURL: u.AvatarURL}
 }
 
 // handleAPIListUsers returns all users (no password hash).
@@ -161,13 +163,12 @@ func (s *Server) handleAPIDeleteUser(w http.ResponseWriter, r *http.Request) {
 // handleUsersPage renders the user management page.
 func (s *Server) handleUsersPage(w http.ResponseWriter, r *http.Request) {
 	sess := auth.FromContext(r.Context())
-	data := struct {
-		Username   string
-		Permission string
-	}{}
+	data := struct{ pageData }{}
 	if sess != nil {
 		data.Username = sess.Username
 		data.Permission = sess.Permission
+		data.FullName = sess.FullName
+		data.AvatarURL = sess.AvatarURL
 	}
 	s.render(w, "users", data)
 }

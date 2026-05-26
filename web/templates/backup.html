@@ -2,28 +2,6 @@
 
 {{define "title"}}Backup & Restore — YAAMon{{end}}
 
-{{define "nav-extra"}}
-{{if .Username}}
-<div class="dropdown">
-  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-    <i class="bi bi-person-circle me-1"></i>{{.Username}}
-  </button>
-  <ul class="dropdown-menu dropdown-menu-end">
-    <li><h6 class="dropdown-header">{{.Permission}}</h6></li>
-    <li><hr class="dropdown-divider"></li>
-    <li><a class="dropdown-item" href="/settings/favorites"><i class="bi bi-star me-2"></i>Favorites</a></li>
-    {{if or (eq .Permission "superuser") (eq .Permission "admin")}}
-    <li><hr class="dropdown-divider"></li>
-    <li><a class="dropdown-item" href="/admin/nodes"><i class="bi bi-diagram-3 me-2"></i>Nodes</a></li>
-    <li><a class="dropdown-item" href="/admin/users"><i class="bi bi-people me-2"></i>Users</a></li>
-    <li><a class="dropdown-item active" href="/admin/backup"><i class="bi bi-archive me-2"></i>Backup</a></li>
-    {{end}}
-    <li><hr class="dropdown-divider"></li>
-    <li><a class="dropdown-item text-danger" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
-  </ul>
-</div>
-{{end}}
-{{end}}
 
 {{define "content"}}
 <div class="row g-4">

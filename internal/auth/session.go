@@ -28,6 +28,8 @@ type Session struct {
 	UserID     int64  `json:"uid"`
 	Username   string `json:"u"`
 	Permission string `json:"p"`
+	FullName   string `json:"fn,omitempty"`
+	AvatarURL  string `json:"av,omitempty"`
 	Expires    int64  `json:"exp"` // Unix timestamp
 }
 
@@ -52,11 +54,13 @@ func GenerateSecret() (string, error) {
 }
 
 // SetSession writes a signed session cookie to the response.
-func (m *Manager) SetSession(w http.ResponseWriter, userID int64, username, permission string) error {
+func (m *Manager) SetSession(w http.ResponseWriter, userID int64, username, permission, fullName, avatarURL string) error {
 	s := Session{
 		UserID:     userID,
 		Username:   username,
 		Permission: permission,
+		FullName:   fullName,
+		AvatarURL:  avatarURL,
 		Expires:    time.Now().Add(sessionTTL).Unix(),
 	}
 	payload, err := json.Marshal(s)

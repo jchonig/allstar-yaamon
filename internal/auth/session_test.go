@@ -14,7 +14,7 @@ func newManager() *Manager {
 func sessionRequest(t *testing.T, m *Manager, id int64, username, permission string) *http.Request {
 	t.Helper()
 	w := httptest.NewRecorder()
-	if err := m.SetSession(w, id, username, permission); err != nil {
+	if err := m.SetSession(w, id, username, permission, "", ""); err != nil {
 		t.Fatalf("SetSession: %v", err)
 	}
 	req := httptest.NewRequest("GET", "/", nil)
@@ -40,7 +40,7 @@ func TestSessionRoundtrip(t *testing.T) {
 func TestSessionTamperedSignature(t *testing.T) {
 	m := newManager()
 	w := httptest.NewRecorder()
-	m.SetSession(w, 1, "alice", "superuser")
+	m.SetSession(w, 1, "alice", "superuser", "", "") //nolint:errcheck
 
 	req := httptest.NewRequest("GET", "/", nil)
 	for _, c := range w.Result().Cookies() {

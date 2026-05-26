@@ -71,6 +71,8 @@ func (s *Server) handleFavoritesPage(w http.ResponseWriter, r *http.Request) {
 	if sess != nil {
 		data.Username = sess.Username
 		data.Permission = sess.Permission
+		data.FullName = sess.FullName
+		data.AvatarURL = sess.AvatarURL
 	}
 	data.Nodes, _ = s.db.ListNodes(r.Context())
 

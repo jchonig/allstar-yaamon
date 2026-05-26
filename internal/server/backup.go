@@ -21,13 +21,14 @@ func (s *Server) handleBackupPage(w http.ResponseWriter, r *http.Request) {
 	sess := auth.FromContext(r.Context())
 	nodes, _ := s.db.ListNodes(r.Context())
 	data := struct {
-		Username   string
-		Permission string
-		Nodes      interface{}
+		pageData
+		Nodes interface{}
 	}{}
 	if sess != nil {
 		data.Username = sess.Username
 		data.Permission = sess.Permission
+		data.FullName = sess.FullName
+		data.AvatarURL = sess.AvatarURL
 	}
 	data.Nodes = nodes
 	s.render(w, "backup", data)

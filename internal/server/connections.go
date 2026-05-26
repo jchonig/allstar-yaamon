@@ -77,8 +77,7 @@ func (s *Server) handleAPIConnections(w http.ResponseWriter, r *http.Request) {
 
 // graphPageData is the template data for the full-page network graph.
 type graphPageData struct {
-	Username   string
-	Permission string
+	pageData
 	NodeNumber string
 	HomeNodeID int64
 }
@@ -113,6 +112,8 @@ func (s *Server) handleGraphPage(w http.ResponseWriter, r *http.Request) {
 	if sess != nil {
 		data.Username = sess.Username
 		data.Permission = sess.Permission
+		data.FullName = sess.FullName
+		data.AvatarURL = sess.AvatarURL
 	}
 	s.render(w, "graph", data)
 }

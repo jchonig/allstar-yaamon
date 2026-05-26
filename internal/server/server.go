@@ -142,6 +142,7 @@ func (s *Server) Run() error {
 	r.Use(middleware.Recoverer)
 	r.Use(s.setupGuard) // redirect to /setup before auth fires when no users exist
 	r.Use(s.sessions.Middleware)
+	r.Use(s.validateSessionUser) // reject sessions for deleted accounts
 
 	// Static files (served before auth middleware so login page CSS loads)
 	staticFS, err := fs.Sub(s.webFS, "web/static")
@@ -173,6 +174,7 @@ func (s *Server) Run() error {
 		r.Get("/api/nodes/{id}/stats", s.handleAPINodeStats)
 		r.Get("/api/nodes/{id}/connections/{nodeNumber}", s.handleAPIConnections)
 		r.Get("/graph/{nodeNumber}", s.handleGraphPage)
+		r.Put("/api/profile", s.handleAPIUpdateProfile)
 	})
 
 	// Readwrite+ routes — can connect/disconnect and manage favorites

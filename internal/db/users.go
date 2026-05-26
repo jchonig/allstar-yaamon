@@ -40,14 +40,16 @@ type User struct {
 	Username   string
 	Password   string // bcrypt hash
 	Permission string
+	FullName   string
+	AvatarURL  string
 }
 
 // GetUser returns the user with the given username, or ErrNotFound.
 func (db *DB) GetUser(ctx context.Context, username string) (*User, error) {
 	u := &User{}
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT id, username, password, permission FROM users WHERE username = ?`, username,
-	).Scan(&u.ID, &u.Username, &u.Password, &u.Permission)
+		`SELECT id, username, password, permission, full_name, avatar_url FROM users WHERE username = ?`, username,
+	).Scan(&u.ID, &u.Username, &u.Password, &u.Permission, &u.FullName, &u.AvatarURL)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -61,8 +63,8 @@ func (db *DB) GetUser(ctx context.Context, username string) (*User, error) {
 func (db *DB) GetUserByID(ctx context.Context, id int64) (*User, error) {
 	u := &User{}
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT id, username, password, permission FROM users WHERE id = ?`, id,
-	).Scan(&u.ID, &u.Username, &u.Password, &u.Permission)
+		`SELECT id, username, password, permission, full_name, avatar_url FROM users WHERE id = ?`, id,
+	).Scan(&u.ID, &u.Username, &u.Password, &u.Permission, &u.FullName, &u.AvatarURL)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -75,7 +77,7 @@ func (db *DB) GetUserByID(ctx context.Context, id int64) (*User, error) {
 // ListUsers returns all users ordered by username.
 func (db *DB) ListUsers(ctx context.Context) ([]User, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT id, username, password, permission FROM users ORDER BY username`)
+		`SELECT id, username, password, permission, full_name, avatar_url FROM users ORDER BY username`)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
@@ -83,7 +85,7 @@ func (db *DB) ListUsers(ctx context.Context) ([]User, error) {
 	var users []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Password, &u.Permission); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Password, &u.Permission, &u.FullName, &u.AvatarURL); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -102,6 +104,13 @@ func (db *DB) CreateUser(ctx context.Context, username, passwordHash, permission
 	}
 	id, _ := res.LastInsertId()
 	return &User{ID: id, Username: username, Password: passwordHash, Permission: permission}, nil
+}
+
+// UpdateUserProfile updates the full name and avatar URL for a user.
+func (db *DB) UpdateUserProfile(ctx context.Context, id int64, fullName, avatarURL string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE users SET full_name = ?, avatar_url = ? WHERE id = ?`, fullName, avatarURL, id)
+	return err
 }
 
 // UpdateUserPassword sets a new bcrypt-hashed password.

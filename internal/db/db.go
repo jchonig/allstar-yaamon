@@ -161,4 +161,6 @@ var migrations = []migration{
 	     UPDATE favorites SET position = id WHERE position = 0;`},
 	{3, `ALTER TABLE nodes ADD COLUMN description TEXT NOT NULL DEFAULT '';
 	     ALTER TABLE nodes ADD COLUMN location TEXT NOT NULL DEFAULT '';`},
+	{4, `ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT '';
+	     ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT '';`},
 }

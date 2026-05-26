@@ -12,6 +12,14 @@ import (
 	"allstar-yaamon/internal/db"
 )
 
+// pageData contains fields common to all authenticated page templates.
+type pageData struct {
+	Username   string
+	Permission string
+	FullName   string
+	AvatarURL  string
+}
+
 // handleHealth returns JSON {"status":"ok"} for Docker HEALTHCHECK and integration tests.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -20,7 +28,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // --- Setup (first-run admin creation) ---
 
-type setupData struct{ Error string }
+type setupData struct {
+	pageData // always zero — no user logged in during setup
+	Error    string
+}
 
 func (s *Server) handleSetupGet(w http.ResponseWriter, r *http.Request) {
 	// If users exist, setup is complete — redirect to login.
@@ -71,7 +82,7 @@ func (s *Server) handleSetupPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission); err != nil {
+	if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission, user.FullName, user.AvatarURL); err != nil {
 		s.render(w, "setup", setupData{Error: "Session error"})
 		return
 	}
@@ -80,7 +91,10 @@ func (s *Server) handleSetupPost(w http.ResponseWriter, r *http.Request) {
 
 // --- Login / Logout ---
 
-type loginData struct{ Error string }
+type loginData struct {
+	pageData // always zero — no user logged in yet
+	Error    string
+}
 
 func (s *Server) handleLoginGet(w http.ResponseWriter, r *http.Request) {
 	if sess := auth.FromContext(r.Context()); sess != nil {
@@ -115,7 +129,7 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission); err != nil {
+	if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission, user.FullName, user.AvatarURL); err != nil {
 		http.Error(w, "session error", http.StatusInternalServerError)
 		return
 	}
@@ -160,8 +174,7 @@ func setLastDashboard(w http.ResponseWriter, value string) {
 // --- Dashboard ---
 
 type dashboardData struct {
-	Username   string
-	Permission string
+	pageData
 	Nodes      []db.Node
 	ActiveNode *db.Node
 }
@@ -172,6 +185,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	if sess != nil {
 		data.Username = sess.Username
 		data.Permission = sess.Permission
+		data.FullName = sess.FullName
+		data.AvatarURL = sess.AvatarURL
 	}
 	data.Nodes, _ = s.db.ListNodes(r.Context())
 	s.fillNodeInfo(data.Nodes)
