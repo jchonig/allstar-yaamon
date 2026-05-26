@@ -144,6 +144,10 @@ func (s *Server) Run() error {
 	r.Use(s.sessions.Middleware)
 	r.Use(s.validateSessionUser) // reject sessions for deleted accounts
 
+	// Favicon routes — check for custom favicon in DB before falling back to embedded.
+	r.Get("/favicon.ico", s.serveFavicon("favicon.ico", "image/x-icon"))
+	r.Get("/favicon.png", s.serveFavicon("favicon-256.png", "image/png"))
+
 	// Static files (served before auth middleware so login page CSS loads)
 	staticFS, err := fs.Sub(s.webFS, "web/static")
 	if err != nil {
@@ -194,6 +198,8 @@ func (s *Server) Run() error {
 	// Admin routes — admin+
 	r.Group(func(r chi.Router) {
 		r.Use(s.sessions.RequirePermission(db.PermAdmin))
+		r.Post("/api/admin/favicon", s.handleAPIUploadFavicon)
+		r.Delete("/api/admin/favicon", s.handleAPIDeleteFavicon)
 		r.Get("/admin/nodes", s.handleNodesPage)
 		r.Post("/api/nodes", s.handleAPICreateNode)
 		r.Put("/api/nodes/{id}", s.handleAPIUpdateNode)
