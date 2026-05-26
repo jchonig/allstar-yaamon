@@ -4,15 +4,18 @@ YAAMon is a modern, responsive web application for managing and monitoring [AllS
 
 **Key differences from AllScan and Allmon3:**
 
-- Manages multiple Asterisk/AMI nodes from one interface
+- Single static binary — no web server, no PHP, no Node.js required
 - Built-in TLS with automatic Let's Encrypt certificates
-- Single static binary — drop it on a Pi and run it
 - Docker and docker-compose ready
 - Multi-user with role-based access (superuser / admin / readwrite / readonly)
 - Parallel AllStarLink stats fetching — no waiting for one node to block another
 - Live dashboard with SSE-pushed updates (no page refresh needed)
 - Encrypted backup and restore
-- Dark, light, solarized, and high-contrast themes
+- Multiple color themes including high-contrast
+
+**Key differences from AllScan specifically:**
+
+- Manages multiple Asterisk/AMI nodes from one interface
 
 ---
 
