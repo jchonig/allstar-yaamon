@@ -78,6 +78,30 @@
 
 {{define "content"}}
 {{if not .ActiveNode}}
+{{if .Nodes}}
+{{/* Multiple nodes configured, none selected — summary grid */}}
+<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 mt-1">
+  {{range .Nodes}}
+  <div class="col">
+    <a href="/dashboard/{{.ID}}" class="text-decoration-none">
+      <div class="card h-100 summary-node-card">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <i id="summary-dot-{{.ID}}" class="bi bi-circle-fill text-secondary" style="font-size:.65rem" title="Connecting…"></i>
+            <h5 class="card-title mb-0 text-truncate" title="{{.Name}}">{{.Name}}</h5>
+          </div>
+          <p class="card-text mb-2"><code class="text-muted">{{.NodeNumber}}</code></p>
+          <p id="summary-links-{{.ID}}" class="card-text small text-muted mb-0">
+            <span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem"></span> Connecting…
+          </p>
+        </div>
+      </div>
+    </a>
+  </div>
+  {{end}}
+</div>
+{{else}}
+{{/* No nodes configured */}}
 <div class="alert alert-info mt-3">
   <i class="bi bi-info-circle me-2"></i>
   Welcome, <strong>{{.Username}}</strong>.
@@ -87,6 +111,7 @@
   No nodes have been configured yet.
   {{end}}
 </div>
+{{end}}
 {{else}}
 
 {{/* Active node header */}}
@@ -341,6 +366,28 @@
 {{end}}
 
 {{define "scripts"}}
+{{if and (not .ActiveNode) .Nodes}}
+<script>
+[{{range .Nodes}}{"id":{{.ID}},"num":"{{.NodeNumber}}"},{{end}}].forEach(n => {
+  const es = new EventSource('/sse/' + n.id);
+  es.onmessage = evt => {
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.type !== 'links') return;
+      const cnt = Object.keys(msg.links || {}).length;
+      const dot = document.getElementById('summary-dot-' + n.id);
+      const lnk = document.getElementById('summary-links-' + n.id);
+      if (dot) { dot.className = 'bi bi-circle-fill text-success'; dot.title = 'AMI connected'; }
+      if (lnk) lnk.textContent = cnt > 0 ? cnt + ' active link' + (cnt !== 1 ? 's' : '') : 'No active links';
+    } catch {}
+  };
+  es.onerror = () => {
+    const dot = document.getElementById('summary-dot-' + n.id);
+    if (dot) { dot.className = 'bi bi-circle-fill text-secondary'; dot.title = 'AMI disconnected'; }
+  };
+});
+</script>
+{{end}}
 {{if .ActiveNode}}
 <script>
 const NODE_ID = {{.ActiveNode.ID}};

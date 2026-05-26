@@ -211,6 +211,14 @@ th.sort-col.sort-active .sort-icon { opacity: 1; }
   opacity: 0.4;
 }
 
+/* Summary landing page node cards */
+a .summary-node-card {
+  transition: border-color 0.15s ease;
+}
+a:hover .summary-node-card {
+  border-color: var(--accent-blue);
+}
+
 /* Connected node row highlight */
 tr.row-connected {
   --bs-table-bg: color-mix(in srgb, var(--accent-green) 12%, transparent);

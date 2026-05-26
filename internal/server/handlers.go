@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -167,9 +168,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if data.ActiveNode == nil && len(data.Nodes) > 0 {
-		n := data.Nodes[0]
-		data.ActiveNode = &n
+	if data.ActiveNode == nil {
+		if len(data.Nodes) == 1 {
+			// Single-node install: go straight to that node's dashboard.
+			http.Redirect(w, r, fmt.Sprintf("/dashboard/%d", data.Nodes[0].ID), http.StatusFound)
+			return
+		}
+		// 0 nodes: show empty state; 2+ nodes: show summary (ActiveNode stays nil).
 	}
 
 	s.render(w, "dashboard", data)
