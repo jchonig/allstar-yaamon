@@ -89,10 +89,26 @@ services:
       - "443:443"
     volumes:
       - ./config:/etc/yaamon       # config.yaml lives here
-      - ./data:/data               # SQLite database lives here
+      - yaamon-data:/data          # named volume for the SQLite database
     environment:
       # Override any config.yaml value with YAAMON_<SECTION>_<KEY>
       - YAAMON_LOG_LEVEL=info
+
+volumes:
+  yaamon-data:
+```
+
+A bind-mount directory works too — replace `yaamon-data:/data` with `./data:/data` if you prefer the database stored at a known path on the host.
+
+To run on non-standard ports, map the host ports in `ports` and set matching values in `config.yaml` (or via environment variables):
+
+```yaml
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      - YAAMON_SERVER_HTTP_PORT=8080
+      - YAAMON_SERVER_HTTPS_PORT=8443
 ```
 
 ```bash
@@ -142,13 +158,13 @@ YAAMon has four TLS modes set in `config.yaml`:
 
 ## Building from Source
 
-Requires Go 1.24+.
+Builds run inside Docker — Go does not need to be installed on the host. Only Docker is required.
 
 ```bash
 git clone https://github.com/jchonig/allstar-yaamon.git
 cd allstar-yaamon
-make build          # builds ./yaamon for the current platform
-make test           # unit + integration tests
+make build          # builds a Docker image for the current platform
+make test           # unit + integration tests (also runs in Docker)
 make snapshot       # GoReleaser cross-compile snapshot (all platforms + .deb)
 ```
 
