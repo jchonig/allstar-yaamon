@@ -126,13 +126,23 @@ sudo asterisk -rx "module reload manager"
 
 ## Remote Nodes
 
-YAAMon can manage nodes on other machines over the network by pointing the AMI host at a remote IP address. **AMI transmits credentials in plain text** — never expose port 5038 directly to the internet.
+YAAMon can manage nodes on other machines by pointing the AMI host at a remote IP address. **AMI transmits credentials in plain text**, so how you secure the connection depends on where the remote node is.
 
-### Option A — VPN (recommended)
+### Nodes on the same local network
 
-Put the YAAMon host and the remote node on the same VPN (WireGuard or OpenVPN). Use the remote node's VPN IP address as the AMI host. No firewall holes needed in the remote node's public interface.
+Plain AMI over a trusted LAN is acceptable for many home setups, using `permit` to restrict access to the YAAMon host's IP (see [Minimum manager.conf entry](#minimum-managerconf-entry) above).
 
-### Option B — SSH tunnel
+AMI over TLS would be the right solution for untrusted local networks, but it is not yet implemented in YAAMon.
+
+### Nodes on a different network (internet-connected)
+
+**Never expose AMI port 5038 directly to the internet.** For nodes that are not on the same local network, the AMI connection must be secured with a tunnel.
+
+#### Option A — VPN (recommended)
+
+Put the YAAMon host and the remote node on the same VPN (WireGuard or OpenVPN). Use the remote node's VPN IP address as the AMI host. No firewall holes are needed on the remote node's public interface, and all traffic is encrypted.
+
+#### Option B — SSH tunnel
 
 On the YAAMon host, open a persistent tunnel to the remote node:
 
@@ -140,7 +150,7 @@ On the YAAMon host, open a persistent tunnel to the remote node:
 ssh -N -L 5038:localhost:5038 youruser@remote-node-ip
 ```
 
-Then set the AMI host to `127.0.0.1` and port `5038` in YAAMon. The tunnel forwards the local port to the remote Asterisk.
+Then set the AMI host to `127.0.0.1` and port `5038` in YAAMon. The tunnel forwards the local port to the remote Asterisk over an encrypted SSH connection.
 
 For a persistent tunnel, use `autossh`:
 
@@ -152,7 +162,7 @@ Or configure it as a systemd service.
 
 ### manager.conf on the remote node
 
-When allowing remote connections, restrict the AMI `permit` line to the YAAMon host's VPN or tunnel address:
+Restrict the AMI `permit` line to the YAAMon host's VPN or tunnel address:
 
 ```ini
 [yaamon]
@@ -160,9 +170,10 @@ secret = your-secret-here
 read = system,call,log,verbose,agent,user,config,dtmf,reporting,cdr,dialplan
 write = system,call,agent,user,config,command,reporting,originate
 permit = 10.0.0.2/255.255.255.255    ; YAAMon host VPN address only
+deny = 0.0.0.0/0.0.0.0
 ```
 
-Restart Asterisk after editing `manager.conf`:
+Reload the manager module after editing:
 
 ```bash
 sudo asterisk -rx "module reload manager"
