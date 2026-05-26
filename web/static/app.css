@@ -72,6 +72,11 @@ body {
   background-color: var(--navbar-bg);
   border-bottom: 1px solid var(--border);
 }
+/* Bootstrap inherits flex-wrap:wrap from .navbar into .container-fluid;
+   force single-row so items compress rather than wrap to new lines. */
+.navbar-yaamon > .container-fluid {
+  flex-wrap: nowrap;
+}
 
 .navbar-yaamon .navbar-brand,
 .navbar-yaamon .nav-link {
