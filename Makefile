@@ -1,5 +1,6 @@
-APP     := yaamon
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+APP      := yaamon
+VERSION  := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+REPO_URL := $(shell git remote get-url origin 2>/dev/null | sed 's|git@github.com:|https://github.com/|;s|\.git$$||')
 
 # Builder image for tests, lint, and deps — Debian-based so the race detector works.
 BUILDER := golang:1.26
@@ -36,11 +37,12 @@ build:
 	docker build \
 	  --build-arg TARGETOS=linux \
 	  --build-arg TARGETARCH=$(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') \
+	  --build-arg REPO_URL=$(REPO_URL) \
 	  -t yaamon:dev .
 
 ## Build multi-arch Docker image (requires buildx).
 build-multi:
-	docker buildx build --platform linux/amd64,linux/arm64 -t yaamon:dev .
+	docker buildx build --platform linux/amd64,linux/arm64 --build-arg REPO_URL=$(REPO_URL) -t yaamon:dev .
 
 ## Full test suite: pre-commit checks → unit tests → build image → integration tests → e2e.
 test: check test-unit build test-integration e2e
@@ -83,7 +85,7 @@ check: check-whitespace check-tidy
 ## Cross-compile for the dev container (linux, native arch, no CGO).
 ## While 'make watch' is running, this triggers a fast container restart instead of a full image rebuild.
 compile:
-	$(DOCKER_GO) sh -c "CGO_ENABLED=0 GOOS=linux go build -o test/yaamon ."
+	$(DOCKER_GO) sh -c "CGO_ENABLED=0 GOOS=linux go build -ldflags \"-s -w -X allstar-yaamon/internal/config.DefaultFooterURL=$(REPO_URL)\" -o test/yaamon ."
 
 ## Start the server in the background on http://localhost:8080.
 ## test/config/ is mounted read-only at /etc/yaamon; test/data/ persists the DB.

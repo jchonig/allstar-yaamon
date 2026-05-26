@@ -1,12 +1,13 @@
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
+ARG REPO_URL
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags "-s -w" -o yaamon .
+    go build -ldflags "-s -w -X allstar-yaamon/internal/config.DefaultFooterURL=${REPO_URL}" -o yaamon .
 
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata curl && \

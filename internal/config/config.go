@@ -7,6 +7,10 @@ import (
 	"github.com/spf13/viper"
 )
 
+// DefaultFooterURL is set at build time via -ldflags "-X allstar-yaamon/internal/config.DefaultFooterURL=...".
+// It is used as the default value for ui.footer_url when not specified in config.yaml.
+var DefaultFooterURL string
+
 type Config struct {
 	Server ServerConfig `mapstructure:"server"`
 	TLS    TLSConfig    `mapstructure:"tls"`
@@ -55,7 +59,7 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("db.path", "/etc/yaamon/yaamon.db")
 	v.SetDefault("log.level", "info")
 	v.SetDefault("ui.footer_text", "Yet Another Allstarlink MONitor (and favorites)")
-	v.SetDefault("ui.footer_url", "https://github.com/jchonig/allstar-yaamon")
+	v.SetDefault("ui.footer_url", DefaultFooterURL)
 	v.SetDefault("ui.footer_attribution", "N2VLV")
 	v.SetDefault("ui.footer_attribution_url", "https://n2vlv.net")
 
