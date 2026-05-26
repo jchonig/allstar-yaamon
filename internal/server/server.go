@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -109,6 +110,9 @@ func (s *Server) parseTemplates() error {
 		"siteFooterURL":            func() string { return ui.FooterURL },
 		"siteFooterAttribution":    func() string { return ui.FooterAttribution },
 		"siteFooterAttributionURL": func() string { return ui.FooterAttributionURL },
+		"isLocalAvatarURL": func(url string) bool {
+			return strings.HasPrefix(url, "/api/users/")
+		},
 	}
 	for _, page := range pages {
 		t, err := template.New("root").Funcs(funcMap).ParseFS(s.webFS,

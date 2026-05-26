@@ -133,6 +133,13 @@
             </div>
             <div class="text-danger small mt-1" id="avatar-error"></div>
           </div>
+          <div class="mb-2">
+            <label for="profile-avatar-url" class="form-label">Or link to an avatar URL</label>
+            <input type="url" class="form-control form-control-sm" id="profile-avatar-url"
+                   placeholder="https://example.com/photo.jpg"
+                   value="{{if not .AvatarURL}}{{else if not (isLocalAvatarURL .AvatarURL)}}{{.AvatarURL}}{{end}}">
+            <div class="form-text">Saving a URL removes any uploaded avatar.</div>
+          </div>
           <hr>
           <div class="mb-3">
             <label for="profile-fullname" class="form-label">Full Name</label>
@@ -255,6 +262,8 @@
       return;
     }
     const body = {full_name: document.getElementById('profile-fullname').value.trim()};
+    const avatarURL = document.getElementById('profile-avatar-url').value.trim();
+    if (avatarURL) body.avatar_url = avatarURL;
     if (newPw) { body.current_password = currentPw; body.new_password = newPw; }
     const btn = document.getElementById('profile-save-btn');
     btn.disabled = true;

@@ -49,9 +49,10 @@ func (s *Server) validateSessionUser(next http.Handler) http.Handler {
 	})
 }
 
-// handleAPIUpdateProfile updates the current user's full name and optionally password.
-// PUT /api/profile — avatar is managed separately via POST/DELETE /api/profile/avatar.
-// Body: {full_name, current_password (required if new_password set), new_password}
+// handleAPIUpdateProfile updates the current user's full name, optionally an external avatar
+// URL (which clears any uploaded avatar), and optionally the password.
+// PUT /api/profile
+// Body: {full_name, avatar_url (optional external URL), current_password, new_password}
 func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	sess := auth.FromContext(r.Context())
 	if sess == nil {
@@ -61,6 +62,8 @@ func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) 
 
 	var body struct {
 		FullName        string `json:"full_name"`
+		AvatarURL       string `json:"avatar_url"`       // external URL; clears uploaded avatar if non-empty
+		ClearAvatar     bool   `json:"clear_avatar"`     // true when explicitly clearing avatar URL
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`
 	}
@@ -95,12 +98,22 @@ func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	if err := s.db.UpdateUserProfile(r.Context(), sess.UserID, body.FullName, user.AvatarURL); err != nil {
+	// Determine the new avatar_url to store in the DB.
+	newAvatarURL := user.AvatarURL // default: keep existing
+	if body.AvatarURL != "" {
+		// External URL provided — clear any uploaded avatar data so URL takes effect.
+		_ = s.db.SetConfig(r.Context(), avatarConfigKey(sess.UserID), "")
+		newAvatarURL = body.AvatarURL
+	} else if body.ClearAvatar {
+		_ = s.db.SetConfig(r.Context(), avatarConfigKey(sess.UserID), "")
+		newAvatarURL = ""
+	}
+
+	if err := s.db.UpdateUserProfile(r.Context(), sess.UserID, body.FullName, newAvatarURL); err != nil {
 		http.Error(w, "update profile: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Re-fetch to get the latest state after updates.
 	user, err = s.db.GetUserByID(r.Context(), sess.UserID)
 	if err != nil {
 		http.Error(w, "user not found", http.StatusInternalServerError)
