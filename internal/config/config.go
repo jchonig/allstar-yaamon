@@ -55,7 +55,7 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("db.path", "/etc/yaamon/yaamon.db")
 	v.SetDefault("log.level", "info")
 	v.SetDefault("ui.footer_text", "Yet Another Allstarlink MONitor (and favorites)")
-	v.SetDefault("ui.footer_url", "")
+	v.SetDefault("ui.footer_url", "https://github.com/jchonig/allstar-yaamon")
 	v.SetDefault("ui.footer_attribution", "N2VLV")
 	v.SetDefault("ui.footer_attribution_url", "https://n2vlv.net")
 
