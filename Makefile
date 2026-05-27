@@ -77,7 +77,7 @@ check-whitespace:
 
 ## Verify go.mod and go.sum are tidy (fails if go mod tidy would make changes).
 check-tidy:
-	$(DOCKER_GO) sh -c "go mod tidy && git diff --exit-code -- go.mod go.sum"
+	$(DOCKER_GO) sh -c "go mod tidy && git diff --exit-code go.sum && git diff --exit-code go.mod"
 
 ## Run all pre-commit checks: whitespace and module tidy.
 check: check-whitespace check-tidy
