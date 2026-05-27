@@ -27,7 +27,7 @@ TEST_VIEWER_PASSWORD := viewerpassword
 .PHONY: all build build-multi test test-unit coverage lint deps check \
         check-whitespace check-tidy compile run stop logs watch \
         test-integration e2e e2e-dev snapshot \
-        install-service uninstall-service version clean cleanall
+        install-hooks install-service uninstall-service version clean cleanall
 
 ## Default — build the yaamon Docker image for the current platform.
 all: build
@@ -81,6 +81,12 @@ check-tidy:
 
 ## Run all pre-commit checks: whitespace and module tidy.
 check: check-whitespace check-tidy
+
+## Install git pre-commit hook that runs 'make check' before every commit.
+install-hooks:
+	@printf '#!/bin/sh\nmake -C "$(CURDIR)" check\n' > .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "pre-commit hook installed."
 
 ## Cross-compile for the dev container (linux, native arch, no CGO).
 ## While 'make watch' is running, this triggers a fast container restart instead of a full image rebuild.
