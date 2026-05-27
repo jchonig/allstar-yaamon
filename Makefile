@@ -27,6 +27,7 @@ TEST_VIEWER_PASSWORD := viewerpassword
 .PHONY: all build build-multi test test-unit coverage lint deps check \
         check-whitespace check-tidy compile run stop logs watch \
         test-integration e2e e2e-dev snapshot \
+        test-deb-integration test-deb \
         install-hooks install-service uninstall-service version clean cleanall
 
 ## Default — build the yaamon Docker image for the current platform.
@@ -210,6 +211,57 @@ e2e-dev:
 ## Local GoReleaser snapshot (builds all release artifacts without publishing).
 snapshot:
 	goreleaser release --snapshot --clean
+
+## Run integration tests against the installed .deb package.
+## Expects a dist/*_linux_amd64.deb to already exist (run 'make snapshot' or the goreleaser CI step first).
+test-deb-integration:
+	@DEB=$$(ls dist/*_linux_amd64.deb 2>/dev/null | head -1) && \
+	test -n "$$DEB" || { echo "No amd64 .deb in dist/ — run 'make snapshot' first"; exit 1; }; \
+	docker build --build-arg DEB=$$DEB -t yaamon:deb-test -f test/Dockerfile.deb .; \
+	docker rm -f $(TEST_SUT) 2>/dev/null; \
+	docker network rm $(TEST_NET) 2>/dev/null; \
+	mkdir -p test/data && chmod a+w test/data; \
+	docker network create $(TEST_NET); \
+	docker run -d \
+	  --name $(TEST_SUT) \
+	  --network $(TEST_NET) \
+	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
+	  -v "$(CURDIR)/test/data:/var/lib/yaamon" \
+	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
+	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
+	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
+	  yaamon:deb-test; \
+	echo "Waiting for .deb server..."; \
+	if ! timeout 30 sh -c 'until docker exec $(TEST_SUT) curl -sf http://localhost/health >/dev/null 2>&1; do sleep 1; done'; then \
+	  echo "Server did not start in 30s — container logs:"; \
+	  docker logs $(TEST_SUT); \
+	  docker stop $(TEST_SUT) >/dev/null 2>&1; \
+	  docker rm   $(TEST_SUT) >/dev/null 2>&1; \
+	  docker network rm $(TEST_NET) >/dev/null 2>&1; \
+	  exit 1; \
+	fi; \
+	echo "Server ready. Running integration tests against .deb..."; \
+	docker run --rm \
+	  --network $(TEST_NET) \
+	  -v "$(CURDIR):/src" \
+	  -v "$(GOMODCACHE):/go/pkg/mod" \
+	  -v "$(GOCACHE):/root/.cache/go-build" \
+	  -w /src \
+	  -e YAAMON_TEST_URL=http://$(TEST_SUT):80 \
+	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
+	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
+	  $(BUILDER) \
+	  go test ./integration_tests/... -v -tags=integration -timeout=120s; \
+	EXIT=$$?; \
+	docker stop $(TEST_SUT) >/dev/null 2>&1; \
+	docker rm   $(TEST_SUT) >/dev/null 2>&1; \
+	docker network rm $(TEST_NET) >/dev/null 2>&1; \
+	exit $$EXIT
+
+## Build a GoReleaser snapshot (.deb only, no Docker) and run integration tests against it.
+test-deb:
+	goreleaser release --snapshot --clean --skip=docker
+	$(MAKE) test-deb-integration
 
 ## Install and enable systemd service on a Linux host (not for Docker installs).
 install-service:

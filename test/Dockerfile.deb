@@ -1,0 +1,12 @@
+FROM ubuntu:22.04
+ARG DEB
+COPY ${DEB} /tmp/yaamon.deb
+RUN apt-get update -q && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      curl /tmp/yaamon.deb && \
+    rm -rf /var/lib/apt/lists/* /tmp/yaamon.deb
+EXPOSE 80
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s \
+    CMD curl -sf http://localhost:80/health || exit 1
+USER yaamon
+ENTRYPOINT ["/usr/bin/yaamon", "serve"]

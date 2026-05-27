@@ -170,9 +170,10 @@ Builds run inside Docker — Go does not need to be installed on the host. Only 
 ```bash
 git clone https://github.com/jchonig/allstar-yaamon.git
 cd allstar-yaamon
-make build          # builds a Docker image for the current platform
-make test           # unit + integration tests (also runs in Docker)
-make snapshot       # GoReleaser cross-compile snapshot (all platforms + .deb)
+make build               # builds a Docker image for the current platform
+make test                # unit + integration tests (also runs in Docker)
+make snapshot            # GoReleaser cross-compile snapshot (all platforms + .deb)
+make test-deb            # build snapshot .deb and run integration tests against it
 ```
 
 ---
