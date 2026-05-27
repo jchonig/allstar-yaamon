@@ -77,7 +77,7 @@ dockers:
   - image_templates:
       - "ghcr.io/jchonig/yaamon:{{ .Version }}-amd64"
     goarch: amd64
-    dockerfile: Dockerfile
+    dockerfile: Dockerfile.release
     use: buildx
     extra_files:
       - docker-entrypoint.sh
@@ -88,7 +88,7 @@ dockers:
   - image_templates:
       - "ghcr.io/jchonig/yaamon:{{ .Version }}-arm64"
     goarch: arm64
-    dockerfile: Dockerfile
+    dockerfile: Dockerfile.release
     use: buildx
     extra_files:
       - docker-entrypoint.sh
