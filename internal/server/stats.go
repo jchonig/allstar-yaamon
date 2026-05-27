@@ -48,7 +48,9 @@ func (c *statsCache) update(results map[string]aslstats.NodeStats) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for k, v := range results {
-		c.stats[k] = v
+		if v.Error == "" {
+			c.stats[k] = v
+		}
 	}
 }
 
@@ -77,7 +79,7 @@ func (s *Server) pollStats(ctx context.Context) {
 	}
 	for _, n := range nodes {
 		if n.Enabled && s.sseBroker.HasSubscribers(n.ID) {
-			s.pollNodeStats(ctx, n.ID)
+			s.pollNodeStats(ctx, n.ID, false)
 		}
 	}
 }
@@ -85,7 +87,9 @@ func (s *Server) pollStats(ctx context.Context) {
 // pollNodeStats fetches fresh ASL stats for a single node's favorites, updates
 // the cache, and publishes an SSE event. Called both by the periodic poller
 // (for nodes with active viewers) and immediately when a client connects.
-func (s *Server) pollNodeStats(ctx context.Context, nodeID int64) {
+// When direct is true (SSE connect path) the shared rate limiter is bypassed
+// so the first load is fast; periodic background polls use the rate limiter.
+func (s *Server) pollNodeStats(ctx context.Context, nodeID int64, direct bool) {
 	n, err := s.db.GetNodeByID(ctx, nodeID)
 	if err != nil {
 		return
@@ -94,18 +98,38 @@ func (s *Server) pollNodeStats(ctx context.Context, nodeID int64) {
 	if err != nil {
 		return
 	}
-	// Always include the home node's own number.
+	// Always include the home node's own number plus all favorites.
+	seen := make(map[string]bool)
 	nums := make([]string, 0, len(favs)+1)
-	nums = append(nums, n.NodeNumber)
-	for _, f := range favs {
-		nums = append(nums, f.NodeNumber)
+	add := func(num string) {
+		if !seen[num] {
+			seen[num] = true
+			nums = append(nums, num)
+		}
 	}
-	results := s.fetcher.FetchAll(ctx, nums)
+	add(n.NodeNumber)
+	for _, f := range favs {
+		add(f.NodeNumber)
+	}
+	// Also include currently active linked nodes so the Active Links panel
+	// always shows fresh stats (connected_links, callsign) without waiting
+	// for the node to appear in favorites.
+	if linked, ok := s.linksCache.get(nodeID); ok {
+		for nodeNum := range linked {
+			add(nodeNum)
+		}
+	}
+	var results map[string]aslstats.NodeStats
+	if direct {
+		results = s.fetcher.FetchDirect(ctx, nums, len(nums), 8)
+	} else {
+		results = s.fetcher.FetchAll(ctx, nums)
+	}
 	s.statsCache.update(results)
 
 	subset := make(map[string]aslstats.NodeStats, len(nums))
 	for _, num := range nums {
-		if st, ok := results[num]; ok {
+		if st, ok := results[num]; ok && st.Error == "" {
 			subset[num] = st
 		}
 	}
@@ -135,7 +159,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger an immediate fresh stats fetch for this node in the background.
 	// Because we subscribed above, the result will arrive on ch.
-	go s.pollNodeStats(r.Context(), nodeID)
+	go s.pollNodeStats(r.Context(), nodeID, true)
 
 	// Send cached state as the initial SSE burst while the fresh fetch is in flight.
 	var initial [][]byte

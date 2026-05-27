@@ -21,6 +21,9 @@ go.work.sum
 # Env
 .env
 
+# Claude Code local settings
+.claude/settings.local.json
+
 # YAAMon build artifacts
 dist/
 /yaamon

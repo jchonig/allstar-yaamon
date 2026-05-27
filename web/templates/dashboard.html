@@ -591,7 +591,10 @@ function connectSSE() {
   if (sseSource) sseSource.close();
   sseSource = new EventSource(`/sse/${NODE_ID}`);
   document.getElementById('ami-badge')?.classList.add('polling');
-  document.getElementById('asl-badge')?.classList.add('polling');
+  // Only dim the ASL badge if we don't already have fresh cached data.
+  if (!statsData[NODE_NUM] || isStale(statsData[NODE_NUM].fetched_at)) {
+    document.getElementById('asl-badge')?.classList.add('polling');
+  }
   sseSource.onmessage = evt => {
     try {
       const msg = JSON.parse(evt.data);
@@ -750,16 +753,18 @@ function renderActiveLinks() {
       : '';
 
     const since = fmtAge(linksSince[nodeNum]);
+    const lcnt  = s.connected_links != null ? s.connected_links : null;
+    const lcntColor = lcnt > 0 ? 'color:var(--accent-blue)' : '';
+    const callTip = [desc, loc].filter(Boolean).join(' — ');
     return `<tr>
       <td class="text-center" style="width:1.5rem">
         <i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem" title="${dotTitle}"></i>
       </td>
       <td style="width:6rem"><code>${esc(nodeNum)}</code></td>
-      <td>${esc(call)}</td>
-      <td class="text-truncate d-none d-md-table-cell" style="max-width:200px" title="${esc(desc)}">${esc(desc || '—')}</td>
-      <td class="text-truncate d-none d-md-table-cell" style="max-width:150px" title="${esc(loc)}">${esc(loc || '—')}</td>
+      <td title="${esc(callTip)}" style="${callTip ? 'cursor:help' : ''}">${esc(call || '—')}</td>
       <td class="text-muted small">${typeLabel}</td>
       <td class="text-muted small d-none d-md-table-cell">${since}</td>
+      <td class="d-none d-md-table-cell small" style="${lcntColor}">${lcnt != null ? lcnt : '—'}</td>
       <td class="text-end text-nowrap">${actions}</td>
     </tr>`;
   }).join('');
@@ -770,10 +775,9 @@ function renderActiveLinks() {
         <th style="width:1.5rem"></th>
         <th style="width:6rem">Node</th>
         <th>Callsign</th>
-        <th class="d-none d-md-table-cell">Description</th>
-        <th class="d-none d-md-table-cell">Location</th>
         <th>Type</th>
         <th class="d-none d-md-table-cell">Since</th>
+        <th class="d-none d-md-table-cell" title="Connected links">Links</th>
         <th></th>
       </tr>
     </thead>

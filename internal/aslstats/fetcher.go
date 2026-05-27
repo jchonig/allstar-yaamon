@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -189,10 +190,10 @@ func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
 		} `json:"node"`
 		Stats struct {
 			Data struct {
-				Keyed       bool     `json:"keyed"`
-				TotalTxTime string   `json:"totaltxtime"` // string-encoded seconds
-				TotalKeyups string   `json:"totalkeyups"` // string-encoded count
-				Links       []string `json:"links"`
+				Keyed       bool            `json:"keyed"`
+				TotalTxTime json.RawMessage `json:"totaltxtime"` // string or number
+				TotalKeyups json.RawMessage `json:"totalkeyups"` // string or number
+				Links       json.RawMessage `json:"links"`       // array or 0 when empty
 			} `json:"data"`
 		} `json:"stats"`
 	}
@@ -205,13 +206,19 @@ func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
 	s.Description = raw.Node.NodeFrequency
 	s.Web = raw.Node.AccessWebtransceiver != "" && raw.Node.AccessWebtransceiver != "0"
 	s.Keyed = raw.Stats.Data.Keyed
-	if v, err := strconv.ParseFloat(raw.Stats.Data.TotalTxTime, 64); err == nil {
+	if v, err := strconv.ParseFloat(strings.Trim(string(raw.Stats.Data.TotalTxTime), `"`), 64); err == nil {
 		s.TotalTxTime = v
 	}
-	if v, err := strconv.Atoi(raw.Stats.Data.TotalKeyups); err == nil {
+	if v, err := strconv.Atoi(strings.Trim(string(raw.Stats.Data.TotalKeyups), `"`)); err == nil {
 		s.TotalKeyups = v
 	}
-	s.LinkedNodes = raw.Stats.Data.Links
-	s.ConnectedLinks = len(raw.Stats.Data.Links)
+	// links is an array of node number strings when connected, or the integer 0 when empty.
+	if len(raw.Stats.Data.Links) > 0 && raw.Stats.Data.Links[0] == '[' {
+		var links []string
+		if err := json.Unmarshal(raw.Stats.Data.Links, &links); err == nil {
+			s.LinkedNodes = links
+			s.ConnectedLinks = len(links)
+		}
+	}
 	return s
 }
