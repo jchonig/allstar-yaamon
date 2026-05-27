@@ -18,6 +18,8 @@
 
 ## First-Time Setup
 
+<!-- IMAGE: /setup page — username and password fields, "Create Account" button -->
+
 When you open YAAMon for the first time — before any users exist — you are redirected to `/setup`. Enter a username and password for your initial superuser account. This account has full administrative access.
 
 After creating the account you are taken to the login page. Sign in with the credentials you just created.
@@ -43,6 +45,8 @@ A newly installed system requires at least one superuser. You cannot delete or d
 
 ## Managing Users
 
+![Managing Users](docs/images/users.png)
+
 Go to **Admin → Users** (top-right menu, admin and superuser accounts only).
 
 ### Adding a user
@@ -67,9 +71,13 @@ Users can change their own password from [My Profile](#your-profile). Admins and
 
 ## Adding Nodes
 
+![Adding Nodes](docs/images/nodes.png)
+
 Go to **Admin → Nodes** (top-right menu, admin and superuser accounts only).
 
 ### Importing from Allmon3
+
+<!-- IMAGE: Allmon3 import modal — checklist of parsed nodes with "existing" badges, Import Selected button -->
 
 If you are migrating from Allmon3, click **Import from Allmon3** and select your `allmon3.ini` file (usually `/etc/allmon3/allmon3.ini`). YAAMon parses the file and lists all nodes found. Nodes already present in YAAMon are unchecked by default. Check the ones you want to import and click **Import Selected**.
 
@@ -191,6 +199,8 @@ sudo asterisk -rx "module reload manager"
 
 ## Favorites
 
+![Favorites](docs/images/favorites.png)
+
 Favorites are the nodes you frequently connect to, organized per node. They appear as quick-connect buttons on the dashboard.
 
 ### Adding favorites
@@ -223,6 +233,8 @@ AllScan labels often follow the pattern `CALLSIGN Description` — YAAMon recogn
 
 ## The Dashboard
 
+![The Dashboard](docs/images/dashboard-node.png)
+
 The dashboard is the main view. It shows live stats for your connected node(s) and lets you connect and disconnect.
 
 ### Selecting a node
@@ -240,6 +252,8 @@ The dashboard uses Server-Sent Events (SSE) to push live stats — you do not ne
 ---
 
 ## Overview Page
+
+![Overview Page](docs/images/overview.png)
 
 The Overview page is shown when you have more than one node and click **Overview** in the nav. It displays a summary card for each node showing:
 
@@ -273,11 +287,15 @@ Your favorites for this node are shown as buttons, organized by group. Buttons f
 
 ### Network graph
 
+<!-- IMAGE: Network graph — interactive bubble chart showing connected nodes with callsigns, edges indicating link direction -->
+
 Click the graph icon on any connection row to open an interactive network graph showing how the connected nodes link to each other. The graph is also available as a full-page view.
 
 ---
 
 ## Your Profile
+
+![My Profile](docs/images/profile.png)
 
 Click your name or avatar in the top-right corner and choose **My Profile**.
 
@@ -302,6 +320,8 @@ Enter your current password and a new password to change it. Passwords must be a
 
 ## Themes
 
+![Theme Switcher](docs/images/themes.png)
+
 Click the half-circle icon in the top-right corner to switch themes:
 
 | Theme | Description |
@@ -317,6 +337,8 @@ Your choice is saved in browser local storage and persists across sessions.
 ---
 
 ## Backup and Restore
+
+<!-- IMAGE: Backup page — "Download Backup" button with optional passphrase field, Restore upload section -->
 
 Go to **Admin → Backup** (admin and superuser accounts only).
 

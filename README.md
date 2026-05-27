@@ -2,6 +2,8 @@
 
 YAAMon is a modern, responsive web application for managing and monitoring [AllStarLink](https://allstarlink.org) amateur radio nodes. It replaces the PHP/Apache-based [AllScan](https://github.com/davidgsd/AllScan) and [Allmon3](https://github.com/AllStarLink/Allmon3) with a single self-contained binary that needs no web server, no PHP runtime, and no external database engine. The interface works on desktops, tablets, and phones.
 
+![YAAMon dashboard](docs/images/dashboard.png)
+
 **Key differences from AllScan and Allmon3:**
 
 - Single static binary — no web server, no PHP, no Node.js required
@@ -155,7 +157,9 @@ YAAMon has four TLS modes set in `config.yaml`:
 | `disabled` | HTTP only — local LAN, behind a reverse proxy |
 | `self_signed` | Generates a self-signed cert on first run — quick setup, browser warning |
 | `provided` | Supply your own `cert_file` and `key_file` |
-| `acme` | Automatic Let's Encrypt via ACME — requires a public domain name and port 443 reachable from the internet |
+| `acme` | Automatic Let's Encrypt via ACME — requires a public domain name and port 80 reachable from the internet |
+
+> **Planned**: DNS-01 ACME challenge support (no port 80 required, wildcard certificates) and automatic hot-reload of externally-managed certificates (e.g. from certbot) are planned for a future release.
 
 ---
 
