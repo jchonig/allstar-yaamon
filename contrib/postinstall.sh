@@ -5,8 +5,8 @@ if ! id -u yaamon >/dev/null 2>&1; then
     useradd --system --no-create-home --shell /usr/sbin/nologin yaamon
 fi
 
-mkdir -p /var/lib/yaamon
-chown yaamon:yaamon /var/lib/yaamon
+mkdir -p /etc/yaamon
+chown yaamon:yaamon /etc/yaamon
 
 systemctl daemon-reload
 systemctl enable yaamon
