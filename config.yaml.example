@@ -16,9 +16,9 @@ tls:
   # acme_cache_dir: /etc/yaamon/acme
 
 db:
-  # Use a volume-mounted path so the database survives container restarts.
-  # Docker: -v /host/data:/data -e YAAMON_DB_PATH=/data/yaamon.db
-  path: /data/yaamon.db
+  # deb install: /var/lib/yaamon/yaamon.db (FHS 3.0 — mutable state in /var/lib)
+  # Docker:      override with YAAMON_DB_PATH=/data/yaamon.db and mount a volume
+  path: /var/lib/yaamon/yaamon.db
 
 log:
   level: info                # debug | info | warn | error
