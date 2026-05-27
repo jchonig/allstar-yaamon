@@ -5,8 +5,11 @@ RUN apt-get update -q && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       curl /tmp/yaamon.deb && \
     rm -rf /var/lib/apt/lists/* /tmp/yaamon.deb
+COPY docker-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 80
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s \
     CMD curl -sf http://localhost:80/health || exit 1
 USER yaamon
-ENTRYPOINT ["/usr/bin/yaamon", "serve"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/usr/bin/yaamon", "serve"]
