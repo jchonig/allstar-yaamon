@@ -8,8 +8,31 @@ permissions:
   packages: write     # required to push images to ghcr.io
 
 jobs:
+  # Build the snapshot .deb and run integration tests against it before publishing.
+  # This catches goreleaser config regressions with the actual release artifacts.
+  test-deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+      - name: Build snapshot (deb only, skip Docker)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --snapshot --clean --skip=docker
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run integration tests against .deb
+        run: make test-deb-integration
+
   goreleaser:
     runs-on: ubuntu-latest
+    needs: test-deb
     steps:
       - uses: actions/checkout@v4
         with:
