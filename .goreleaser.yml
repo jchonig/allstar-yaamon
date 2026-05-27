@@ -1,0 +1,105 @@
+version: 2
+
+project_name: allstar-yaamon
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: yaamon
+    main: .
+    binary: yaamon
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X allstar-yaamon/internal/config.DefaultFooterURL=https://github.com/jchonig/allstar-yaamon
+
+archives:
+  - id: yaamon
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: tar.gz
+    files:
+      - README.md
+      - LICENSE
+      - config.yaml.example
+      - contrib/yaamon.service
+
+nfpms:
+  - id: yaamon-deb
+    package_name: yaamon
+    vendor: YAAMon Contributors
+    homepage: https://github.com/jchonig/allstar-yaamon
+    maintainer: Jeffrey C Honig <jch@honig.net>
+    description: AllStar multi-node management and monitoring web app
+    license: BSD-3-Clause
+    formats:
+      - deb
+    contents:
+      - src: config.yaml.example
+        dst: /etc/yaamon/config.yaml
+        type: config|noreplace
+      - src: contrib/yaamon.service
+        dst: /lib/systemd/system/yaamon.service
+    scripts:
+      postinstall: contrib/postinstall.sh
+      preremove: contrib/preremove.sh
+    overrides:
+      deb:
+        dependencies:
+          - systemd
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  draft: false
+  prerelease: auto
+  name_template: "YAAMon {{.Version}}"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/jchonig/yaamon:{{ .Version }}-amd64"
+    goarch: amd64
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/jchonig/allstar-yaamon"
+  - image_templates:
+      - "ghcr.io/jchonig/yaamon:{{ .Version }}-arm64"
+    goarch: arm64
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/jchonig/allstar-yaamon"
+
+docker_manifests:
+  - name_template: "ghcr.io/jchonig/yaamon:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/jchonig/yaamon:{{ .Version }}-amd64"
+      - "ghcr.io/jchonig/yaamon:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/jchonig/yaamon:latest"
+    image_templates:
+      - "ghcr.io/jchonig/yaamon:{{ .Version }}-amd64"
+      - "ghcr.io/jchonig/yaamon:{{ .Version }}-arm64"
+    skip_push: "{{ .Prerelease }}"

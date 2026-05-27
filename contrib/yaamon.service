@@ -1,0 +1,28 @@
+[Unit]
+Description=YAAMon — AllStar Node Management
+Documentation=https://github.com/jchonig/allstar-yaamon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=yaamon
+Group=yaamon
+ExecStart=/usr/bin/yaamon serve
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+
+# Allow binding to ports 80 and 443 without root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/yaamon /etc/yaamon
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
