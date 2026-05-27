@@ -13,7 +13,7 @@ services:
       - "8080:80"
     volumes:
       - ./config:/etc/yaamon:ro
-      - ./data:/data
+      - ./data:/var/lib/yaamon
     environment:
       YAAMON_STATE_FILE: /etc/yaamon/state.yaml
       TEST_ADMIN_PASSWORD: ${TEST_ADMIN_PASSWORD:-testpassword}

@@ -400,7 +400,7 @@ services:
     image: ghcr.io/jchonig/allstar-yaamon:latest
     volumes:
       - ./config:/etc/yaamon
-      - yaamon-data:/data
+      - yaamon-data:/var/lib/yaamon
     environment:
       - YAAMON_STATE_FILE=/etc/yaamon/state.yaml
 ```

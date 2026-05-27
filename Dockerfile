@@ -12,8 +12,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata curl && \
     adduser -D -s /sbin/nologin -u 1000 yaamon && \
-    mkdir -p /etc/yaamon /data && \
-    chown yaamon:yaamon /etc/yaamon /data
+    mkdir -p /etc/yaamon /var/lib/yaamon && \
+    chown yaamon:yaamon /etc/yaamon /var/lib/yaamon
 COPY --from=builder /build/yaamon /usr/local/bin/yaamon
 COPY docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

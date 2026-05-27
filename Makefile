@@ -94,7 +94,7 @@ compile:
 	$(DOCKER_GO) sh -c "CGO_ENABLED=0 GOOS=linux go build -ldflags \"-s -w -X allstar-yaamon/internal/config.DefaultFooterURL=$(REPO_URL)\" -o test/yaamon ."
 
 ## Start the server in the background on http://localhost:8080.
-## test/config/ is mounted read-only at /etc/yaamon; test/data/ persists the DB.
+## test/config/ is mounted read-only at /etc/yaamon; test/data/ persists the DB at /var/lib/yaamon.
 ## Override credentials: TEST_ADMIN_PASSWORD=xxx TEST_VIEWER_PASSWORD=xxx make run
 run:
 	mkdir -p test/data
@@ -124,7 +124,7 @@ test-integration:
 	  --name $(TEST_SUT) \
 	  --network $(TEST_NET) \
 	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
-	  -v "$(CURDIR)/test/data:/data" \
+	  -v "$(CURDIR)/test/data:/var/lib/yaamon" \
 	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
 	  -e TEST_ADMIN_PASSWORD=testpassword \
 	  -e TEST_VIEWER_PASSWORD=viewerpassword \
@@ -166,7 +166,7 @@ e2e: build
 	  --name $(TEST_SUT) \
 	  --network $(TEST_NET) \
 	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
-	  -v "$(CURDIR)/test/data:/data" \
+	  -v "$(CURDIR)/test/data:/var/lib/yaamon" \
 	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
 	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
 	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \

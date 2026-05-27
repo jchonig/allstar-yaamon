@@ -1,7 +1,7 @@
 # yaamon configuration — copy to config.yaml and customise.
 # With Docker: mount at /etc/yaamon/config.yaml
 # Any setting can be overridden with an env var: YAAMON_<SECTION>_<KEY>
-#   e.g. YAAMON_DB_PATH=/data/yaamon.db
+#   e.g. YAAMON_DB_PATH=/var/lib/yaamon/yaamon.db
 
 server:
   http_port: 80
@@ -17,7 +17,7 @@ tls:
 
 db:
   # deb install: /var/lib/yaamon/yaamon.db (FHS 3.0 — mutable state in /var/lib)
-  # Docker:      override with YAAMON_DB_PATH=/data/yaamon.db and mount a volume
+  # Docker:      override with YAAMON_DB_PATH=/var/lib/yaamon/yaamon.db and mount a volume at /var/lib/yaamon
   path: /var/lib/yaamon/yaamon.db
 
 log:

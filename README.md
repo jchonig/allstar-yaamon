@@ -76,11 +76,11 @@ docker run -d \
   --restart unless-stopped \
   -p 80:80 \
   -v /etc/yaamon:/etc/yaamon \
-  -v /data/yaamon:/data \
+  -v /var/lib/yaamon:/var/lib/yaamon \
   ghcr.io/jchonig/allstar-yaamon:latest
 ```
 
-Mount your config file at `/etc/yaamon/config.yaml` and a persistent data volume at `/data`. The database is created at `/data/yaamon.db` on first run.
+Mount your config file at `/etc/yaamon/config.yaml` and a persistent data volume at `/var/lib/yaamon`. The database is created at `/var/lib/yaamon/yaamon.db` on first run.
 
 ### Option 4 — docker-compose
 
@@ -94,7 +94,7 @@ services:
       - "443:443"
     volumes:
       - ./config:/etc/yaamon       # config.yaml lives here
-      - yaamon-data:/data          # named volume for the SQLite database
+      - yaamon-data:/var/lib/yaamon  # named volume for the SQLite database
     environment:
       # Override any config.yaml value with YAAMON_<SECTION>_<KEY>
       - YAAMON_LOG_LEVEL=info
@@ -103,7 +103,7 @@ volumes:
   yaamon-data:
 ```
 
-A bind-mount directory works too — replace `yaamon-data:/data` with `./data:/data` if you prefer the database stored at a known path on the host.
+A bind-mount directory works too — replace `yaamon-data:/var/lib/yaamon` with `./data:/var/lib/yaamon` if you prefer the database stored at a known path on the host.
 
 To run on non-standard ports, map the host ports in `ports` and set matching values in `config.yaml` (or via environment variables):
 
@@ -136,13 +136,13 @@ tls:
   mode: disabled             # disabled | self_signed | provided | acme
 
 db:
-  path: /data/yaamon.db
+  path: /var/lib/yaamon/yaamon.db
 
 log:
   level: info
 ```
 
-Any config value can be overridden with an environment variable using the pattern `YAAMON_<SECTION>_<KEY>` — for example `YAAMON_DB_PATH=/data/yaamon.db`.
+Any config value can be overridden with an environment variable using the pattern `YAAMON_<SECTION>_<KEY>` — for example `YAAMON_DB_PATH=/var/lib/yaamon/yaamon.db`.
 
 See [`config.yaml.example`](config.yaml.example) for all options including TLS and UI footer customization.
 
