@@ -11,7 +11,10 @@ import (
 
 func TestAdminPagesLoad(t *testing.T) {
 	c := adminClient(t)
-	pages := []string{"/dashboard", "/admin/nodes", "/admin/users", "/admin/backup"}
+	nid := seedNodeID(t)
+	// Use the node-specific dashboard URL; /dashboard redirects to /dashboard/{id}
+	// for single-node installs so we go directly to avoid following redirects.
+	pages := []string{fmt.Sprintf("/dashboard/%d", nid), "/admin/nodes", "/admin/users", "/admin/backup"}
 	for _, path := range pages {
 		t.Run(path, func(t *testing.T) {
 			resp := do(t, c, http.MethodGet, path, nil)
@@ -28,10 +31,11 @@ func TestAdminPagesLoad(t *testing.T) {
 
 func TestViewerCanAccessDashboard(t *testing.T) {
 	c := viewerClient(t)
-	resp := do(t, c, http.MethodGet, "/dashboard", nil)
+	nid := seedNodeID(t)
+	resp := do(t, c, http.MethodGet, fmt.Sprintf("/dashboard/%d", nid), nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("viewer /dashboard: expected 200, got %d", resp.StatusCode)
+		t.Errorf("viewer /dashboard/%d: expected 200, got %d", nid, resp.StatusCode)
 	}
 }
 

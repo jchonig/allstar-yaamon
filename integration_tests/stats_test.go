@@ -67,8 +67,8 @@ func TestConnectReturnsJSON(t *testing.T) {
 	nid := seedNodeID(t)
 
 	resp := do(t, c, http.MethodPost, fmt.Sprintf("/api/nodes/%d/connect", nid), map[string]any{
-		"node_number": "12345",
-		"exclusive":   false,
+		"target":    "12345",
+		"exclusive": false,
 	})
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
@@ -91,8 +91,8 @@ func TestDisconnectReturnsJSON(t *testing.T) {
 	nid := seedNodeID(t)
 
 	resp := do(t, c, http.MethodPost, fmt.Sprintf("/api/nodes/%d/disconnect", nid), map[string]any{
-		"node_number": "12345",
-		"permanent":   false,
+		"target":    "12345",
+		"permanent": false,
 	})
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
@@ -113,7 +113,7 @@ func TestViewerCannotConnect(t *testing.T) {
 	nid := seedNodeID(t)
 
 	resp := do(t, c, http.MethodPost, fmt.Sprintf("/api/nodes/%d/connect", nid), map[string]any{
-		"node_number": "12345",
+		"target": "12345",
 	})
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {

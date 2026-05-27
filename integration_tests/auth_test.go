@@ -22,7 +22,9 @@ func TestHealth(t *testing.T) {
 }
 
 func TestRootRedirect(t *testing.T) {
-	resp := get(t, "/")
+	// Authenticated GET / should redirect to /dashboard (302 Found).
+	c := adminClient(t)
+	resp := do(t, c, http.MethodGet, "/", nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("expected 302, got %d", resp.StatusCode)
@@ -42,8 +44,8 @@ func TestLoginPageLoads(t *testing.T) {
 
 func TestLoginSuccess(t *testing.T) {
 	c := adminClient(t) // panics via t.Fatalf if login fails
-	// Verify the session works — /dashboard should return 200.
-	resp := do(t, c, http.MethodGet, "/dashboard", nil)
+	// Verify the session works — health endpoint (no redirect) should return 200.
+	resp := do(t, c, http.MethodGet, "/health", nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200 after login, got %d", resp.StatusCode)
@@ -94,22 +96,23 @@ func TestLogout(t *testing.T) {
 	if loc := resp.Header.Get("Location"); loc != "/login" {
 		t.Errorf("expected redirect to /login, got %q", loc)
 	}
-	// Confirm session is cleared — /dashboard should now redirect.
+	// Confirm session is cleared — /dashboard should now redirect (303 from RequirePermission).
 	resp2 := do(t, c, http.MethodGet, "/dashboard", nil)
 	defer resp2.Body.Close()
-	if resp2.StatusCode != http.StatusFound {
+	if resp2.StatusCode != http.StatusSeeOther {
 		t.Errorf("after logout, /dashboard should redirect, got %d", resp2.StatusCode)
 	}
 }
 
 func TestUnauthenticatedRedirectsToLogin(t *testing.T) {
+	// RequirePermission redirects unauthenticated requests with 303 SeeOther.
 	protected := []string{"/dashboard", "/admin/nodes", "/admin/users", "/admin/backup"}
 	for _, path := range protected {
 		t.Run(path, func(t *testing.T) {
 			resp := get(t, path)
 			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusFound {
-				t.Errorf("%s: expected 302, got %d", path, resp.StatusCode)
+			if resp.StatusCode != http.StatusSeeOther {
+				t.Errorf("%s: expected 303, got %d", path, resp.StatusCode)
 			}
 		})
 	}
