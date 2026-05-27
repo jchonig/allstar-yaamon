@@ -118,7 +118,7 @@ watch:
 test-integration:
 	@docker rm -f $(TEST_SUT) 2>/dev/null; \
 	docker network rm $(TEST_NET) 2>/dev/null; \
-	mkdir -p test/data; \
+	mkdir -p test/data && chmod a+w test/data; \
 	docker network create $(TEST_NET); \
 	docker run -d \
 	  --name $(TEST_SUT) \
@@ -130,7 +130,14 @@ test-integration:
 	  -e TEST_VIEWER_PASSWORD=viewerpassword \
 	  yaamon:dev; \
 	echo "Waiting for server..."; \
-	timeout 30 sh -c 'until docker exec $(TEST_SUT) curl -sf http://localhost/health >/dev/null 2>&1; do sleep 1; done'; \
+	if ! timeout 30 sh -c 'until docker exec $(TEST_SUT) curl -sf http://localhost/health >/dev/null 2>&1; do sleep 1; done'; then \
+	  echo "Server did not start in 30s — container logs:"; \
+	  docker logs $(TEST_SUT); \
+	  docker stop $(TEST_SUT) >/dev/null 2>&1; \
+	  docker rm   $(TEST_SUT) >/dev/null 2>&1; \
+	  docker network rm $(TEST_NET) >/dev/null 2>&1; \
+	  exit 1; \
+	fi; \
 	echo "Server ready. Running integration tests..."; \
 	docker run --rm \
 	  --network $(TEST_NET) \
@@ -153,7 +160,7 @@ test-integration:
 e2e: build
 	@docker rm -f $(TEST_SUT) 2>/dev/null; \
 	docker network rm $(TEST_NET) 2>/dev/null; \
-	mkdir -p test/data; \
+	mkdir -p test/data && chmod a+w test/data; \
 	docker network create $(TEST_NET); \
 	docker run -d \
 	  --name $(TEST_SUT) \
@@ -165,7 +172,14 @@ e2e: build
 	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
 	  yaamon:dev; \
 	echo "Waiting for server..."; \
-	timeout 30 sh -c 'until docker exec $(TEST_SUT) curl -sf http://localhost/health >/dev/null 2>&1; do sleep 1; done'; \
+	if ! timeout 30 sh -c 'until docker exec $(TEST_SUT) curl -sf http://localhost/health >/dev/null 2>&1; do sleep 1; done'; then \
+	  echo "Server did not start in 30s — container logs:"; \
+	  docker logs $(TEST_SUT); \
+	  docker stop $(TEST_SUT) >/dev/null 2>&1; \
+	  docker rm   $(TEST_SUT) >/dev/null 2>&1; \
+	  docker network rm $(TEST_NET) >/dev/null 2>&1; \
+	  exit 1; \
+	fi; \
 	echo "Server ready. Running Playwright tests..."; \
 	docker run --rm \
 	  --network $(TEST_NET) \
