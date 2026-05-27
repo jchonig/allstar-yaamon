@@ -77,7 +77,7 @@ check-whitespace:
 
 ## Verify go.mod and go.sum are tidy (fails if go mod tidy would make changes).
 check-tidy:
-	$(DOCKER_GO) sh -c 'go mod tidy && STATUS=$$(git status --porcelain go.mod go.sum) && test -z "$$STATUS" || (echo "go.mod/go.sum changed after go mod tidy:"; echo "$$STATUS"; exit 1)'
+	$(DOCKER_GO) sh -c 'git config --global --add safe.directory /src && go mod tidy && STATUS=$$(git status --porcelain go.mod go.sum) && test -z "$$STATUS" || (echo "go.mod/go.sum changed after go mod tidy:"; echo "$$STATUS"; exit 1)'
 
 ## Run all pre-commit checks: whitespace and module tidy.
 check: check-whitespace check-tidy
