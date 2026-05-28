@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -48,6 +49,12 @@ type Server struct {
 	sseBroker    *sse.Broker
 	tmpls        map[string]*template.Template
 	loginLimiter *loginLimiter
+
+	// adaptive stats-fetch mode: switches between individual and bulk endpoint
+	// based on how many stale node numbers are pending (see fetchAdaptive).
+	adaptiveMu sync.Mutex
+	inBulkMode bool
+	lastBulkAt time.Time
 }
 
 func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {

@@ -82,7 +82,7 @@ func (b *Broker) StreamFrom(w http.ResponseWriter, r *http.Request, ch <-chan []
 	}
 	flusher.Flush()
 
-	heartbeat := time.NewTicker(25 * time.Second)
+	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
 
 	for {

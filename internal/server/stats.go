@@ -72,24 +72,150 @@ func (s *Server) startStatsPoller(ctx context.Context) {
 	}()
 }
 
+// bulkHighMark and bulkLowMark define hysteresis thresholds for the adaptive
+// fetch mode. When the number of stale nodes exceeds bulkHighMark the poller
+// switches to the bulk endpoint (1 request/min/IP, returns all reporting nodes).
+// It stays in bulk mode until the stale count drops to bulkLowMark or below,
+// then reverts to individual rate-limited fetches (30 requests/min/IP total).
+const (
+	bulkHighMark    = 10
+	bulkLowMark     = 4
+	bulkMinInterval = 5 * time.Minute // multiple instances may share an IP; ASL allows 1 bulk req/min/IP
+)
+
+// pollStats is the background poller. It collects all unique node numbers
+// across every active (SSE-subscribed) node in one pass, deduplicates them
+// globally, checks which are stale, then calls fetchAdaptive once for the
+// whole set. Results are stored in the shared cache and SSE events are
+// published per node.
 func (s *Server) pollStats(ctx context.Context) {
 	nodes, err := s.db.ListNodes(ctx)
 	if err != nil {
 		return
 	}
+
+	type nodeSet struct {
+		id   int64
+		nums []string
+	}
+
+	globalSeen := make(map[string]struct{})
+	sets := make([]nodeSet, 0, len(nodes))
+
 	for _, n := range nodes {
-		if n.Enabled && s.sseBroker.HasSubscribers(n.ID) {
-			s.pollNodeStats(ctx, n.ID, false)
+		if !n.Enabled || !s.sseBroker.HasSubscribers(n.ID) {
+			continue
 		}
+		favs, err := s.db.ListFavoritesByNode(ctx, n.ID)
+		if err != nil {
+			continue
+		}
+		localSeen := make(map[string]bool)
+		nums := make([]string, 0, len(favs)+1)
+		add := func(num string) {
+			if !localSeen[num] {
+				localSeen[num] = true
+				nums = append(nums, num)
+				globalSeen[num] = struct{}{}
+			}
+		}
+		add(n.NodeNumber)
+		for _, f := range favs {
+			add(f.NodeNumber)
+		}
+		if linked, ok := s.linksCache.get(n.ID); ok {
+			for num := range linked {
+				add(num)
+			}
+		}
+		sets = append(sets, nodeSet{id: n.ID, nums: nums})
+	}
+
+	if len(globalSeen) == 0 {
+		return
+	}
+
+	// Identify which globally-unique node numbers have gone stale.
+	stale := make([]string, 0, len(globalSeen))
+	for num := range globalSeen {
+		if st, ok := s.statsCache.get(num); !ok || st.Stale() {
+			stale = append(stale, num)
+		}
+	}
+
+	if len(stale) > 0 {
+		results := s.fetchAdaptive(ctx, stale)
+		// Store everything returned — bulk fetches include nodes beyond what
+		// was explicitly requested, and we keep all of them.
+		s.statsCache.update(results)
+	}
+
+	// Publish fresh cache snapshot to each node's SSE subscribers.
+	for _, ns := range sets {
+		s.publishCachedStats(ns.id, ns.nums)
 	}
 }
 
-// pollNodeStats fetches fresh ASL stats for a single node's favorites, updates
-// the cache, and publishes an SSE event. Called both by the periodic poller
-// (for nodes with active viewers) and immediately when a client connects.
-// When direct is true (SSE connect path) the shared rate limiter is bypassed
-// so the first load is fast; periodic background polls use the rate limiter.
-func (s *Server) pollNodeStats(ctx context.Context, nodeID int64, direct bool) {
+// fetchAdaptive chooses between the bulk endpoint and individual rate-limited
+// fetches based on the number of stale node numbers, with hysteresis to avoid
+// oscillating between modes.
+//
+// Bulk mode  (inBulkMode=true):  single request to /api/stats/, returns all
+//
+//	reporting nodes; the full result is kept in the cache.
+//
+// Individual mode (inBulkMode=false): per-node requests via FetchAll,
+//
+//	subject to the shared 28 req/min rate limiter.
+func (s *Server) fetchAdaptive(ctx context.Context, stale []string) map[string]aslstats.NodeStats {
+	s.adaptiveMu.Lock()
+	n := len(stale)
+	switch {
+	case n > bulkHighMark:
+		s.inBulkMode = true
+	case n <= bulkLowMark:
+		s.inBulkMode = false
+	// else: in hysteresis band — keep current mode
+	}
+	useBulk := s.inBulkMode
+	canBulk := time.Since(s.lastBulkAt) >= bulkMinInterval
+	s.adaptiveMu.Unlock()
+
+	slog.Debug("stats fetch", "stale", n, "bulk", useBulk, "can_bulk", canBulk)
+
+	if useBulk && canBulk {
+		all, err := s.fetcher.FetchBulk(ctx)
+		if err == nil {
+			s.adaptiveMu.Lock()
+			s.lastBulkAt = time.Now()
+			s.adaptiveMu.Unlock()
+			return all
+		}
+		slog.Warn("stats bulk fetch failed, falling back to individual", "err", err)
+	}
+	return s.fetcher.FetchAll(ctx, stale)
+}
+
+// publishCachedStats reads nums from the stats cache and publishes one SSE
+// event for nodeID containing whatever is currently cached.
+func (s *Server) publishCachedStats(nodeID int64, nums []string) {
+	subset := s.statsCache.getMany(nums)
+	data, err := json.Marshal(map[string]any{
+		"type":   "stats",
+		"nodeID": nodeID,
+		"stats":  subset,
+	})
+	if err == nil {
+		s.sseBroker.Publish(nodeID, data)
+	}
+	slog.Debug("stats poll", "node_id", nodeID, "count", len(subset))
+}
+
+// pollNodeStats fetches fresh ASL stats for a single node on SSE connect and
+// publishes the result. Only stale or missing entries are fetched; nodes with
+// fresh cache are served immediately from cache. Uses FetchDirect (no rate
+// limiter) so the initial page load is responsive.
+func (s *Server) pollNodeStats(ctx context.Context, nodeID int64) {
 	n, err := s.db.GetNodeByID(ctx, nodeID)
 	if err != nil {
 		return
@@ -98,7 +224,6 @@ func (s *Server) pollNodeStats(ctx context.Context, nodeID int64, direct bool) {
 	if err != nil {
 		return
 	}
-	// Always include the home node's own number plus all favorites.
 	seen := make(map[string]bool)
 	nums := make([]string, 0, len(favs)+1)
 	add := func(num string) {
@@ -111,37 +236,26 @@ func (s *Server) pollNodeStats(ctx context.Context, nodeID int64, direct bool) {
 	for _, f := range favs {
 		add(f.NodeNumber)
 	}
-	// Also include currently active linked nodes so the Active Links panel
-	// always shows fresh stats (connected_links, callsign) without waiting
-	// for the node to appear in favorites.
 	if linked, ok := s.linksCache.get(nodeID); ok {
-		for nodeNum := range linked {
-			add(nodeNum)
+		for num := range linked {
+			add(num)
 		}
 	}
-	var results map[string]aslstats.NodeStats
-	if direct {
-		results = s.fetcher.FetchDirect(ctx, nums, len(nums), 8)
-	} else {
-		results = s.fetcher.FetchAll(ctx, nums)
-	}
-	s.statsCache.update(results)
 
-	subset := make(map[string]aslstats.NodeStats, len(nums))
+	// Only fetch what is stale or absent; in steady state (bulk cache warm)
+	// this is usually empty and the function returns immediately from cache.
+	stale := make([]string, 0, len(nums))
 	for _, num := range nums {
-		if st, ok := results[num]; ok && st.Error == "" {
-			subset[num] = st
+		if st, ok := s.statsCache.get(num); !ok || st.Stale() {
+			stale = append(stale, num)
 		}
 	}
-	data, err := json.Marshal(map[string]any{
-		"type":   "stats",
-		"nodeID": nodeID,
-		"stats":  subset,
-	})
-	if err == nil {
-		s.sseBroker.Publish(nodeID, data)
+	if len(stale) > 0 {
+		results := s.fetcher.FetchDirect(ctx, stale, len(stale), 8)
+		s.statsCache.update(results)
 	}
-	slog.Debug("stats poll", "node_id", nodeID, "count", len(subset))
+
+	s.publishCachedStats(nodeID, nums)
 }
 
 // handleSSE streams live stats updates for a node to the browser.
@@ -166,7 +280,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger an immediate fresh stats fetch for this node in the background.
 	// Because we subscribed above, the result will arrive on ch.
-	go s.pollNodeStats(r.Context(), nodeID, true)
+	go s.pollNodeStats(r.Context(), nodeID)
 
 	// Send cached state as the initial SSE burst while the fresh fetch is in flight.
 	var initial [][]byte

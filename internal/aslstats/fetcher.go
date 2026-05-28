@@ -90,7 +90,7 @@ func New(baseURL string) *Fetcher {
 	return &Fetcher{
 		baseURL: baseURL,
 		client:  &http.Client{Timeout: 10 * time.Second},
-		limiter: newRateLimiter(28), // conservative: < ASL's 30/min limit
+		limiter: newRateLimiter(10), // conservative: multiple instances may share an IP behind NAT
 	}
 }
 
@@ -150,66 +150,37 @@ func (f *Fetcher) FetchAll(ctx context.Context, nodeNumbers []string) map[string
 	return out
 }
 
-// Fetch fetches stats for a single node number.
-func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
-	s := NodeStats{NodeNumber: nodeNumber, FetchedAt: time.Now()}
-	url := fmt.Sprintf("%s/api/stats/%s", f.baseURL, nodeNumber)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		s.Error = err.Error()
-		return s
-	}
-	resp, err := f.client.Do(req)
-	if err != nil {
-		s.Error = err.Error()
-		slog.Warn("ASL stats fetch error", "node", nodeNumber, "err", err)
-		return s
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		s.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
-		slog.Warn("ASL stats fetch error", "node", nodeNumber, "status", resp.StatusCode)
-		return s
-	}
+// rawNodeEntry is the per-node JSON shape shared by both the individual
+// (/api/stats/{node}) and bulk (/api/stats/) endpoints.
+//
+// Individual response: the root object IS a rawNodeEntry.
+// Bulk response:       map[nodeNumber]rawNodeEntry.
+type rawNodeEntry struct {
+	Node struct {
+		Callsign             string `json:"callsign"`
+		AccessWebtransceiver string `json:"access_webtransceiver"` // "0" or "1"
+		NodeFrequency        string `json:"node_frequency"`        // site/description
+	} `json:"node"`
+	Stats struct {
+		Data struct {
+			Keyed       bool            `json:"keyed"`
+			TotalTxTime json.RawMessage `json:"totaltxtime"` // string or number
+			TotalKeyups json.RawMessage `json:"totalkeyups"` // string or number
+			Links       json.RawMessage `json:"links"`       // array or 0 when empty
+		} `json:"data"`
+	} `json:"stats"`
+}
 
-	// Actual response shape (stats.allstarlink.org/api/stats/{node}):
-	// {
-	//   "node": { "callsign": "W1AW", "access_webtransceiver": "1",
-	//             "node_frequency": "Site description" },
-	//   "stats": {
-	//     "data": {
-	//       "keyed": false,
-	//       "totaltxtime": "6001",   // string-encoded seconds
-	//       "totalkeyups": "776",    // string-encoded count
-	//       "links": ["12345", "67890"]  // connected node numbers
-	//     }
-	//   }
-	// }
-	var raw struct {
-		Node struct {
-			Callsign             string `json:"callsign"`
-			AccessWebtransceiver string `json:"access_webtransceiver"` // "0" or "1"
-			NodeFrequency        string `json:"node_frequency"`        // site/description
-		} `json:"node"`
-		Stats struct {
-			Data struct {
-				Keyed       bool            `json:"keyed"`
-				TotalTxTime json.RawMessage `json:"totaltxtime"` // string or number
-				TotalKeyups json.RawMessage `json:"totalkeyups"` // string or number
-				Links       json.RawMessage `json:"links"`       // array or 0 when empty
-			} `json:"data"`
-		} `json:"stats"`
+// parseEntry converts a rawNodeEntry into a NodeStats value.
+func parseEntry(nodeNumber string, raw rawNodeEntry) NodeStats {
+	s := NodeStats{
+		NodeNumber:  nodeNumber,
+		Callsign:    raw.Node.Callsign,
+		Description: raw.Node.NodeFrequency,
+		Web:         raw.Node.AccessWebtransceiver != "" && raw.Node.AccessWebtransceiver != "0",
+		Keyed:       raw.Stats.Data.Keyed,
+		FetchedAt:   time.Now(),
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		s.Error = err.Error()
-		slog.Warn("ASL stats decode error", "node", nodeNumber, "err", err)
-		return s
-	}
-
-	s.Callsign = raw.Node.Callsign
-	s.Description = raw.Node.NodeFrequency
-	s.Web = raw.Node.AccessWebtransceiver != "" && raw.Node.AccessWebtransceiver != "0"
-	s.Keyed = raw.Stats.Data.Keyed
 	if v, err := strconv.ParseFloat(strings.Trim(string(raw.Stats.Data.TotalTxTime), `"`), 64); err == nil {
 		s.TotalTxTime = v
 	}
@@ -219,10 +190,75 @@ func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
 	// links is an array of node number strings when connected, or the integer 0 when empty.
 	if len(raw.Stats.Data.Links) > 0 && raw.Stats.Data.Links[0] == '[' {
 		var links []string
-		if err := json.Unmarshal(raw.Stats.Data.Links, &links); err == nil {
+		if json.Unmarshal(raw.Stats.Data.Links, &links) == nil {
 			s.LinkedNodes = links
 			s.ConnectedLinks = len(links)
 		}
 	}
 	return s
+}
+
+// Fetch fetches stats for a single node number.
+func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
+	url := fmt.Sprintf("%s/api/stats/%s", f.baseURL, nodeNumber)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return NodeStats{NodeNumber: nodeNumber, Error: err.Error(), FetchedAt: time.Now()}
+	}
+	req.Header.Set("User-Agent", "YAAMon/1.0")
+	resp, err := f.client.Do(req)
+	if err != nil {
+		slog.Warn("ASL stats fetch error", "node", nodeNumber, "err", err)
+		return NodeStats{NodeNumber: nodeNumber, Error: err.Error(), FetchedAt: time.Now()}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("ASL stats fetch error", "node", nodeNumber, "status", resp.StatusCode)
+		return NodeStats{NodeNumber: nodeNumber, Error: fmt.Sprintf("HTTP %d", resp.StatusCode), FetchedAt: time.Now()}
+	}
+	var raw rawNodeEntry
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		slog.Warn("ASL stats decode error", "node", nodeNumber, "err", err)
+		return NodeStats{NodeNumber: nodeNumber, Error: err.Error(), FetchedAt: time.Now()}
+	}
+	return parseEntry(nodeNumber, raw)
+}
+
+// FetchBulk fetches stats for all currently-reporting nodes from the bulk endpoint
+// (/api/stats/). Subject to a 1 request/minute/IP rate limit by AllStarLink.
+// Returns every entry received; callers should cache all of them.
+func (f *Fetcher) FetchBulk(ctx context.Context) (map[string]NodeStats, error) {
+	url := f.baseURL + "/api/stats/"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "YAAMon/1.0")
+
+	resp, err := f.client.Do(req)
+	if err != nil {
+		slog.Warn("ASL stats bulk fetch error", "err", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("ASL stats bulk fetch error", "status", resp.StatusCode)
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	var raw map[string]rawNodeEntry
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		slog.Warn("ASL stats bulk decode error", "err", err)
+		return nil, err
+	}
+
+	now := time.Now()
+	out := make(map[string]NodeStats, len(raw))
+	for nodeNum, entry := range raw {
+		s := parseEntry(nodeNum, entry)
+		s.FetchedAt = now // consistent timestamp across the whole batch
+		out[nodeNum] = s
+	}
+	slog.Info("ASL stats bulk fetch", "nodes", len(out))
+	return out, nil
 }
