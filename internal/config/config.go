@@ -61,7 +61,7 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("server.redirect_http", true)
 	v.SetDefault("tls.mode", "disabled")
 	v.SetDefault("tls.acme_cache_dir", "/etc/yaamon/acme")
-	v.SetDefault("db.path", "/etc/yaamon/yaamon.db")
+	v.SetDefault("db.path", "/var/lib/yaamon/yaamon.db")
 	v.SetDefault("log.level", "info")
 	v.SetDefault("ui.footer_text", "Yet Another Allstarlink MONitor (and favorites)")
 	v.SetDefault("ui.footer_url", DefaultFooterURL)
