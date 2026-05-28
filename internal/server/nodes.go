@@ -84,8 +84,7 @@ func (s *Server) handleAPICreateNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.AMIUser == "" {
-		http.Error(w, "ami_user is required", http.StatusBadRequest)
-		return
+		in.AMIUser = "admin"
 	}
 	if in.AMIPort == 0 {
 		in.AMIPort = 5038

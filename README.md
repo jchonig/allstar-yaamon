@@ -25,6 +25,8 @@ YAAMon is a modern, responsive web application for managing and monitoring [AllS
 
 ### Option 1 — Debian / Ubuntu package (recommended for ASL3 nodes)
 
+> **Port note**: ASL3 already runs Apache2 on port 80. YAAMon defaults to port 8080 to avoid the conflict. Access it at `http://<your-node-ip>:8080/` (or `http://nodeXXXXX.local:8080/`). See [Changing the port](#changing-the-port) below if you want a different port or to front it with Apache.
+
 Download the `.deb` for your architecture from the [Releases page](https://github.com/jchonig/allstar-yaamon/releases/latest):
 
 | Platform | File |
@@ -48,7 +50,7 @@ sudo systemctl status yaamon
 sudo journalctl -u yaamon -f
 ```
 
-Open `http://<your-node-ip>/` in a browser. On first visit you will be directed to the setup page to create your admin account.
+Open `http://<your-node-ip>:8080/` in a browser. On first visit you will be directed to the setup page to create your admin account.
 
 ### Option 2 — Pre-built binary (tarball)
 
@@ -74,13 +76,13 @@ sudo systemctl enable --now yaamon
 docker run -d \
   --name yaamon \
   --restart unless-stopped \
-  -p 80:80 \
+  -p 8080:8080 \
   -v /etc/yaamon:/etc/yaamon \
   -v /var/lib/yaamon:/var/lib/yaamon \
   ghcr.io/jchonig/yaamon:latest
 ```
 
-Mount your config file at `/etc/yaamon/config.yaml` and a persistent data volume at `/var/lib/yaamon`. The database is created at `/var/lib/yaamon/yaamon.db` on first run.
+Mount your config file at `/etc/yaamon/config.yaml` and a persistent data volume at `/var/lib/yaamon`. The database is created at `/var/lib/yaamon/yaamon.db` on first run. Access at `http://<host>:8080/`.
 
 ### Option 4 — docker-compose
 
@@ -90,8 +92,7 @@ services:
     image: ghcr.io/jchonig/yaamon:latest
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:8080"
     volumes:
       - ./config:/etc/yaamon       # config.yaml lives here
       - yaamon-data:/var/lib/yaamon  # named volume for the SQLite database
@@ -141,7 +142,7 @@ Copy `config.yaml.example` to `config.yaml` and edit it before first run:
 
 ```yaml
 server:
-  http_port: 80
+  http_port: 8080            # default; coexists with ASL3's Apache on port 80
   https_port: 443
 
 tls:
@@ -157,6 +158,58 @@ log:
 Any config value can be overridden with an environment variable using the pattern `YAAMON_<SECTION>_<KEY>` — for example `YAAMON_DB_PATH=/var/lib/yaamon/yaamon.db`.
 
 See [`config.yaml.example`](config.yaml.example) for all options including TLS and UI footer customization.
+
+---
+
+## Changing the port
+
+YAAMon's default HTTP port is **8080** so it can coexist with ASL3's Apache on port 80. To change it, edit `/etc/yaamon/config.yaml`:
+
+```yaml
+server:
+  http_port: 8080      # change to any available port
+```
+
+Then restart the service:
+
+```bash
+sudo systemctl restart yaamon
+```
+
+Any config value can also be set via environment variable — e.g. `YAAMON_SERVER_HTTP_PORT=9000`.
+
+### Running on port 80 (standalone, no ASL3 Apache)
+
+If YAAMon is the only web service on the host (e.g. a dedicated Pi), set `http_port: 80`. You will need to either run as root or grant the binary the `CAP_NET_BIND_SERVICE` capability:
+
+```bash
+sudo setcap cap_net_bind_service=+ep /usr/local/bin/yaamon
+```
+
+### Fronting with Apache (ASL3 coexistence on port 80)
+
+If you want YAAMon reachable on port 80 via Apache, use a reverse proxy. Ensure `mod_proxy` and `mod_proxy_http` are enabled:
+
+```bash
+sudo a2enmod proxy proxy_http
+```
+
+Create `/etc/apache2/conf-available/yaamon.conf`:
+
+```apache
+ProxyPreserveHost On
+ProxyPass        /yaamon/ http://127.0.0.1:8080/
+ProxyPassReverse /yaamon/ http://127.0.0.1:8080/
+```
+
+Enable and reload:
+
+```bash
+sudo a2enconf yaamon
+sudo systemctl reload apache2
+```
+
+> **Note**: Full subfolder support (so all links and redirects work under `/yaamon/`) requires a code change tracked in [issue #14](https://github.com/jchonig/allstar-yaamon/issues/14). Until then, proxying at root (`/` → `http://localhost:8080/`) works without any code changes.
 
 ---
 

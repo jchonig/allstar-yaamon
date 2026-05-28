@@ -3,6 +3,7 @@
 package integration_tests
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
@@ -99,20 +100,29 @@ func TestNodeCreateRequiresNameAndNumber(t *testing.T) {
 	}
 }
 
-func TestNodeCreateRequiresAMIUser(t *testing.T) {
+func TestNodeCreateDefaultsAMIUser(t *testing.T) {
 	c := adminClient(t)
 	resp := do(t, c, http.MethodPost, "/api/nodes", map[string]any{
-		"name":        "No AMI User Node",
+		"name":        "Default AMI User Node",
 		"node_number": uniqueNum(),
 		"ami_host":    "localhost",
 		"ami_port":    5038,
-		// ami_user intentionally omitted
+		// ami_user intentionally omitted — should default to "admin"
 		"ami_pass": "pass",
 		"enabled":  false,
 	})
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("create without ami_user: expected 400, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("create without ami_user: expected 201, got %d", resp.StatusCode)
+	}
+	var created struct {
+		AMIUser string `json:"ami_user"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if created.AMIUser != "admin" {
+		t.Errorf("ami_user = %q, want \"admin\"", created.AMIUser)
 	}
 }
 

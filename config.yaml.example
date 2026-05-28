@@ -4,7 +4,9 @@
 #   e.g. YAAMON_DB_PATH=/var/lib/yaamon/yaamon.db
 
 server:
-  http_port: 80
+  # Default port is 8080 so YAAMon can coexist with ASL3's Apache on port 80.
+  # Change to 80 only if no other web server is running on this host.
+  http_port: 8080
   https_port: 443
   redirect_http: true        # 301 redirect http → https when TLS is enabled
 

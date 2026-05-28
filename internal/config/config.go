@@ -62,7 +62,7 @@ type LogConfig struct {
 func Load(cfgFile string) (*Config, error) {
 	v := viper.New()
 
-	v.SetDefault("server.http_port", 80)
+	v.SetDefault("server.http_port", 8080)
 	v.SetDefault("server.https_port", 443)
 	v.SetDefault("server.redirect_http", true)
 	v.SetDefault("tls.mode", "disabled")
