@@ -108,12 +108,7 @@ func (s *Server) handleGraphPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := auth.FromContext(r.Context())
-	data := graphPageData{NodeNumber: nodeNumber, HomeNodeID: homeNodeID}
-	if sess != nil {
-		data.Username = sess.Username
-		data.Permission = sess.Permission
-		data.FullName = sess.FullName
-		data.AvatarURL = sess.AvatarURL
-	}
+	data := graphPageData{pageData: newPageData(), NodeNumber: nodeNumber, HomeNodeID: homeNodeID}
+	fillSession(&data.pageData, sess)
 	s.render(w, "graph", data)
 }

@@ -11,6 +11,7 @@ import (
 
 	"allstar-yaamon/internal/auth"
 	"allstar-yaamon/internal/db"
+	"allstar-yaamon/internal/version"
 )
 
 // pageData contains fields common to all authenticated page templates.
@@ -19,6 +20,22 @@ type pageData struct {
 	Permission string
 	FullName   string
 	AvatarURL  string
+	Version    string
+}
+
+func newPageData() pageData {
+	return pageData{Version: version.Version}
+}
+
+// fillSession copies the authenticated session fields into pd.
+func fillSession(pd *pageData, sess *auth.Session) {
+	if sess == nil {
+		return
+	}
+	pd.Username = sess.Username
+	pd.Permission = sess.Permission
+	pd.FullName = sess.FullName
+	pd.AvatarURL = sess.AvatarURL
 }
 
 // handleHealth returns JSON {"status":"ok"} for Docker HEALTHCHECK and integration tests.
@@ -196,13 +213,8 @@ type dashboardData struct {
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	sess := auth.FromContext(r.Context())
-	data := dashboardData{}
-	if sess != nil {
-		data.Username = sess.Username
-		data.Permission = sess.Permission
-		data.FullName = sess.FullName
-		data.AvatarURL = sess.AvatarURL
-	}
+	data := dashboardData{pageData: newPageData()}
+	fillSession(&data.pageData, sess)
 	data.Nodes, _ = s.db.ListNodes(r.Context())
 	s.fillNodeInfo(data.Nodes)
 

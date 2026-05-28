@@ -52,6 +52,7 @@
             <li><button class="dropdown-item" onclick="openSiteSettingsModal()"><i class="bi bi-sliders me-2"></i>Site Settings</button></li>
             {{end}}
             <li><hr class="dropdown-divider"></li>
+            <li><button class="dropdown-item" onclick="openAboutModal()"><i class="bi bi-info-circle me-2"></i>About</button></li>
             <li><a class="dropdown-item text-danger" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
           </ul>
         </div>
@@ -379,6 +380,76 @@
       document.getElementById('site-settings-error').textContent = 'Network error: ' + e.message;
     } finally {
       btn.disabled = false;
+    }
+  }
+  </script>
+  {{end}}
+  {{if .Username}}
+  <!-- About Modal -->
+  <div class="modal fade" id="aboutModal" tabindex="-1" aria-labelledby="aboutModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="aboutModalTitle"><i class="bi bi-info-circle me-2"></i>About YAAMon</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <img src="/static/logo-horizontal.png" alt="YAAMon" style="height:3rem;width:auto">
+          </div>
+          <table class="table table-sm table-borderless mb-0">
+            <tbody>
+              <tr>
+                <th scope="row" class="text-muted fw-normal ps-0" style="width:40%">Version</th>
+                <td><code id="about-version">{{.Version}}</code></td>
+              </tr>
+              <tr>
+                <th scope="row" class="text-muted fw-normal ps-0">Latest release</th>
+                <td><span id="about-latest"><span class="spinner-border spinner-border-sm text-secondary" role="status"></span></span></td>
+              </tr>
+              <tr>
+                <th scope="row" class="text-muted fw-normal ps-0">Source</th>
+                <td><a href="https://github.com/jchonig/allstar-yaamon" target="_blank" rel="noopener">github.com/jchonig/allstar-yaamon</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+  let _aboutModal;
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('aboutModal');
+    if (el) _aboutModal = new bootstrap.Modal(el);
+  });
+  function openAboutModal() {
+    _aboutModal.show();
+    checkLatestVersion();
+  }
+  async function checkLatestVersion() {
+    const el = document.getElementById('about-latest');
+    if (!el) return;
+    try {
+      const resp = await fetch('https://api.github.com/repos/jchonig/allstar-yaamon/releases/latest', {
+        headers: {'Accept': 'application/vnd.github+json'},
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      const latest = data.tag_name || '';
+      const current = document.getElementById('about-version').textContent.trim();
+      if (!latest) {
+        el.textContent = 'unavailable';
+      } else if (latest === current) {
+        el.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + latest + ' (up to date)</span>';
+      } else {
+        el.innerHTML = '<a href="' + data.html_url + '" target="_blank" rel="noopener" class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>' + latest + ' available</a>';
+      }
+    } catch (_) {
+      el.textContent = 'unavailable';
     }
   }
   </script>

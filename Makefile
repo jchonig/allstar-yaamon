@@ -92,7 +92,7 @@ install-hooks:
 ## Cross-compile for the dev container (linux, native arch, no CGO).
 ## While 'make watch' is running, this triggers a fast container restart instead of a full image rebuild.
 compile:
-	$(DOCKER_GO) sh -c "CGO_ENABLED=0 GOOS=linux go build -ldflags \"-s -w -X allstar-yaamon/internal/config.DefaultFooterURL=$(REPO_URL)\" -o test/yaamon ."
+	$(DOCKER_GO) sh -c "CGO_ENABLED=0 GOOS=linux go build -ldflags \"-s -w -X allstar-yaamon/internal/config.DefaultFooterURL=$(REPO_URL) -X allstar-yaamon/internal/version.Version=$(VERSION)\" -o test/yaamon ."
 
 ## Start the server in the background on http://localhost:8080.
 ## test/config/ is mounted read-only at /etc/yaamon; test/data/ persists the DB at /var/lib/yaamon.
