@@ -12,6 +12,7 @@
 - [Your Profile](#your-profile)
 - [Themes](#themes)
 - [Backup and Restore](#backup-and-restore)
+- [Docker — Bind-mount Ownership (PUID / PGID)](#docker--bind-mount-ownership-puid--pgid)
 - [Declarative State (yaamon apply)](#declarative-state-yaamon-apply)
 
 ---
@@ -373,6 +374,27 @@ yaamon restore /path/to/backup.owbackup --passphrase "your passphrase"
 ```
 
 > **Warning**: Restore replaces the entire database. All current users, nodes, and favorites are overwritten.
+
+---
+
+## Docker — Bind-mount Ownership (PUID / PGID)
+
+When using a bind-mount for `/var/lib/yaamon`, the host directory must be writable by the container process. By default YAAMon runs as uid/gid 1000 inside the container. If your host directory is owned by a different user, set `PUID` and `PGID` environment variables to match:
+
+```yaml
+services:
+  yaamon:
+    image: ghcr.io/jchonig/yaamon:latest
+    volumes:
+      - ./data:/var/lib/yaamon
+    environment:
+      - PUID=1000   # uid of the host directory owner (run: id -u)
+      - PGID=1000   # gid of the host directory owner (run: id -g)
+```
+
+The container entrypoint starts as root, adjusts the internal `yaamon` user to the specified uid/gid, re-owns `/var/lib/yaamon` and `/etc/yaamon`, then drops privileges before starting the server. Named Docker volumes (the default) are always owned correctly and do not require this.
+
+> **Note**: `PUID` and `PGID` have no effect when the container is started as a non-root user (e.g., with `--user`). In that case the process runs as whatever uid Docker assigns and the entrypoint privilege-drop is skipped.
 
 ---
 

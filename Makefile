@@ -26,7 +26,7 @@ TEST_VIEWER_PASSWORD := viewerpassword
 
 .PHONY: all build build-multi test test-unit coverage lint deps check \
         check-whitespace check-tidy compile run stop logs watch \
-        test-integration e2e e2e-dev snapshot \
+        test-integration test-puid e2e e2e-dev snapshot \
         test-deb-integration test-deb \
         install-hooks install-service uninstall-service version clean cleanall
 
@@ -46,7 +46,7 @@ build-multi:
 	docker buildx build --platform linux/amd64,linux/arm64 --build-arg REPO_URL=$(REPO_URL) -t yaamon:dev .
 
 ## Full test suite: pre-commit checks → unit tests → build image → integration tests → e2e.
-test: check test-unit build test-integration e2e
+test: check test-unit build test-integration test-puid e2e
 
 ## Run unit tests inside Docker.
 test-unit:
@@ -156,6 +156,53 @@ test-integration:
 	docker rm   $(TEST_SUT) >/dev/null 2>&1; \
 	docker network rm $(TEST_NET) >/dev/null 2>&1; \
 	exit $$EXIT
+
+## Verify PUID/PGID entrypoint: start container as uid/gid 1234, confirm server
+## starts healthy and PID 1 runs as that uid.
+TEST_SUT_PUID := yaamon-sut-puid
+TEST_PUID     := 1234
+TEST_PGID     := 1234
+test-puid: build
+	@docker rm -f $(TEST_SUT_PUID) 2>/dev/null; \
+	docker network rm $(TEST_NET)-puid 2>/dev/null; \
+	mkdir -p test/puid-data; \
+	docker network create $(TEST_NET)-puid; \
+	docker run -d \
+	  --name $(TEST_SUT_PUID) \
+	  --network $(TEST_NET)-puid \
+	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
+	  -v "$(CURDIR)/test/puid-data:/var/lib/yaamon" \
+	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
+	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
+	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
+	  -e PUID=$(TEST_PUID) \
+	  -e PGID=$(TEST_PGID) \
+	  yaamon:dev; \
+	echo "Waiting for server with PUID=$(TEST_PUID) PGID=$(TEST_PGID)..."; \
+	if ! timeout 30 sh -c 'until docker exec $(TEST_SUT_PUID) curl -sf http://localhost/health >/dev/null 2>&1; do sleep 1; done'; then \
+	  echo "FAIL: server did not start — container logs:"; \
+	  docker logs $(TEST_SUT_PUID); \
+	  docker stop $(TEST_SUT_PUID) >/dev/null 2>&1; \
+	  docker rm   $(TEST_SUT_PUID) >/dev/null 2>&1; \
+	  docker network rm $(TEST_NET)-puid >/dev/null 2>&1; \
+	  rm -rf test/puid-data; \
+	  exit 1; \
+	fi; \
+	ACTUAL_UID=$$(docker exec $(TEST_SUT_PUID) sh -c 'grep "^Uid:" /proc/1/status | cut -f2'); \
+	ACTUAL_GID=$$(docker exec $(TEST_SUT_PUID) sh -c 'grep "^Gid:" /proc/1/status | cut -f2'); \
+	FAIL=0; \
+	if [ "$$ACTUAL_UID" != "$(TEST_PUID)" ]; then \
+	  echo "FAIL: expected uid=$(TEST_PUID), got uid=$$ACTUAL_UID"; FAIL=1; \
+	fi; \
+	if [ "$$ACTUAL_GID" != "$(TEST_PGID)" ]; then \
+	  echo "FAIL: expected gid=$(TEST_PGID), got gid=$$ACTUAL_GID"; FAIL=1; \
+	fi; \
+	docker stop $(TEST_SUT_PUID) >/dev/null 2>&1; \
+	docker rm   $(TEST_SUT_PUID) >/dev/null 2>&1; \
+	docker network rm $(TEST_NET)-puid >/dev/null 2>&1; \
+	rm -rf test/puid-data; \
+	if [ "$$FAIL" = "1" ]; then exit 1; fi; \
+	echo "PASS: server running as uid=$$ACTUAL_UID gid=$$ACTUAL_GID"
 
 ## End-to-end browser tests: starts a fresh SUT, runs Playwright, then tears down.
 e2e: build

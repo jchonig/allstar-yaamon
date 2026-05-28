@@ -10,14 +10,13 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags "-s -w -X allstar-yaamon/internal/config.DefaultFooterURL=${REPO_URL}" -o yaamon .
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata curl && \
+RUN apk add --no-cache ca-certificates tzdata curl shadow su-exec && \
     adduser -D -s /sbin/nologin -u 1000 yaamon && \
     mkdir -p /etc/yaamon /var/lib/yaamon && \
     chown yaamon:yaamon /etc/yaamon /var/lib/yaamon
 COPY --from=builder /build/yaamon /usr/local/bin/yaamon
 COPY docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
-USER yaamon
 WORKDIR /etc/yaamon
 EXPOSE 80 443
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s \

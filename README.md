@@ -105,6 +105,18 @@ volumes:
 
 A bind-mount directory works too — replace `yaamon-data:/var/lib/yaamon` with `./data:/var/lib/yaamon` if you prefer the database stored at a known path on the host.
 
+#### Bind-mount ownership (PUID / PGID)
+
+When using a bind-mount for `/var/lib/yaamon`, the host directory must be writable by the user inside the container. By default the container runs as uid/gid 1000. If your host directory is owned by a different user, set `PUID` and `PGID` to match:
+
+```yaml
+    environment:
+      - PUID=1000   # uid of the host directory owner
+      - PGID=1000   # gid of the host directory owner
+```
+
+The entrypoint adjusts the `yaamon` user to the specified uid/gid before starting the server. Named Docker volumes (the default) are always owned correctly and do not require this.
+
 To run on non-standard ports, map the host ports in `ports` and set matching values in `config.yaml` (or via environment variables):
 
 ```yaml
