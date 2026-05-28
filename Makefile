@@ -120,7 +120,6 @@ test-integration:
 	@docker rm -f $(TEST_SUT) 2>/dev/null; \
 	docker network rm $(TEST_NET) 2>/dev/null; \
 	mkdir -p test/data && chmod a+w test/data; \
-	rm -f test/data/yaamon.db; \
 	docker network create $(TEST_NET); \
 	docker run -d \
 	  --name $(TEST_SUT) \
@@ -128,6 +127,7 @@ test-integration:
 	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
 	  -v "$(CURDIR)/test/data:/var/lib/yaamon" \
 	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
+	  -e YAAMON_APPLY_RESET_PASSWORDS=1 \
 	  -e TEST_ADMIN_PASSWORD=testpassword \
 	  -e TEST_VIEWER_PASSWORD=viewerpassword \
 	  yaamon:dev; \
@@ -276,6 +276,7 @@ test-deb-integration:
 	  -v "$(CURDIR)/test/config:/etc/yaamon:ro" \
 	  -v "$(CURDIR)/test/data:/var/lib/yaamon" \
 	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
+	  -e YAAMON_APPLY_RESET_PASSWORDS=1 \
 	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
 	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
 	  yaamon:deb-test; \

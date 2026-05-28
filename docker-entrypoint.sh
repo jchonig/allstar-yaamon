@@ -10,16 +10,20 @@ if [ "$(id -u)" = "0" ]; then
     chown -R yaamon:yaamon /var/lib/yaamon
 
     if [ -n "$YAAMON_STATE_FILE" ] && [ -f "$YAAMON_STATE_FILE" ]; then
+        APPLY_FLAGS=""
+        [ -n "$YAAMON_APPLY_RESET_PASSWORDS" ] && APPLY_FLAGS="--reset-passwords"
         echo "Applying state from $YAAMON_STATE_FILE..."
-        su-exec yaamon yaamon apply "$YAAMON_STATE_FILE"
+        su-exec yaamon yaamon apply $APPLY_FLAGS "$YAAMON_STATE_FILE"
     fi
 
     exec su-exec yaamon "$@"
 fi
 
 if [ -n "$YAAMON_STATE_FILE" ] && [ -f "$YAAMON_STATE_FILE" ]; then
+    APPLY_FLAGS=""
+    [ -n "$YAAMON_APPLY_RESET_PASSWORDS" ] && APPLY_FLAGS="--reset-passwords"
     echo "Applying state from $YAAMON_STATE_FILE..."
-    yaamon apply "$YAAMON_STATE_FILE"
+    yaamon apply $APPLY_FLAGS "$YAAMON_STATE_FILE"
 fi
 
 exec "$@"
