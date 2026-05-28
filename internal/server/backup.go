@@ -23,7 +23,7 @@ func (s *Server) handleBackupPage(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		pageData
 		Nodes interface{}
-	}{pageData: newPageData()}
+	}{pageData: s.newPageData()}
 	fillSession(&data.pageData, sess)
 	data.Nodes = nodes
 	s.render(w, "backup", data)

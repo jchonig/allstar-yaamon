@@ -408,9 +408,19 @@
                 <td><span id="about-latest"><span class="spinner-border spinner-border-sm text-secondary" role="status"></span></span></td>
               </tr>
               <tr>
+                <th scope="row" class="text-muted fw-normal ps-0">Author</th>
+                <td><a href="https://n2vlv.net" target="_blank" rel="noopener">Jeffrey Honig, N2VLV</a></td>
+              </tr>
+              <tr>
                 <th scope="row" class="text-muted fw-normal ps-0">Source</th>
                 <td><a href="https://github.com/jchonig/allstar-yaamon" target="_blank" rel="noopener">github.com/jchonig/allstar-yaamon</a></td>
               </tr>
+              {{if and .RepoURL (ne .RepoURL "https://github.com/jchonig/allstar-yaamon")}}
+              <tr>
+                <th scope="row" class="text-muted fw-normal ps-0">This instance</th>
+                <td><a href="{{.RepoURL}}" target="_blank" rel="noopener">{{.RepoURL}}</a> <span class="text-muted small">(fork)</span></td>
+              </tr>
+              {{end}}
             </tbody>
           </table>
         </div>
@@ -438,15 +448,20 @@
         headers: {'Accept': 'application/vnd.github+json'},
       });
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const data = await resp.json();
-      const latest = data.tag_name || '';
-      const current = document.getElementById('about-version').textContent.trim();
+      const rel = await resp.json();
+      const latest = rel.tag_name || '';
+      const full = document.getElementById('about-version').textContent.trim();
+      // Extract vX.Y.Z from git-describe output (strips -dirty, -N-gHASH suffixes).
+      const current = full.match(/^v\d+\.\d+\.\d+/)?.[0] || full;
+      const isDev = full !== current; // dev build if suffixes were stripped
       if (!latest) {
         el.textContent = 'unavailable';
       } else if (latest === current) {
         el.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + latest + ' (up to date)</span>';
+      } else if (isDev) {
+        el.innerHTML = '<span class="text-muted">' + latest + ' <span class="small">(dev build)</span></span>';
       } else {
-        el.innerHTML = '<a href="' + data.html_url + '" target="_blank" rel="noopener" class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>' + latest + ' available</a>';
+        el.innerHTML = '<a href="' + rel.html_url + '" target="_blank" rel="noopener" class="text-warning fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>' + latest + ' available</a>';
       }
     } catch (_) {
       el.textContent = 'unavailable';

@@ -108,7 +108,7 @@ func (s *Server) handleGraphPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := auth.FromContext(r.Context())
-	data := graphPageData{pageData: newPageData(), NodeNumber: nodeNumber, HomeNodeID: homeNodeID}
+	data := graphPageData{pageData: s.newPageData(), NodeNumber: nodeNumber, HomeNodeID: homeNodeID}
 	fillSession(&data.pageData, sess)
 	s.render(w, "graph", data)
 }

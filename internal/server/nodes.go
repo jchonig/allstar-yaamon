@@ -239,7 +239,7 @@ func (s *Server) handleAPITestNode(w http.ResponseWriter, r *http.Request) {
 // handleNodesPage renders the node management page.
 func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
 	sess := auth.FromContext(r.Context())
-	data := struct{ pageData }{pageData: newPageData()}
+	data := struct{ pageData }{pageData: s.newPageData()}
 	fillSession(&data.pageData, sess)
 	s.render(w, "nodes", data)
 }

@@ -21,10 +21,14 @@ type pageData struct {
 	FullName   string
 	AvatarURL  string
 	Version    string
+	RepoURL    string
 }
 
-func newPageData() pageData {
-	return pageData{Version: version.Version}
+func (s *Server) newPageData() pageData {
+	return pageData{
+		Version: version.Version,
+		RepoURL: s.cfg.UI.FooterURL,
+	}
 }
 
 // fillSession copies the authenticated session fields into pd.
@@ -213,7 +217,7 @@ type dashboardData struct {
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	sess := auth.FromContext(r.Context())
-	data := dashboardData{pageData: newPageData()}
+	data := dashboardData{pageData: s.newPageData()}
 	fillSession(&data.pageData, sess)
 	data.Nodes, _ = s.db.ListNodes(r.Context())
 	s.fillNodeInfo(data.Nodes)

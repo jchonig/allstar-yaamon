@@ -67,7 +67,7 @@ func (s *Server) enrichFromCache(num string, in *favoriteInput) {
 // handleFavoritesPage renders the favorites management settings page.
 func (s *Server) handleFavoritesPage(w http.ResponseWriter, r *http.Request) {
 	sess := auth.FromContext(r.Context())
-	data := dashboardData{pageData: newPageData()}
+	data := dashboardData{pageData: s.newPageData()}
 	fillSession(&data.pageData, sess)
 	data.Nodes, _ = s.db.ListNodes(r.Context())
 
