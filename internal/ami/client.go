@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"allstar-yaamon/internal/mdns"
 )
 
 // Event is a parsed AMI message: a block of Key: Value headers terminated by a blank line.
@@ -191,12 +193,26 @@ func (c *Client) reconnectLoop(ctx context.Context) {
 	}
 }
 
+// dialAMI opens a TCP connection to host:port, resolving .local names via mDNS.
+func dialAMI(ctx context.Context, host string, port int, timeout time.Duration) (net.Conn, error) {
+	resolved := host
+	if mdns.IsLocal(host) {
+		ip, err := mdns.Resolve(ctx, host)
+		if err != nil {
+			return nil, fmt.Errorf("mDNS lookup %q: %w", host, err)
+		}
+		resolved = ip.String()
+		slog.Debug("mDNS resolved", "host", host, "ip", resolved)
+	}
+	addr := net.JoinHostPort(resolved, strconv.Itoa(port))
+	d := net.Dialer{Timeout: timeout}
+	return d.DialContext(ctx, "tcp", addr)
+}
+
 func (c *Client) connect(ctx context.Context) error {
-	addr := fmt.Sprintf("%s:%d", c.host, c.port)
-	dialer := net.Dialer{Timeout: 10 * time.Second}
-	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	conn, err := dialAMI(ctx, c.host, c.port, 10*time.Second)
 	if err != nil {
-		return fmt.Errorf("dial %s: %w", addr, err)
+		return fmt.Errorf("dial %s:%d: %w", c.host, c.port, err)
 	}
 
 	c.mu.Lock()
@@ -322,8 +338,7 @@ func (c *Client) readLoop(ctx context.Context, r *bufio.Reader) error {
 // on successful authentication or an error with a descriptive message.
 // The connection is closed immediately after the result is known.
 func TestConnection(host string, port int, user, pass string) error {
-	addr := net.JoinHostPort(host, strconv.Itoa(port))
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	conn, err := dialAMI(context.Background(), host, port, 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("connection refused: %w", err)
 	}
