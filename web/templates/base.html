@@ -452,8 +452,10 @@
       const latest = rel.tag_name || '';
       const full = document.getElementById('about-version').textContent.trim();
       // Extract vX.Y.Z from git-describe output (strips -dirty, -N-gHASH suffixes).
-      const current = full.match(/^v\d+\.\d+\.\d+/)?.[0] || full;
-      const isDev = full !== current; // dev build if suffixes were stripped
+      // Normalize to always have a v prefix so comparison works regardless of build tool.
+      const tag = full.match(/v?\d+\.\d+\.\d+/)?.[0] || full;
+      const current = tag.startsWith('v') ? tag : 'v' + tag;
+      const isDev = full !== tag; // dev build if suffixes were stripped
       if (!latest) {
         el.textContent = 'unavailable';
       } else if (latest === current) {
