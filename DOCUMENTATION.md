@@ -397,7 +397,7 @@ Set the `YAAMON_STATE_FILE` environment variable to the path of your state file 
 ```yaml
 services:
   yaamon:
-    image: ghcr.io/jchonig/allstar-yaamon:latest
+    image: ghcr.io/jchonig/yaamon:latest
     volumes:
       - ./config:/etc/yaamon
       - yaamon-data:/var/lib/yaamon

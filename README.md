@@ -77,7 +77,7 @@ docker run -d \
   -p 80:80 \
   -v /etc/yaamon:/etc/yaamon \
   -v /var/lib/yaamon:/var/lib/yaamon \
-  ghcr.io/jchonig/allstar-yaamon:latest
+  ghcr.io/jchonig/yaamon:latest
 ```
 
 Mount your config file at `/etc/yaamon/config.yaml` and a persistent data volume at `/var/lib/yaamon`. The database is created at `/var/lib/yaamon/yaamon.db` on first run.
@@ -87,7 +87,7 @@ Mount your config file at `/etc/yaamon/config.yaml` and a persistent data volume
 ```yaml
 services:
   yaamon:
-    image: ghcr.io/jchonig/allstar-yaamon:latest
+    image: ghcr.io/jchonig/yaamon:latest
     restart: unless-stopped
     ports:
       - "80:80"
