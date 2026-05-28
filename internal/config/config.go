@@ -15,6 +15,7 @@ type Config struct {
 	Server ServerConfig `mapstructure:"server"`
 	TLS    TLSConfig    `mapstructure:"tls"`
 	DB     DBConfig     `mapstructure:"db"`
+	AstDB  AstDBConfig  `mapstructure:"astdb"`
 	Log    LogConfig    `mapstructure:"log"`
 	UI     UIConfig     `mapstructure:"ui"`
 
@@ -49,6 +50,11 @@ type DBConfig struct {
 	Path string `mapstructure:"path"`
 }
 
+type AstDBConfig struct {
+	Path   string `mapstructure:"path"`
+	Update bool   `mapstructure:"update"`
+}
+
 type LogConfig struct {
 	Level string `mapstructure:"level"`
 }
@@ -62,6 +68,8 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("tls.mode", "disabled")
 	v.SetDefault("tls.acme_cache_dir", "/etc/yaamon/acme")
 	v.SetDefault("db.path", "/var/lib/yaamon/yaamon.db")
+	v.SetDefault("astdb.path", "/var/lib/asterisk/astdb.txt")
+	v.SetDefault("astdb.update", true)
 	v.SetDefault("log.level", "info")
 	v.SetDefault("ui.footer_text", "Yet Another Allstarlink MONitor (and favorites)")
 	v.SetDefault("ui.footer_url", DefaultFooterURL)

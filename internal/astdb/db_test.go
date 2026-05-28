@@ -72,7 +72,7 @@ func TestParseEmptyLines(t *testing.T) {
 }
 
 func TestLookup(t *testing.T) {
-	db := New("")
+	db := New("", false)
 	db.mu.Lock()
 	db.nodes["12345"] = Node{Callsign: "W1AW", Description: "ARRL HQ", Location: "Newington, CT"}
 	db.mu.Unlock()
@@ -106,7 +106,7 @@ func TestLoadFile(t *testing.T) {
 	}
 	f.Close()
 
-	db := New(f.Name())
+	db := New(f.Name(), false)
 	db.loadFile()
 
 	if db.Len() != 30 {
@@ -130,7 +130,7 @@ func TestLoadFile(t *testing.T) {
 
 func TestLoadFileMissing(t *testing.T) {
 	// A missing file should be a no-op, not an error.
-	db := New(filepath.Join(t.TempDir(), "nonexistent.txt"))
+	db := New(filepath.Join(t.TempDir(), "nonexistent.txt"), false)
 	db.loadFile()
 	if db.Len() != 0 {
 		t.Errorf("expected 0 nodes for missing file, got %d", db.Len())
@@ -146,7 +146,7 @@ func TestLoadFileTooSmall(t *testing.T) {
 	f.WriteString("1000|KD9ABC|Hub|Chicago, IL\n") //nolint:errcheck
 	f.Close()
 
-	db := New(f.Name())
+	db := New(f.Name(), false)
 	db.loadFile()
 	if db.Len() != 0 {
 		t.Errorf("expected 0 nodes for undersized file, got %d", db.Len())
@@ -169,11 +169,7 @@ func TestRefreshDownloadsAndSavesFile(t *testing.T) {
 	defer srv.Close()
 
 	outFile := filepath.Join(t.TempDir(), "astdb.txt")
-	db := New(outFile)
-	db.client = srv.Client()
-	// Override the URL by pointing the client at our test server.
-	// We do this by temporarily replacing the constant via a field on the test DB.
-	// Since dbURL is a package-level const, we use a custom http.RoundTripper instead.
+	db := New(outFile, true)
 	db.client = &http.Client{
 		Transport: rewriteHost(srv.URL),
 	}
@@ -206,7 +202,7 @@ func TestRefreshNotModified(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	db := New("")
+	db := New("", true)
 	db.mu.Lock()
 	db.nodes["9999"] = Node{Callsign: "W1AW"}
 	db.lastModified = "Mon, 01 Jan 2024 00:00:00 GMT"
@@ -230,7 +226,7 @@ func TestRefreshIgnoresSmallDownload(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	db := New("")
+	db := New("", true)
 	db.mu.Lock()
 	db.nodes["9999"] = Node{Callsign: "SEED"}
 	db.mu.Unlock()
@@ -243,6 +239,69 @@ func TestRefreshIgnoresSmallDownload(t *testing.T) {
 	// The suspiciously small download should be discarded; seed node preserved.
 	if db.Len() != 1 {
 		t.Errorf("expected 1 node preserved after small download, got %d", db.Len())
+	}
+}
+
+func TestSaveFileAtomic(t *testing.T) {
+	dir := t.TempDir()
+	outFile := filepath.Join(dir, "astdb.txt")
+	db := New(outFile, true)
+
+	body := []byte("1000|W1AW|Hub|City, ST\n")
+	db.saveFile(body)
+
+	got, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("output file not readable: %v", err)
+	}
+	if string(got) != string(body) {
+		t.Errorf("file contents = %q, want %q", got, body)
+	}
+
+	// No temp files should remain in the directory.
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".astdb-") {
+			t.Errorf("temp file left behind: %s", e.Name())
+		}
+	}
+}
+
+func TestNoUpdateSkipsNetwork(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	// Write a valid file so loadFile has something to read.
+	var sb strings.Builder
+	for i := 1000; i < 1030; i++ {
+		fmt.Fprintf(&sb, "%d|KD9ABC|Node %d|Chicago, IL\n", i, i)
+	}
+	f, err := os.CreateTemp(t.TempDir(), "astdb*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(sb.String()) //nolint:errcheck
+	f.Close()
+
+	db := New(f.Name(), false)
+	db.client = &http.Client{Transport: rewriteHost(srv.URL)}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	db.Start(ctx, 50*time.Millisecond)
+
+	// Give the ticker a chance to fire if it incorrectly started.
+	<-ctx.Done()
+
+	if called {
+		t.Error("update=false: network request was made but should not have been")
+	}
+	if db.Len() != 30 {
+		t.Errorf("update=false: expected 30 nodes loaded from file, got %d", db.Len())
 	}
 }
 

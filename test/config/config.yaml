@@ -5,5 +5,7 @@ tls:
   mode: disabled
 db:
   path: /var/lib/yaamon/yaamon.db
+astdb:
+  path: /var/lib/yaamon/astdb.txt
 log:
   level: debug

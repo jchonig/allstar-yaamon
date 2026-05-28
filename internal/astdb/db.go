@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -30,15 +31,20 @@ type DB struct {
 	lastModified string
 	client       *http.Client
 	filePath     string
+	update       bool
 }
 
 // New creates an empty DB. filePath is where the database is persisted on disk
-// (empty string disables file persistence). Call Start to begin downloading.
-func New(filePath string) *DB {
+// (empty string disables file persistence). When update is true, Start will
+// download fresh data from allmondb.allstarlink.org on an interval; when false,
+// Start only reads the existing file and never makes network requests.
+// Call Start to load data.
+func New(filePath string, update bool) *DB {
 	return &DB{
 		nodes:    make(map[string]Node),
 		client:   &http.Client{Timeout: 30 * time.Second},
 		filePath: filePath,
+		update:   update,
 	}
 }
 
@@ -57,10 +63,15 @@ func (db *DB) Len() int {
 	return len(db.nodes)
 }
 
-// Start loads the database from disk (if available), then downloads a fresh copy,
-// and refreshes every interval using If-Modified-Since so unchanged responses cost only a HEAD round-trip.
+// Start loads the database from disk (if available). When update is true it also
+// downloads a fresh copy immediately and refreshes every interval thereafter,
+// using If-Modified-Since so unchanged responses cost only a HEAD round-trip.
+// When update is false, only the local file is used and no network requests are made.
 func (db *DB) Start(ctx context.Context, interval time.Duration) {
 	db.loadFile()
+	if !db.update {
+		return
+	}
 	db.refresh(ctx)
 	go func() {
 		t := time.NewTicker(interval)
@@ -115,13 +126,33 @@ func (db *DB) loadFile() {
 	slog.Info("astdb: loaded from file", "path", db.filePath, "nodes", len(nodes))
 }
 
-// saveFile writes the current raw body to the configured file path.
+// saveFile atomically writes body to filePath by writing a temp file in the same
+// directory and renaming it, so readers never see a partial file.
 func (db *DB) saveFile(body []byte) {
 	if db.filePath == "" {
 		return
 	}
-	if err := os.WriteFile(db.filePath, body, 0644); err != nil {
-		slog.Warn("astdb: write file", "path", db.filePath, "err", err)
+	dir := filepath.Dir(db.filePath)
+	tmp, err := os.CreateTemp(dir, ".astdb-*.tmp")
+	if err != nil {
+		slog.Warn("astdb: create temp file", "dir", dir, "err", err)
+		return
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(body); err != nil {
+		tmp.Close()
+		os.Remove(tmpName) //nolint:errcheck
+		slog.Warn("astdb: write temp file", "err", err)
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName) //nolint:errcheck
+		slog.Warn("astdb: close temp file", "err", err)
+		return
+	}
+	if err := os.Rename(tmpName, db.filePath); err != nil {
+		os.Remove(tmpName) //nolint:errcheck
+		slog.Warn("astdb: rename temp file", "path", db.filePath, "err", err)
 	}
 }
 

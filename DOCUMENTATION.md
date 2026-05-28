@@ -377,6 +377,70 @@ yaamon restore /path/to/backup.owbackup --passphrase "your passphrase"
 
 ---
 
+## AllStarLink Node Database (astdb)
+
+YAAMon automatically downloads the AllStarLink node database from `allmondb.allstarlink.org` and uses it to populate callsign, description, and location fields for nodes and favorites that are not manually configured. The database is refreshed every hour using a conditional request (If-Modified-Since), so bandwidth use is minimal.
+
+### File location
+
+| Deployment | Default path |
+|---|---|
+| Standard Asterisk install | `/var/lib/asterisk/astdb.txt` |
+| Docker (no Asterisk on host) | `/var/lib/yaamon/astdb.txt` |
+
+The path is configurable. The file is written atomically (temp file → rename) so readers never see a partial update.
+
+### Configuration
+
+```yaml
+astdb:
+  # Path to the node database file.
+  # Standard install: /var/lib/asterisk/astdb.txt  (default)
+  # Docker:           /var/lib/yaamon/astdb.txt
+  path: /var/lib/asterisk/astdb.txt
+
+  # update: true  — download fresh data on startup and every hour (default).
+  # update: false — read the existing file only; make no network requests.
+  #   Use false when Asterisk is co-located and already keeps the file current,
+  #   or when the host has no internet access.
+  update: true
+```
+
+Environment-variable equivalents (for Docker):
+
+```
+YAAMON_ASTDB_PATH=/var/lib/yaamon/astdb.txt
+YAAMON_ASTDB_UPDATE=false
+```
+
+### Docker example
+
+```yaml
+services:
+  yaamon:
+    image: ghcr.io/jchonig/yaamon:latest
+    environment:
+      - YAAMON_ASTDB_PATH=/var/lib/yaamon/astdb.txt
+    volumes:
+      - ./data:/var/lib/yaamon
+```
+
+If you prefer to share Asterisk's own copy of the file, bind-mount the Asterisk directory instead and set `update: false`:
+
+```yaml
+services:
+  yaamon:
+    image: ghcr.io/jchonig/yaamon:latest
+    environment:
+      - YAAMON_ASTDB_PATH=/asterisk/astdb.txt
+      - YAAMON_ASTDB_UPDATE=false
+    volumes:
+      - /var/lib/asterisk:/asterisk:ro
+      - ./data:/var/lib/yaamon
+```
+
+---
+
 ## Docker — Bind-mount Ownership (PUID / PGID)
 
 When using a bind-mount for `/var/lib/yaamon`, the host directory must be writable by the container process. By default YAAMon runs as uid/gid 1000 inside the container. If your host directory is owned by a different user, set `PUID` and `PGID` environment variables to match:

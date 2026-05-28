@@ -20,6 +20,22 @@ db:
   # Docker:      override with YAAMON_DB_PATH=/var/lib/yaamon/yaamon.db and mount a volume at /var/lib/yaamon
   path: /var/lib/yaamon/yaamon.db
 
+astdb:
+  # Path to the AllStarLink node database file (pipe-delimited, downloaded from
+  # allmondb.allstarlink.org). YAAMon reads this file to fill in callsign,
+  # description, and location for nodes not manually configured.
+  #
+  # Standard Asterisk install: /var/lib/asterisk/astdb.txt  (default)
+  # Docker (no Asterisk):      /var/lib/yaamon/astdb.txt
+  #   — set via env var: YAAMON_ASTDB_PATH=/var/lib/yaamon/astdb.txt
+  path: /var/lib/asterisk/astdb.txt
+  #
+  # update: true (default) — download a fresh copy on startup and every hour.
+  # update: false          — read the existing file only; no network requests.
+  #   Useful when Asterisk is running on the same host and already keeps the file
+  #   current, or when the host has no internet access.
+  update: true
+
 log:
   level: info                # debug | info | warn | error
 
