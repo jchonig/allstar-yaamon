@@ -87,7 +87,7 @@ func generateSelfSigned() (tls.Certificate, error) {
 		Subject:      pkix.Name{CommonName: "yaamon"},
 		NotBefore:    time.Now().Add(-time.Minute),
 		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
-		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
 		DNSNames:     []string{"localhost"},
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
