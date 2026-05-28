@@ -17,7 +17,12 @@ type Config struct {
 	DB     DBConfig     `mapstructure:"db"`
 	Log    LogConfig    `mapstructure:"log"`
 	UI     UIConfig     `mapstructure:"ui"`
+
+	configFile string // resolved path of the config file actually loaded
 }
+
+// ConfigFile returns the path of the config file that was loaded, if any.
+func (c *Config) ConfigFile() string { return c.configFile }
 
 type UIConfig struct {
 	FooterText           string `mapstructure:"footer_text"`
@@ -88,6 +93,7 @@ func Load(cfgFile string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
+	cfg.configFile = v.ConfigFileUsed()
 	return &cfg, validate(&cfg)
 }
 

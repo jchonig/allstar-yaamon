@@ -122,6 +122,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 	setupLogging(cfg.Log.Level)
 	slog.Info("YAAMon starting", "tls_mode", cfg.TLS.Mode, "db", cfg.DB.Path)
 
+	for _, w := range config.CheckFilePermissions(cfg, os.Getenv("YAAMON_STATE_FILE")) {
+		slog.Warn("insecure file permissions", "detail", w)
+	}
+
 	database, err := db.Open(cfg.DB.Path)
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
