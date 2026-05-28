@@ -530,9 +530,9 @@ function renderFavs() {
     const s = statsData[f.node_number] || {};
     const txTime = s.total_keyups != null ? s.total_keyups : '—';
     const lcnt = s.connected_links != null ? s.connected_links : null;
-    const call = s.callsign || f.callsign || '—';
-    const desc = s.description || f.description || '—';
-    const loc  = s.location || f.location || '—';
+    const call = f.callsign || s.callsign || '—';
+    const desc = f.description || s.description || '—';
+    const loc  = f.location || '—';
     const dot = keyedDot(f.node_number);
     const numAttrs = CAN_WRITE
       ? `ondblclick="doConnect('${esc(f.node_number)}','transceive',true)" style="cursor:pointer" title="Double-click to connect"`
@@ -724,9 +724,9 @@ function renderActiveLinks() {
     const s    = statsData[nodeNum] || {};
     const fav  = favsData.find(f => f.node_number === nodeNum);
     const adb  = astdbCache[nodeNum] || {};
-    const call = s.callsign || adb.callsign || (fav && fav.callsign) || '';
-    const desc = s.description || adb.description || (fav && fav.description) || '';
-    const loc  = s.location   || adb.location    || (fav && fav.location)    || '';
+    const call = (fav && fav.callsign)    || s.callsign    || adb.callsign    || '';
+    const desc = (fav && fav.description) || s.description || adb.description || '';
+    const loc  = (fav && fav.location)    || s.location    || adb.location    || '';
     // AMI keyed state (real-time, from RPT_ALINKS) takes precedence over ASL stats keyed.
     const amiKeyed = !!link.keyed;
     const dotClass  = amiKeyed ? 'text-danger' : (s.fetched_at ? 'text-success' : 'text-secondary');

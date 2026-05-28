@@ -200,6 +200,7 @@ func (s *Server) fetchAdaptive(ctx context.Context, stale []string) map[string]a
 // event for nodeID containing whatever is currently cached.
 func (s *Server) publishCachedStats(nodeID int64, nums []string) {
 	subset := s.statsCache.getMany(nums)
+	s.enrichFromAstdb(subset)
 	data, err := json.Marshal(map[string]any{
 		"type":   "stats",
 		"nodeID": nodeID,
@@ -209,6 +210,26 @@ func (s *Server) publishCachedStats(nodeID int64, nums []string) {
 		s.sseBroker.Publish(nodeID, data)
 	}
 	slog.Debug("stats poll", "node_id", nodeID, "count", len(subset))
+}
+
+// enrichFromAstdb fills in Location (and Callsign when absent) for each entry
+// in stats from the local AllStar node database. The stats API does not return
+// location; astdb is the authoritative source for that field.
+func (s *Server) enrichFromAstdb(stats map[string]aslstats.NodeStats) {
+	for num, st := range stats {
+		if st.Location != "" {
+			continue
+		}
+		if n, ok := s.nodeDB.Lookup(num); ok {
+			if st.Location == "" {
+				st.Location = n.Location
+			}
+			if st.Callsign == "" {
+				st.Callsign = n.Callsign
+			}
+			stats[num] = st
+		}
+	}
 }
 
 // pollNodeStats fetches fresh ASL stats for a single node on SSE connect and
@@ -279,8 +300,9 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	// Trigger an immediate fresh stats fetch for this node in the background.
-	// Because we subscribed above, the result will arrive on ch.
-	go s.pollNodeStats(r.Context(), nodeID)
+	// Use WithoutCancel so the fetch and publish complete even if the browser
+	// closes this SSE connection before the goroutine finishes (e.g. on refresh).
+	go s.pollNodeStats(context.WithoutCancel(r.Context()), nodeID)
 
 	// Send cached state as the initial SSE burst while the fresh fetch is in flight.
 	var initial [][]byte
@@ -342,7 +364,9 @@ func (s *Server) handleAPINodeStats(w http.ResponseWriter, r *http.Request) {
 	for _, f := range favs {
 		nums = append(nums, f.NodeNumber)
 	}
-	writeJSON(w, s.statsCache.getMany(nums))
+	result := s.statsCache.getMany(nums)
+	s.enrichFromAstdb(result)
+	writeJSON(w, result)
 }
 
 // handleConnect sends an AMI connect command.

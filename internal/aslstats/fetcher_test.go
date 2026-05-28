@@ -156,3 +156,89 @@ func TestFetchStringEncodedNumbers(t *testing.T) {
 		t.Errorf("TotalKeyups = %d, want 42 (API returns string)", s.TotalKeyups)
 	}
 }
+
+func TestFetchBulkParsesAllNodes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/stats/" {
+			t.Errorf("unexpected path %q, want /api/stats/", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"11111": {
+				"node": {"callsign": "W1AW", "access_webtransceiver": "1", "node_frequency": "ARRL HQ"},
+				"stats": {"data": {"keyed": true, "totaltxtime": "10", "totalkeyups": "3", "links": ["22222"]}}
+			},
+			"22222": {
+				"node": {"callsign": "N0CALL", "access_webtransceiver": "0", "node_frequency": "Test"},
+				"stats": {"data": {"keyed": false, "totaltxtime": "0", "totalkeyups": "0", "links": 0}}
+			}
+		}`))
+	}))
+	defer srv.Close()
+
+	results, err := newTestFetcher(srv).FetchBulk(context.Background())
+	if err != nil {
+		t.Fatalf("FetchBulk error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("got %d results, want 2", len(results))
+	}
+
+	n1, ok := results["11111"]
+	if !ok {
+		t.Fatal("missing node 11111")
+	}
+	if n1.Callsign != "W1AW" {
+		t.Errorf("11111 Callsign = %q, want W1AW", n1.Callsign)
+	}
+	if !n1.Keyed {
+		t.Error("11111 Keyed = false, want true")
+	}
+	if n1.ConnectedLinks != 1 || len(n1.LinkedNodes) != 1 || n1.LinkedNodes[0] != "22222" {
+		t.Errorf("11111 links = %v, want [22222]", n1.LinkedNodes)
+	}
+
+	n2, ok := results["22222"]
+	if !ok {
+		t.Fatal("missing node 22222")
+	}
+	if n2.Callsign != "N0CALL" {
+		t.Errorf("22222 Callsign = %q, want N0CALL", n2.Callsign)
+	}
+	if n2.ConnectedLinks != 0 {
+		t.Errorf("22222 ConnectedLinks = %d, want 0 (links is integer 0)", n2.ConnectedLinks)
+	}
+}
+
+func TestFetchBulkHTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	_, err := newTestFetcher(srv).FetchBulk(context.Background())
+	if err == nil {
+		t.Error("expected error for 429 response, got nil")
+	}
+}
+
+func TestFetchBulkConsistentTimestamp(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"11111": {"node": {}, "stats": {"data": {}}},
+			"22222": {"node": {}, "stats": {"data": {}}}
+		}`))
+	}))
+	defer srv.Close()
+
+	results, err := newTestFetcher(srv).FetchBulk(context.Background())
+	if err != nil {
+		t.Fatalf("FetchBulk error: %v", err)
+	}
+	t1 := results["11111"].FetchedAt
+	t2 := results["22222"].FetchedAt
+	if !t1.Equal(t2) {
+		t.Errorf("FetchedAt not consistent across bulk results: %v vs %v", t1, t2)
+	}
+}

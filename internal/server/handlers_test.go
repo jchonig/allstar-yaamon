@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"allstar-yaamon/internal/aslstats"
 	"allstar-yaamon/internal/astdb"
 	"allstar-yaamon/internal/db"
 )
@@ -93,6 +94,94 @@ func TestFillNodeInfo_UnknownNodeUnchanged(t *testing.T) {
 	if nodes[0].Description != "" || nodes[0].Location != "" {
 		t.Errorf("unknown node should have empty desc/loc, got %q / %q",
 			nodes[0].Description, nodes[0].Location)
+	}
+}
+
+func TestEnrichFromAstdb_FillsLocation(t *testing.T) {
+	stub := &stubAstDB{nodes: map[string]astdb.Node{
+		"12345": {Callsign: "W1AW", Location: "Newington, CT"},
+	}}
+	s := &Server{nodeDB: stub}
+
+	stats := map[string]aslstats.NodeStats{
+		"12345": {NodeNumber: "12345", Callsign: "W1AW"},
+	}
+	s.enrichFromAstdb(stats)
+
+	if stats["12345"].Location != "Newington, CT" {
+		t.Errorf("Location = %q, want %q", stats["12345"].Location, "Newington, CT")
+	}
+}
+
+func TestEnrichFromAstdb_PreservesExistingLocation(t *testing.T) {
+	stub := &stubAstDB{nodes: map[string]astdb.Node{
+		"12345": {Callsign: "W1AW", Location: "astdb location"},
+	}}
+	s := &Server{nodeDB: stub}
+
+	stats := map[string]aslstats.NodeStats{
+		"12345": {NodeNumber: "12345", Location: "manual location"},
+	}
+	s.enrichFromAstdb(stats)
+
+	if stats["12345"].Location != "manual location" {
+		t.Errorf("Location overwritten: got %q, want %q", stats["12345"].Location, "manual location")
+	}
+}
+
+func TestEnrichFromAstdb_FillsCallsignWhenAbsent(t *testing.T) {
+	stub := &stubAstDB{nodes: map[string]astdb.Node{
+		"12345": {Callsign: "W1AW", Location: "Somewhere"},
+	}}
+	s := &Server{nodeDB: stub}
+
+	stats := map[string]aslstats.NodeStats{
+		"12345": {NodeNumber: "12345"},
+	}
+	s.enrichFromAstdb(stats)
+
+	if stats["12345"].Callsign != "W1AW" {
+		t.Errorf("Callsign = %q, want W1AW", stats["12345"].Callsign)
+	}
+}
+
+func TestEnrichFromAstdb_UnknownNodeUnchanged(t *testing.T) {
+	stub := &stubAstDB{nodes: map[string]astdb.Node{}}
+	s := &Server{nodeDB: stub}
+
+	stats := map[string]aslstats.NodeStats{
+		"99999": {NodeNumber: "99999"},
+	}
+	s.enrichFromAstdb(stats)
+
+	if stats["99999"].Location != "" || stats["99999"].Callsign != "" {
+		t.Errorf("unknown node should be unchanged, got loc=%q call=%q",
+			stats["99999"].Location, stats["99999"].Callsign)
+	}
+}
+
+func TestEnrichFromAstdb_MultipleNodes(t *testing.T) {
+	stub := &stubAstDB{nodes: map[string]astdb.Node{
+		"11111": {Callsign: "W1AA", Location: "loc A"},
+		"22222": {Callsign: "W2BB", Location: "loc B"},
+	}}
+	s := &Server{nodeDB: stub}
+
+	stats := map[string]aslstats.NodeStats{
+		"11111": {NodeNumber: "11111"},
+		"22222": {NodeNumber: "22222", Location: "override"},
+		"33333": {NodeNumber: "33333"},
+	}
+	s.enrichFromAstdb(stats)
+
+	if stats["11111"].Location != "loc A" {
+		t.Errorf("11111 Location = %q, want loc A", stats["11111"].Location)
+	}
+	if stats["22222"].Location != "override" {
+		t.Errorf("22222 Location overwritten to %q", stats["22222"].Location)
+	}
+	if stats["33333"].Location != "" {
+		t.Errorf("33333 (unknown) Location = %q, want empty", stats["33333"].Location)
 	}
 }
 

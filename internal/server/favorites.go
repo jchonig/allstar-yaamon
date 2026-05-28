@@ -103,7 +103,19 @@ func (s *Server) handleAPIListFavorites(w http.ResponseWriter, r *http.Request) 
 	}
 	result := make([]favoriteJSON, len(favs))
 	for i, f := range favs {
-		result[i] = favToJSON(f)
+		j := favToJSON(f)
+		if n, ok := s.nodeDB.Lookup(f.NodeNumber); ok {
+			if j.Callsign == "" {
+				j.Callsign = n.Callsign
+			}
+			if j.Description == "" {
+				j.Description = n.Description
+			}
+			if j.Location == "" {
+				j.Location = n.Location
+			}
+		}
+		result[i] = j
 	}
 	writeJSON(w, result)
 }

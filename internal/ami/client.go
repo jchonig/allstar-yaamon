@@ -199,10 +199,19 @@ func dialAMI(ctx context.Context, host string, port int, timeout time.Duration) 
 	if mdns.IsLocal(host) {
 		ip, err := mdns.Resolve(ctx, host)
 		if err != nil {
-			return nil, fmt.Errorf("mDNS lookup %q: %w", host, err)
+			// Fall back to the system resolver — Docker on macOS and systems
+			// with systemd-resolved or avahi can resolve .local via regular DNS.
+			slog.Debug("mDNS lookup failed, trying system resolver", "host", host, "err", err)
+			addrs, dnsErr := net.DefaultResolver.LookupHost(ctx, host)
+			if dnsErr != nil || len(addrs) == 0 {
+				return nil, fmt.Errorf("mDNS lookup %q: %w", host, err)
+			}
+			resolved = addrs[0]
+			slog.Debug("system resolver resolved .local", "host", host, "ip", resolved)
+		} else {
+			resolved = ip.String()
+			slog.Debug("mDNS resolved", "host", host, "ip", resolved)
 		}
-		resolved = ip.String()
-		slog.Debug("mDNS resolved", "host", host, "ip", resolved)
 	}
 	addr := net.JoinHostPort(resolved, strconv.Itoa(port))
 	d := net.Dialer{Timeout: timeout}
