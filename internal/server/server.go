@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -62,7 +63,7 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 		return nil, fmt.Errorf("AMI manager: %w", err)
 	}
 	s.fetcher = aslstats.New("")
-	s.nodeDB = astdb.New("/data/astdb.txt")
+	s.nodeDB = astdb.New(filepath.Join(filepath.Dir(cfg.DB.Path), "astdb.txt"))
 	s.statsCache = newStatsCache()
 	s.linksCache = newLinksCache()
 	s.sseBroker = sse.NewBroker()

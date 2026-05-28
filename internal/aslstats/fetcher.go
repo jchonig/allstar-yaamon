@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -161,11 +162,13 @@ func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
 	resp, err := f.client.Do(req)
 	if err != nil {
 		s.Error = err.Error()
+		slog.Warn("ASL stats fetch error", "node", nodeNumber, "err", err)
 		return s
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		s.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
+		slog.Warn("ASL stats fetch error", "node", nodeNumber, "status", resp.StatusCode)
 		return s
 	}
 
@@ -199,6 +202,7 @@ func (f *Fetcher) Fetch(ctx context.Context, nodeNumber string) NodeStats {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		s.Error = err.Error()
+		slog.Warn("ASL stats decode error", "node", nodeNumber, "err", err)
 		return s
 	}
 

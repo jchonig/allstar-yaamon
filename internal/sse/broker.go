@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 )
 
 // Broker fans out server-sent events to subscribed HTTP clients per topic (node ID).
@@ -81,6 +82,9 @@ func (b *Broker) StreamFrom(w http.ResponseWriter, r *http.Request, ch <-chan []
 	}
 	flusher.Flush()
 
+	heartbeat := time.NewTicker(25 * time.Second)
+	defer heartbeat.Stop()
+
 	for {
 		select {
 		case data, ok := <-ch:
@@ -88,6 +92,9 @@ func (b *Broker) StreamFrom(w http.ResponseWriter, r *http.Request, ch <-chan []
 				return
 			}
 			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		case <-heartbeat.C:
+			fmt.Fprintf(w, ": heartbeat\n\n")
 			flusher.Flush()
 		case <-r.Context().Done():
 			return

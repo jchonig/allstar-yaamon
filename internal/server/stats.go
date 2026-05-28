@@ -152,6 +152,13 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SSE streams are intentionally long-lived. Remove the server-level write
+	// deadline so it doesn't kill the connection while an ASL stats fetch is
+	// in flight (fetching many favorites can take >30 s through the semaphore).
+	if rc := http.NewResponseController(w); rc != nil {
+		_ = rc.SetWriteDeadline(time.Time{})
+	}
+
 	// Subscribe before triggering the fresh fetch so no published events are
 	// dropped between the fetch completing and the stream starting.
 	ch, cancel := s.sseBroker.Subscribe(nodeID)
