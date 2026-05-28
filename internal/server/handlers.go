@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 
@@ -111,6 +112,16 @@ func (s *Server) handleLoginGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
+	ip := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		ip = host
+	}
+
+	if !s.loginLimiter.Allow(ip) {
+		http.Error(w, "Too many failed login attempts — try again in a minute", http.StatusTooManyRequests)
+		return
+	}
+
 	if err := r.ParseForm(); err != nil {
 		s.render(w, "login", loginData{Error: "Invalid form data"})
 		return
@@ -121,14 +132,17 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.db.GetUser(r.Context(), username)
 	if err != nil {
+		s.loginLimiter.RecordFailure(ip)
 		s.renderLoginError(w, r)
 		return
 	}
 	if err := auth.CheckPassword(user.Password, password); err != nil {
+		s.loginLimiter.RecordFailure(ip)
 		s.renderLoginError(w, r)
 		return
 	}
 
+	s.loginLimiter.RecordSuccess(ip)
 	if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission, user.FullName, user.AvatarURL); err != nil {
 		http.Error(w, "session error", http.StatusInternalServerError)
 		return
@@ -140,6 +154,7 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
+
 
 func (s *Server) renderLoginError(w http.ResponseWriter, r *http.Request) {
 	// Same error for unknown user and wrong password — don't leak which one.

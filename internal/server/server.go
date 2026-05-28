@@ -36,17 +36,18 @@ type nodeDBer interface {
 }
 
 type Server struct {
-	cfg        *config.Config
-	webFS      embed.FS
-	db         *db.DB
-	sessions   *auth.Manager
-	amiMgr     *ami.Manager
-	fetcher    *aslstats.Fetcher
-	nodeDB     nodeDBer
-	statsCache *statsCache
-	linksCache *linksCache
-	sseBroker  *sse.Broker
-	tmpls      map[string]*template.Template
+	cfg          *config.Config
+	webFS        embed.FS
+	db           *db.DB
+	sessions     *auth.Manager
+	amiMgr       *ami.Manager
+	fetcher      *aslstats.Fetcher
+	nodeDB       nodeDBer
+	statsCache   *statsCache
+	linksCache   *linksCache
+	sseBroker    *sse.Broker
+	tmpls        map[string]*template.Template
+	loginLimiter *loginLimiter
 }
 
 func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
@@ -65,6 +66,7 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 	s.statsCache = newStatsCache()
 	s.linksCache = newLinksCache()
 	s.sseBroker = sse.NewBroker()
+	s.loginLimiter = newLoginLimiter()
 	return s, nil
 }
 
@@ -144,6 +146,7 @@ func (s *Server) Run() error {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(csrfMiddleware)
 	r.Use(s.setupGuard) // redirect to /setup before auth fires when no users exist
 	r.Use(s.sessions.Middleware)
 	r.Use(s.validateSessionUser) // reject sessions for deleted accounts
@@ -262,7 +265,7 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 		httpsAddr := fmt.Sprintf(":%d", s.cfg.Server.HTTPSPort)
 		mainServer = &http.Server{
 			Addr:        httpsAddr,
-			Handler:     handler,
+			Handler:     hstsMiddleware(handler),
 			TLSConfig:   tlsCfg,
 			BaseContext: baseCtx,
 			ReadTimeout:  30 * time.Second,

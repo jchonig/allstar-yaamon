@@ -79,6 +79,10 @@ func (s *Server) handleAPICreateNode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name and node_number are required", http.StatusBadRequest)
 		return
 	}
+	if !validNodeNumber(in.NodeNumber) {
+		http.Error(w, "node_number must be 4–10 digits", http.StatusBadRequest)
+		return
+	}
 	if in.AMIUser == "" {
 		http.Error(w, "ami_user is required", http.StatusBadRequest)
 		return
@@ -137,6 +141,10 @@ func (s *Server) handleAPIUpdateNode(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.NodeNumber == "" {
 		in.NodeNumber = existing.NodeNumber
+	}
+	if in.NodeNumber != existing.NodeNumber && !validNodeNumber(in.NodeNumber) {
+		http.Error(w, "node_number must be 4–10 digits", http.StatusBadRequest)
+		return
 	}
 	if in.AMIHost == "" {
 		in.AMIHost = existing.AMIHost

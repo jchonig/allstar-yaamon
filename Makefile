@@ -120,6 +120,7 @@ test-integration:
 	@docker rm -f $(TEST_SUT) 2>/dev/null; \
 	docker network rm $(TEST_NET) 2>/dev/null; \
 	mkdir -p test/data && chmod a+w test/data; \
+	rm -f test/data/yaamon.db; \
 	docker network create $(TEST_NET); \
 	docker run -d \
 	  --name $(TEST_SUT) \
