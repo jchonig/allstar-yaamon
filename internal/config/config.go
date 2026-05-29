@@ -12,14 +12,32 @@ import (
 var DefaultFooterURL string
 
 type Config struct {
-	Server ServerConfig `mapstructure:"server"`
-	TLS    TLSConfig    `mapstructure:"tls"`
-	DB     DBConfig     `mapstructure:"db"`
-	AstDB  AstDBConfig  `mapstructure:"astdb"`
-	Log    LogConfig    `mapstructure:"log"`
-	UI     UIConfig     `mapstructure:"ui"`
+	Server       ServerConfig       `mapstructure:"server"`
+	TLS          TLSConfig          `mapstructure:"tls"`
+	DB           DBConfig           `mapstructure:"db"`
+	AstDB        AstDBConfig        `mapstructure:"astdb"`
+	Log          LogConfig          `mapstructure:"log"`
+	UI           UIConfig           `mapstructure:"ui"`
+	ProxyAuth    ProxyAuthConfig    `mapstructure:"proxy_auth"`
+	TailscaleAuth TailscaleAuthConfig `mapstructure:"tailscale_auth"`
 
 	configFile string // resolved path of the config file actually loaded
+}
+
+type ProxyAuthConfig struct {
+	Enabled          bool              `mapstructure:"enabled"`
+	UsernameHeader   string            `mapstructure:"username_header"`
+	GroupsHeader     string            `mapstructure:"groups_header"`
+	GroupPermissions map[string]string `mapstructure:"group_permissions"`
+	CreateUsers      bool              `mapstructure:"create_users"`
+	UpdateDBRole     bool              `mapstructure:"update_db_role"`
+}
+
+type TailscaleAuthConfig struct {
+	Enabled      bool   `mapstructure:"enabled"`
+	UserHeader   string `mapstructure:"user_header"`
+	NameHeader   string `mapstructure:"name_header"`
+	AvatarHeader string `mapstructure:"avatar_header"`
 }
 
 // ConfigFile returns the path of the config file that was loaded, if any.
@@ -75,6 +93,15 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("ui.footer_url", DefaultFooterURL)
 	v.SetDefault("ui.footer_attribution", "N2VLV")
 	v.SetDefault("ui.footer_attribution_url", "https://n2vlv.net")
+	v.SetDefault("proxy_auth.enabled", false)
+	v.SetDefault("proxy_auth.username_header", "X-Auth-Request-Preferred-Username")
+	v.SetDefault("proxy_auth.groups_header", "X-Auth-Request-Groups")
+	v.SetDefault("proxy_auth.create_users", true)
+	v.SetDefault("proxy_auth.update_db_role", false)
+	v.SetDefault("tailscale_auth.enabled", false)
+	v.SetDefault("tailscale_auth.user_header", "Tailscale-User-Login")
+	v.SetDefault("tailscale_auth.name_header", "Tailscale-User-Name")
+	v.SetDefault("tailscale_auth.avatar_header", "Tailscale-User-Profile-Pic")
 
 	if cfgFile != "" {
 		v.SetConfigFile(cfgFile)

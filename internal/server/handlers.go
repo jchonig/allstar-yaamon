@@ -16,12 +16,14 @@ import (
 
 // pageData contains fields common to all authenticated page templates.
 type pageData struct {
-	Username   string
-	Permission string
-	FullName   string
-	AvatarURL  string
-	Version    string
-	RepoURL    string
+	Username         string
+	Permission       string
+	FullName         string
+	AvatarURL        string
+	Version          string
+	RepoURL          string
+	AuthMethod       string
+	ExternalUsername string
 }
 
 func (s *Server) newPageData() pageData {
@@ -40,6 +42,8 @@ func fillSession(pd *pageData, sess *auth.Session) {
 	pd.Permission = sess.Permission
 	pd.FullName = sess.FullName
 	pd.AvatarURL = sess.AvatarURL
+	pd.AuthMethod = sess.AuthMethod
+	pd.ExternalUsername = sess.ExternalUsername
 }
 
 // handleHealth returns JSON {"status":"ok"} for Docker HEALTHCHECK and integration tests.
@@ -153,6 +157,12 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.db.GetUser(r.Context(), username)
 	if err != nil {
+		s.loginLimiter.RecordFailure(ip)
+		s.renderLoginError(w, r)
+		return
+	}
+	// "*" sentinel means the account was created via proxy auth; local login is denied.
+	if user.Password == "*" {
 		s.loginLimiter.RecordFailure(ip)
 		s.renderLoginError(w, r)
 		return

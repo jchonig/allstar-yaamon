@@ -12,21 +12,30 @@ import (
 )
 
 type userJSON struct {
-	ID         int64  `json:"id"`
-	Username   string `json:"username"`
-	Permission string `json:"permission"`
-	FullName   string `json:"full_name,omitempty"`
-	AvatarURL  string `json:"avatar_url,omitempty"`
+	ID                 int64  `json:"id"`
+	Username           string `json:"username"`
+	Permission         string `json:"permission"`
+	FullName           string `json:"full_name,omitempty"`
+	AvatarURL          string `json:"avatar_url,omitempty"`
+	TailscaleUsernames string `json:"tailscale_usernames,omitempty"`
 }
 
 type userInput struct {
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	Permission string `json:"permission"`
+	Username           string  `json:"username"`
+	Password           string  `json:"password"`
+	Permission         string  `json:"permission"`
+	TailscaleUsernames *string `json:"tailscale_usernames"`
 }
 
 func userToJSON(u db.User) userJSON {
-	return userJSON{ID: u.ID, Username: u.Username, Permission: u.Permission, FullName: u.FullName, AvatarURL: u.AvatarURL}
+	return userJSON{
+		ID:                 u.ID,
+		Username:           u.Username,
+		Permission:         u.Permission,
+		FullName:           u.FullName,
+		AvatarURL:          u.AvatarURL,
+		TailscaleUsernames: u.TailscaleUsernames,
+	}
 }
 
 // handleAPIListUsers returns all users (no password hash).
@@ -129,6 +138,14 @@ func (s *Server) handleAPIUpdateUser(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "update password: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+	}
+
+	if in.TailscaleUsernames != nil {
+		if err := s.db.UpdateUserTailscaleUsernames(r.Context(), id, *in.TailscaleUsernames); err != nil {
+			http.Error(w, "update tailscale usernames: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		existing.TailscaleUsernames = *in.TailscaleUsernames
 	}
 
 	writeJSON(w, userToJSON(*existing))

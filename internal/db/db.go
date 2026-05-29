@@ -163,4 +163,5 @@ var migrations = []migration{
 	     ALTER TABLE nodes ADD COLUMN location TEXT NOT NULL DEFAULT '';`},
 	{4, `ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT '';
 	     ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT '';`},
+	{5, `ALTER TABLE users ADD COLUMN tailscale_usernames TEXT NOT NULL DEFAULT '';`},
 }

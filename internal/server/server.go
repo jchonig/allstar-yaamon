@@ -155,6 +155,7 @@ func (s *Server) Run() error {
 	r.Use(middleware.Recoverer)
 	r.Use(csrfMiddleware)
 	r.Use(s.setupGuard) // redirect to /setup before auth fires when no users exist
+	r.Use(proxyAuthMiddleware(s.cfg.ProxyAuth, s.cfg.TailscaleAuth, s.db))
 	r.Use(s.sessions.Middleware)
 	r.Use(s.validateSessionUser) // reject sessions for deleted accounts
 
