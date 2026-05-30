@@ -728,9 +728,12 @@ function renderActiveLinks() {
     const desc = (fav && fav.description) || s.description || adb.description || '';
     const loc  = (fav && fav.location)    || s.location    || adb.location    || '';
     // AMI keyed state (real-time, from RPT_ALINKS) takes precedence over ASL stats keyed.
+    // Presence in amiLinks is itself confirmation the link is established, so the dot is
+    // always green (idle) or red (keyed) — never grey. Direct clients (callsign identifiers
+    // like KR4YXX) have no ASL stats entry, so s.fetched_at would always be falsy for them.
     const amiKeyed = !!link.keyed;
-    const dotClass  = amiKeyed ? 'text-danger' : (s.fetched_at ? 'text-success' : 'text-secondary');
-    const dotTitle  = amiKeyed ? 'Keyed (transmitting to us)' : (s.fetched_at ? 'Idle' : 'Status unknown');
+    const dotClass  = amiKeyed ? 'text-danger' : 'text-success';
+    const dotTitle  = amiKeyed ? 'Keyed (transmitting to us)' : 'Idle';
     const typeLabel = TYPE_LABEL[typeChar] || typeChar;
 
     const actions = CAN_WRITE
