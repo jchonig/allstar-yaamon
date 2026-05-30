@@ -724,17 +724,24 @@ function renderActiveLinks() {
     const s    = statsData[nodeNum] || {};
     const fav  = favsData.find(f => f.node_number === nodeNum);
     const adb  = astdbCache[nodeNum] || {};
-    const call = (fav && fav.callsign)    || s.callsign    || adb.callsign    || '';
+    // Web/direct clients (IAXRPT) have a callsign as their identifier rather than a
+    // numeric node number. Detect them and flip the display: show "Web" in the node
+    // column and the callsign in the callsign column.
+    const isDirect = !/^\d+$/.test(nodeNum);
+    const displayNode = isDirect
+      ? `<span class="badge bg-secondary fw-normal">Web</span>`
+      : `<code>${esc(nodeNum)}</code>`;
+    const call = isDirect ? nodeNum
+      : ((fav && fav.callsign) || s.callsign || adb.callsign || '');
     const desc = (fav && fav.description) || s.description || adb.description || '';
     const loc  = (fav && fav.location)    || s.location    || adb.location    || '';
     // AMI keyed state (real-time, from RPT_ALINKS) takes precedence over ASL stats keyed.
     // Presence in amiLinks is itself confirmation the link is established, so the dot is
-    // always green (idle) or red (keyed) — never grey. Direct clients (callsign identifiers
-    // like KR4YXX) have no ASL stats entry, so s.fetched_at would always be falsy for them.
+    // always green (idle) or red (keyed) — never grey.
     const amiKeyed = !!link.keyed;
     const dotClass  = amiKeyed ? 'text-danger' : 'text-success';
     const dotTitle  = amiKeyed ? 'Keyed (transmitting to us)' : 'Idle';
-    const typeLabel = TYPE_LABEL[typeChar] || typeChar;
+    const typeLabel = isDirect ? 'Web Client' : (TYPE_LABEL[typeChar] || typeChar);
 
     const actions = CAN_WRITE
       ? `<div class="btn-group btn-group-sm">
@@ -763,7 +770,7 @@ function renderActiveLinks() {
       <td class="text-center" style="width:1.5rem">
         <i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem" title="${dotTitle}"></i>
       </td>
-      <td style="width:6rem"><code>${esc(nodeNum)}</code></td>
+      <td style="width:6rem">${displayNode}</td>
       <td title="${esc(callTip)}" style="${callTip ? 'cursor:help' : ''}">${esc(call || '—')}</td>
       <td class="text-muted small">${typeLabel}</td>
       <td class="text-muted small d-none d-md-table-cell">${since}</td>
