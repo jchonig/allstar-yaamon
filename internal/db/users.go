@@ -85,31 +85,15 @@ func (db *DB) GetUserByID(ctx context.Context, id int64) (*User, error) {
 }
 
 // GetUserByTailscaleLogin returns the user whose tailscale_usernames contains login, or ErrNotFound.
-// Returns an error if more than one user matches, to avoid ambiguous authentication.
 func (db *DB) GetUserByTailscaleLogin(ctx context.Context, login string) (*User, error) {
-	rows, err := db.sql.QueryContext(ctx,
+	row := db.sql.QueryRowContext(ctx,
 		`SELECT `+userSelectCols+` FROM users WHERE ','||tailscale_usernames||',' LIKE '%,'||?||',%'`, login)
+	u, err := scanUser(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get user by tailscale login: %w", err)
-	}
-	defer rows.Close()
-
-	var u *User
-	for rows.Next() {
-		next, err := scanUser(rows)
-		if err != nil {
-			return nil, fmt.Errorf("get user by tailscale login: %w", err)
-		}
-		if u != nil {
-			return nil, fmt.Errorf("tailscale login %q matches multiple users", login)
-		}
-		u = next
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("get user by tailscale login: %w", err)
-	}
-	if u == nil {
-		return nil, ErrNotFound
 	}
 	return u, nil
 }

@@ -55,11 +55,7 @@ func tailscaleSession(r *http.Request, cfg config.TailscaleAuthConfig, database 
 
 	u, err := database.GetUserByTailscaleLogin(r.Context(), login)
 	if err != nil {
-		if err != db.ErrNotFound {
-			slog.Warn("tailscale auth: login lookup failed", "login", login, "err", err)
-		} else {
-			slog.Debug("tailscale auth: no matching user", "login", login, "err", err)
-		}
+		slog.Debug("tailscale auth: no matching user", "login", login, "err", err)
 		return nil, false
 	}
 	slog.Debug("tailscale auth: matched user", "login", login, "username", u.Username)
