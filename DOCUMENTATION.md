@@ -530,14 +530,14 @@ https://yaamon.example.ts.net {
     tailscale_auth
 
     reverse_proxy yaamon:80 {
-        header_up Tailscale-User-Login       {http.auth.user.tailscale_login}
+        header_up Tailscale-User-Login       {http.auth.user.tailscale_user}
         header_up Tailscale-User-Name        {http.auth.user.tailscale_name}
         header_up Tailscale-User-Profile-Pic {http.auth.user.tailscale_profile_picture}
     }
 }
 ```
 
-The header names above (`Tailscale-User-Login`, etc.) match YAAMon's defaults and do not need to be changed unless you choose different names in both places.
+Use `tailscale_user` (not `tailscale_login`) for the login header — `tailscale_user` is the full namespace-qualified ID (e.g. `jchonig@github`) while `tailscale_login` is just the username portion (`jchonig`). Using the full ID avoids ambiguity when users from different Tailscale tailnets might share the same short username.
 
 ### YAAMon configuration
 
