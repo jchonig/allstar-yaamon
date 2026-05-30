@@ -40,10 +40,14 @@ func userToJSON(u db.User, logins []string) userJSON {
 }
 
 func splitLogins(s string) []string {
+	seen := make(map[string]struct{})
 	var out []string
 	for _, part := range strings.Split(s, ",") {
 		if l := strings.TrimSpace(part); l != "" {
-			out = append(out, l)
+			if _, dup := seen[l]; !dup {
+				seen[l] = struct{}{}
+				out = append(out, l)
+			}
 		}
 	}
 	return out
