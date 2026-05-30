@@ -50,6 +50,27 @@ func (s *Server) validateSessionUser(next http.Handler) http.Handler {
 	})
 }
 
+// handleAPIGetProfile returns the current user's profile fields.
+// GET /api/profile
+func (s *Server) handleAPIGetProfile(w http.ResponseWriter, r *http.Request) {
+	sess := auth.FromContext(r.Context())
+	if sess == nil {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	user, err := s.db.GetUserByID(r.Context(), sess.UserID)
+	if err != nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, map[string]any{
+		"username":            user.Username,
+		"full_name":           user.FullName,
+		"avatar_url":          s.effectiveAvatarURL(r, user.ID, user.AvatarURL),
+		"tailscale_usernames": user.TailscaleUsernames,
+	})
+}
+
 // handleAPIUpdateProfile updates the current user's full name, optionally an external avatar
 // URL (which clears any uploaded avatar), and optionally the password.
 // PUT /api/profile

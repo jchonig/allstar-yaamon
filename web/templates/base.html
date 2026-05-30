@@ -158,6 +158,13 @@
             <input type="text" class="form-control" id="profile-fullname"
                    placeholder="Your name" value="{{.FullName}}">
           </div>
+          <div class="mb-3">
+            <label for="profile-tailscale" class="form-label">Tailscale Usernames</label>
+            <input type="text" class="form-control" id="profile-tailscale"
+                   placeholder="jch@honig.net" autocomplete="off"
+                   data-tailscale-usernames>
+            <div class="form-text">Comma-separated Tailscale login names for automatic sign-in.</div>
+          </div>
           <hr>
           <div class="mb-3">
             <label for="profile-current-pw" class="form-label">Current Password</label>
@@ -186,13 +193,20 @@
     const fileInput = document.getElementById('avatar-file');
     if (fileInput) fileInput.addEventListener('change', onAvatarFileChosen);
   });
-  function openProfileModal() {
+  async function openProfileModal() {
     document.getElementById('profile-error').textContent = '';
     document.getElementById('avatar-error').textContent = '';
     document.getElementById('profile-current-pw').value = '';
     document.getElementById('profile-new-pw').value = '';
     document.getElementById('avatar-file').value = '';
     document.getElementById('avatar-upload-btn').style.display = 'none';
+    try {
+      const resp = await fetch('/api/profile');
+      if (resp.ok) {
+        const profile = await resp.json();
+        document.getElementById('profile-tailscale').value = profile.tailscale_usernames || '';
+      }
+    } catch (_) {}
     _profileModal.show();
   }
   function onAvatarFileChosen(e) {
@@ -274,6 +288,7 @@
       return;
     }
     const body = {full_name: document.getElementById('profile-fullname').value.trim()};
+    body.tailscale_usernames = document.getElementById('profile-tailscale').value.trim();
     const avatarURL = document.getElementById('profile-avatar-url').value.trim();
     if (avatarURL) body.avatar_url = avatarURL;
     if (newPw) { body.current_password = currentPw; body.new_password = newPw; }

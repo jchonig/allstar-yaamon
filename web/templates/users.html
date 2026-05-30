@@ -65,6 +65,12 @@
               <small class="text-muted" id="pw-label"></small>
             </div>
           </div>
+          <div class="mb-3" id="tailscale-group" style="display:none">
+            <label for="user-tailscale" class="form-label">Tailscale Usernames</label>
+            <input type="text" class="form-control" id="user-tailscale"
+                   placeholder="jch@honig.net" autocomplete="off">
+            <div class="form-text">Comma-separated Tailscale login names for automatic sign-in.</div>
+          </div>
           <div class="text-danger small" id="user-form-error"></div>
         </form>
       </div>
@@ -157,6 +163,7 @@ function openAddModal() {
   document.getElementById('pw-required').style.display = '';
   document.getElementById('pw-optional').style.display = 'none';
   document.getElementById('pw-strength-bar').style.display = 'none';
+  document.getElementById('tailscale-group').style.display = 'none';
   document.getElementById('user-form-error').textContent = '';
   userModal.show();
 }
@@ -173,6 +180,8 @@ function openEditModal(id) {
   document.getElementById('pw-required').style.display = 'none';
   document.getElementById('pw-optional').style.display = '';
   document.getElementById('pw-strength-bar').style.display = 'none';
+  document.getElementById('tailscale-group').style.display = '';
+  document.getElementById('user-tailscale').value = u.tailscale_usernames || '';
   document.getElementById('user-form-error').textContent = '';
   userModal.show();
 }
@@ -195,6 +204,7 @@ async function saveUser() {
   const body = {permission};
   if (!id) body.username = username;
   if (password) body.password = password;
+  if (id) body.tailscale_usernames = document.getElementById('user-tailscale').value.trim();
 
   const saveBtn = document.getElementById('user-save-btn');
   saveBtn.disabled = true;
