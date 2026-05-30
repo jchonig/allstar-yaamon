@@ -86,6 +86,7 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 	s.linksCache = newLinksCache()
 	s.sseBroker = sse.NewBroker()
 	s.loginLimiter = newLoginLimiter()
+	s.qrzClient = qrz.New("", "") // always available; credentials set in initQRZ
 	s.initQRZ(ctx)
 	return s, nil
 }
@@ -255,6 +256,8 @@ func (s *Server) Run() error {
 		r.Get("/api/admin/integrations/qrz", s.handleAPIGetQRZCredentials)
 		r.Put("/api/admin/integrations/qrz", s.handleAPISetQRZCredentials)
 		r.Delete("/api/admin/integrations/qrz", s.handleAPIDeleteQRZCredentials)
+		r.Get("/api/admin/integrations/lookup_source", s.handleAPIGetLookupSource)
+		r.Put("/api/admin/integrations/lookup_source", s.handleAPISetLookupSource)
 	})
 
 	// Readwrite+ favorites export/import

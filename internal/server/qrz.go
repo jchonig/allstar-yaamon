@@ -21,24 +21,80 @@ import (
 
 var validCallsign = regexp.MustCompile(`(?i)^[a-z0-9]{3,10}$`)
 
-// handleAPIQRZLookup returns cached QRZ data for a callsign.
+// handleAPIQRZLookup returns callsign data for a callsign.
+// Source is determined by the lookup_source config key ("auto", "qrz", "callook").
 // GET /api/qrz/{callsign}
 func (s *Server) handleAPIQRZLookup(w http.ResponseWriter, r *http.Request) {
-	if s.qrzClient == nil || !s.qrzClient.Configured() {
-		http.Error(w, "QRZ not configured", http.StatusServiceUnavailable)
-		return
-	}
 	call := chi.URLParam(r, "callsign")
 	if !validCallsign.MatchString(call) {
 		http.Error(w, "invalid callsign", http.StatusBadRequest)
 		return
 	}
-	rec, err := s.qrzClient.Lookup(r.Context(), call, s.db)
+
+	source, _ := s.db.GetConfig(r.Context(), "lookup_source")
+	if source == "" {
+		source = "auto"
+	}
+
+	var (
+		rec qrz.Record
+		err error
+	)
+	switch source {
+	case "qrz":
+		if !s.qrzClient.Configured() {
+			http.Error(w, "QRZ not configured", http.StatusServiceUnavailable)
+			return
+		}
+		rec, err = s.qrzClient.Lookup(r.Context(), call, s.db)
+	case "callook":
+		rec, err = s.qrzClient.LookupCallook(r.Context(), call, s.db)
+	default: // "auto": use QRZ when configured, otherwise callook.info
+		if s.qrzClient.Configured() {
+			rec, err = s.qrzClient.Lookup(r.Context(), call, s.db)
+		} else {
+			rec, err = s.qrzClient.LookupCallook(r.Context(), call, s.db)
+		}
+	}
+
 	if err != nil {
-		http.Error(w, "QRZ lookup failed: "+err.Error(), http.StatusBadGateway)
+		http.Error(w, "lookup failed: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	writeJSON(w, rec)
+}
+
+// handleAPIGetLookupSource returns the current callsign lookup source setting.
+// GET /api/admin/integrations/lookup_source
+func (s *Server) handleAPIGetLookupSource(w http.ResponseWriter, r *http.Request) {
+	source, _ := s.db.GetConfig(r.Context(), "lookup_source")
+	if source == "" {
+		source = "auto"
+	}
+	writeJSON(w, map[string]string{"source": source})
+}
+
+// handleAPISetLookupSource saves the callsign lookup source preference.
+// PUT /api/admin/integrations/lookup_source
+func (s *Server) handleAPISetLookupSource(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Source string `json:"source"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	switch body.Source {
+	case "auto", "qrz", "callook":
+	default:
+		http.Error(w, "source must be auto, qrz, or callook", http.StatusBadRequest)
+		return
+	}
+	if err := s.db.SetConfig(r.Context(), "lookup_source", body.Source); err != nil {
+		http.Error(w, "database error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 // handleAPIGetQRZCredentials returns the stored QRZ username (password is never returned).
@@ -81,7 +137,7 @@ func (s *Server) handleAPISetQRZCredentials(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	s.qrzClient = qrz.New(body.Username, body.Password)
+	s.qrzClient.SetCredentials(body.Username, body.Password)
 	s.seedQRZCache(ctx)
 
 	writeJSON(w, map[string]any{"ok": true})
@@ -93,7 +149,7 @@ func (s *Server) handleAPIDeleteQRZCredentials(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 	s.db.SetConfig(ctx, "qrz_username", "")    //nolint:errcheck
 	s.db.SetConfig(ctx, "qrz_password_enc", "") //nolint:errcheck
-	s.qrzClient = nil
+	s.qrzClient.SetCredentials("", "")
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -174,18 +230,16 @@ func decryptQRZPassword(key [32]byte, encoded string) (string, error) {
 	return string(plain), nil
 }
 
-// initQRZ loads QRZ credentials from the DB and seeds the in-memory cache.
+// initQRZ loads QRZ credentials from the DB (if set) and seeds the in-memory cache.
+// The client is always available for callook.info lookups even without credentials.
 func (s *Server) initQRZ(ctx context.Context) {
 	username, _ := s.db.GetConfig(ctx, "qrz_username")
 	encPass, _ := s.db.GetConfig(ctx, "qrz_password_enc")
-	if username == "" || encPass == "" {
-		return
+	if username != "" && encPass != "" {
+		if password, err := decryptQRZPassword(s.cipherKey, encPass); err == nil {
+			s.qrzClient.SetCredentials(username, password)
+		}
 	}
-	password, err := decryptQRZPassword(s.cipherKey, encPass)
-	if err != nil {
-		return
-	}
-	s.qrzClient = qrz.New(username, password)
 	s.seedQRZCache(ctx)
 }
 
