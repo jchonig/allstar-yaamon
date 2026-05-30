@@ -192,4 +192,9 @@ var migrations = []migration{
 		stats_json  TEXT NOT NULL,
 		updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`},
+	{version: 8, sql: `CREATE TABLE IF NOT EXISTS qrz_cache (
+		callsign    TEXT PRIMARY KEY,
+		record_json TEXT NOT NULL,
+		fetched_at  DATETIME NOT NULL
+	)`},
 }

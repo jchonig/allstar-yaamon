@@ -771,7 +771,8 @@ function renderActiveLinks() {
         <i class="bi bi-circle-fill ${dotClass}" style="font-size:.6rem" title="${dotTitle}"></i>
       </td>
       <td style="width:6rem">${displayNode}</td>
-      <td title="${esc(callTip)}" style="${callTip ? 'cursor:help' : ''}">${esc(call || '—')}</td>
+      <td>${call ? `<span class="qrz-tip" data-callsign="${esc(call)}"
+            title="${esc(callTip)}" style="${callTip ? 'cursor:help' : ''}">${esc(call)}</span>` : '—'}</td>
       <td class="text-muted small">${typeLabel}</td>
       <td class="text-muted small d-none d-md-table-cell">${since}</td>
       <td class="d-none d-md-table-cell small" style="${lcntColor}">${lcnt != null ? lcnt : '—'}</td>
@@ -1236,6 +1237,83 @@ function showDTMF(digit) {
   clearTimeout(dtmfTimer);
   dtmfTimer = setTimeout(() => { el.style.display = 'none'; }, 2000);
 }
+
+// QRZ callsign hover tooltips
+(function () {
+  const qrzCache = new Map();
+  let hoverTimer = null;
+  let activePopover = null;
+
+  function dismissActive() {
+    if (activePopover) {
+      activePopover.dispose();
+      activePopover = null;
+    }
+  }
+
+  function formatQRZ(r) {
+    const name = [r.first_name, r.last_name].filter(Boolean).join(' ');
+    const loc  = [r.address, r.state, r.country].filter(Boolean).join(', ');
+    const cls  = r.class ? `<span class="badge bg-secondary ms-1">${esc(r.class)}</span>` : '';
+    return `<div class="fw-semibold">${esc(name)}${cls}</div>${loc ? `<div class="text-muted small">${esc(loc)}</div>` : ''}`;
+  }
+
+  async function fetchQRZ(callsign) {
+    if (qrzCache.has(callsign)) return qrzCache.get(callsign);
+    try {
+      const res = await fetch(`/api/qrz/${encodeURIComponent(callsign)}`);
+      if (!res.ok) throw new Error(res.statusText);
+      const data = await res.json();
+      qrzCache.set(callsign, data);
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  document.addEventListener('mouseover', async (e) => {
+    const el = e.target.closest('.qrz-tip');
+    if (!el || el === activePopover?._element) return;
+    dismissActive();
+    const callsign = el.dataset.callsign;
+    if (!callsign) return;
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(async () => {
+      const rec = await fetchQRZ(callsign);
+      if (!rec) return;
+      // Verify mouse is still over the element
+      if (!el.matches(':hover')) return;
+      const pop = new bootstrap.Popover(el, {
+        content:   formatQRZ(rec),
+        html:      true,
+        trigger:   'manual',
+        placement: 'top',
+        container: 'body',
+      });
+      pop.show();
+      activePopover = pop;
+    }, 300);
+  });
+
+  document.addEventListener('mouseout', (e) => {
+    const el = e.target.closest('.qrz-tip');
+    if (!el) return;
+    clearTimeout(hoverTimer);
+    // Dismiss if mouse left the element and its popover
+    setTimeout(() => {
+      if (!el.matches(':hover') && !document.querySelector('.popover:hover')) {
+        dismissActive();
+      }
+    }, 150);
+  });
+
+  // Dismiss when clicking elsewhere
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.qrz-tip') && !e.target.closest('.popover')) {
+      dismissActive();
+    }
+  });
+}());
 
 let toastContainer;
 function showToast(msg, type) {

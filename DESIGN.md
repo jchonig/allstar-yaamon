@@ -111,6 +111,24 @@ whose `node_number` no longer appears in `nodes` or `favorites` are pruned at st
 | `stats_json` | TEXT NOT NULL | JSON-encoded `NodeStats` |
 | `updated_at` | DATETIME | Last successful fetch time |
 
+#### `qrz_cache`
+Persists callsign records fetched from the QRZ.com XML API. Records are valid for 30 days;
+stale records are refetched on next access. The in-memory `qrz.Client` cache is pre-seeded
+from this table on startup.
+
+| Column | Type | Notes |
+|---|---|---|
+| `callsign` | TEXT PRIMARY KEY | Amateur radio callsign (uppercase) |
+| `record_json` | TEXT NOT NULL | JSON-encoded `qrz.Record` |
+| `fetched_at` | DATETIME NOT NULL | When the QRZ API returned this record |
+
+New config keys added by the Integrations feature:
+
+| Key | Description |
+|---|---|
+| `qrz_username` | QRZ.com account username |
+| `qrz_password_enc` | AES-256-GCM encrypted QRZ password (key derived from session secret) |
+
 #### `tls_certs`
 Stores a self-signed TLS certificate and private key generated at first start
 when `tls.mode = self_signed`.
@@ -141,6 +159,7 @@ nodes, favorites ──> stats_cache (pruned by cross-reference)
 | 5 | Add `users.tailscale_usernames` (comma-separated — superseded by migration 6) |
 | 6 | Create `tailscale_logins` join table; migrate comma-separated data; drop `tailscale_usernames` column |
 | 7 | Add `stats_cache` table for persisting ASL stats across server restarts |
+| 8 | Add `qrz_cache` table for persisting QRZ callsign lookup results |
 
 ---
 
