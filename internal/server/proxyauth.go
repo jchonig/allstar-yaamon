@@ -49,13 +49,16 @@ func proxyAuthMiddleware(proxyCfg config.ProxyAuthConfig, tsCfg config.Tailscale
 func tailscaleSession(r *http.Request, cfg config.TailscaleAuthConfig, database *db.DB) (*auth.Session, bool) {
 	login := strings.TrimSpace(r.Header.Get(cfg.UserHeader))
 	if login == "" {
+		slog.Debug("tailscale auth: header absent", "header", cfg.UserHeader)
 		return nil, false
 	}
 
 	u, err := database.GetUserByTailscaleLogin(r.Context(), login)
 	if err != nil {
+		slog.Debug("tailscale auth: no matching user", "login", login, "err", err)
 		return nil, false
 	}
+	slog.Debug("tailscale auth: matched user", "login", login, "username", u.Username)
 
 	sess := &auth.Session{
 		UserID:     u.ID,
@@ -91,14 +94,17 @@ func tailscaleSession(r *http.Request, cfg config.TailscaleAuthConfig, database 
 func oauthSession(r *http.Request, cfg config.ProxyAuthConfig, database *db.DB) (*auth.Session, bool) {
 	username := strings.TrimSpace(r.Header.Get(cfg.UsernameHeader))
 	if username == "" {
+		slog.Debug("oauth2 auth: header absent", "header", cfg.UsernameHeader)
 		return nil, false
 	}
 
 	groupsHdr := r.Header.Get(cfg.GroupsHeader)
 	role, ok := highestRole(groupsHdr, cfg.GroupPermissions)
 	if !ok {
+		slog.Debug("oauth2 auth: no matching group", "username", username, "groups", groupsHdr)
 		return nil, true // header present but no group matches → 403
 	}
+	slog.Debug("oauth2 auth: matched role", "username", username, "role", role)
 
 	u, err := database.GetUser(r.Context(), username)
 	if err != nil {
