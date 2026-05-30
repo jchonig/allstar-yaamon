@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -27,15 +28,25 @@ type userInput struct {
 	TailscaleUsernames *string `json:"tailscale_usernames"`
 }
 
-func userToJSON(u db.User) userJSON {
+func userToJSON(u db.User, logins []string) userJSON {
 	return userJSON{
 		ID:                 u.ID,
 		Username:           u.Username,
 		Permission:         u.Permission,
 		FullName:           u.FullName,
 		AvatarURL:          u.AvatarURL,
-		TailscaleUsernames: u.TailscaleUsernames,
+		TailscaleUsernames: strings.Join(logins, ","),
 	}
+}
+
+func splitLogins(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if l := strings.TrimSpace(part); l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // handleAPIListUsers returns all users (no password hash).
@@ -47,7 +58,8 @@ func (s *Server) handleAPIListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	result := make([]userJSON, len(users))
 	for i, u := range users {
-		result[i] = userToJSON(u)
+		logins, _ := s.db.GetTailscaleLogins(r.Context(), u.ID)
+		result[i] = userToJSON(u, logins)
 	}
 	writeJSON(w, result)
 }
@@ -84,7 +96,7 @@ func (s *Server) handleAPICreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, userToJSON(*u))
+	writeJSON(w, userToJSON(*u, nil))
 }
 
 // handleAPIUpdateUser updates a user's permission and/or password.
@@ -141,14 +153,14 @@ func (s *Server) handleAPIUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if in.TailscaleUsernames != nil {
-		if err := s.db.UpdateUserTailscaleUsernames(r.Context(), id, *in.TailscaleUsernames); err != nil {
-			http.Error(w, "update tailscale usernames: "+err.Error(), http.StatusInternalServerError)
+		if err := s.db.SetTailscaleLogins(r.Context(), id, splitLogins(*in.TailscaleUsernames)); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		existing.TailscaleUsernames = *in.TailscaleUsernames
 	}
 
-	writeJSON(w, userToJSON(*existing))
+	logins, _ := s.db.GetTailscaleLogins(r.Context(), id)
+	writeJSON(w, userToJSON(*existing, logins))
 }
 
 // handleAPIDeleteUser deletes a user. Only superusers can delete; last superuser is protected.

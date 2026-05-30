@@ -164,4 +164,13 @@ var migrations = []migration{
 	{4, `ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT '';
 	     ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT '';`},
 	{5, `ALTER TABLE users ADD COLUMN tailscale_usernames TEXT NOT NULL DEFAULT '';`},
+	{6, `CREATE TABLE tailscale_logins (
+		login   TEXT PRIMARY KEY,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+	);
+	INSERT INTO tailscale_logins (login, user_id)
+		SELECT trim(j.value), u.id
+		FROM users u, json_each('["' || replace(u.tailscale_usernames, ',', '","') || '"]') j
+		WHERE trim(u.tailscale_usernames) != '' AND trim(j.value) != '';
+	ALTER TABLE users DROP COLUMN tailscale_usernames;`},
 }

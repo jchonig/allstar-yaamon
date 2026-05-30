@@ -64,6 +64,12 @@ func (s *Server) handleAPIGetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tailscaleLogins, err := s.db.GetTailscaleLogins(r.Context(), user.ID)
+	if err != nil {
+		http.Error(w, "get tailscale logins: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Include the Tailscale login detected in this request (if any) so the UI
 	// can offer a one-click "add" when the header is present but not yet mapped.
 	tailscaleLogin := strings.TrimSpace(r.Header.Get(s.cfg.TailscaleAuth.UserHeader))
@@ -72,7 +78,7 @@ func (s *Server) handleAPIGetProfile(w http.ResponseWriter, r *http.Request) {
 		"username":            user.Username,
 		"full_name":           user.FullName,
 		"avatar_url":          s.effectiveAvatarURL(r, user.ID, user.AvatarURL),
-		"tailscale_usernames": user.TailscaleUsernames,
+		"tailscale_usernames": strings.Join(tailscaleLogins, ","),
 		"tailscale_login":     tailscaleLogin,
 	})
 }
@@ -133,8 +139,8 @@ func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if body.TailscaleUsernames != nil {
-		if err := s.db.UpdateUserTailscaleUsernames(r.Context(), sess.UserID, *body.TailscaleUsernames); err != nil {
-			http.Error(w, "update tailscale usernames: "+err.Error(), http.StatusBadRequest)
+		if err := s.db.SetTailscaleLogins(r.Context(), sess.UserID, splitLogins(*body.TailscaleUsernames)); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
