@@ -509,22 +509,44 @@ When a session is established via proxy auth, a shield icon (🛡) appears next 
 
 ## Tailscale Authentication
 
-When YAAMon sits behind [caddy-tailscale](https://github.com/tailscale/caddy-tailscale) (or any proxy that injects Tailscale identity headers), it can automatically log in users arriving from the Tailscale network without a password.
+When YAAMon sits behind [caddy-tailscale](https://github.com/tailscale/caddy-tailscale), it can automatically log in users arriving from the Tailscale network without a password.
 
 ### How it works
 
-caddy-tailscale injects headers identifying the Tailscale identity of the connecting device. YAAMon reads the Tailscale login name from the header and looks for a YAAMon DB user whose **Tailscale Usernames** profile field contains that login. If found, the user is logged in with their DB role. If not found, YAAMon falls through to the cookie session (if any) or the login page — users without a Tailscale mapping can still log in with a password.
+caddy-tailscale's `tailscale_auth` directive identifies the Tailscale user making each request and populates Caddy auth user fields. Those fields are then mapped to HTTP headers by the `reverse_proxy` block and forwarded to YAAMon. YAAMon reads the login name from the configured header and looks for a YAAMon DB user whose **Tailscale Usernames** profile field contains that login. If found, the user is logged in with their DB role. If not found, YAAMon falls through to the cookie session (if any) or the login page — users without a Tailscale mapping can still log in with a password.
 
 Unlike OAuth2 proxy auth, Tailscale auth **does not create users automatically**. The mapping must be configured by editing the user's profile.
 
-### Configuration
+> **Note:** `tailscale_auth` identifies the *connecting user's* device. It does not work when the connecting client is itself a tagged (service) device, only for user-owned devices.
+
+### Caddyfile configuration
+
+The `tailscale_auth` directive must appear before `reverse_proxy`, and the Caddy auth user fields must be explicitly mapped to headers:
+
+```caddyfile
+https://yaamon.example.ts.net {
+    bind tailscale/yaamon
+
+    tailscale_auth
+
+    reverse_proxy yaamon:80 {
+        header_up Tailscale-User-Login       {http.auth.user.tailscale_login}
+        header_up Tailscale-User-Name        {http.auth.user.tailscale_name}
+        header_up Tailscale-User-Profile-Pic {http.auth.user.tailscale_profile_picture}
+    }
+}
+```
+
+The header names above (`Tailscale-User-Login`, etc.) match YAAMon's defaults and do not need to be changed unless you choose different names in both places.
+
+### YAAMon configuration
 
 ```yaml
 tailscale_auth:
-  enabled: false
+  enabled: true
 
-  # Header injected by caddy-tailscale with the Tailscale login name
-  # (e.g. jch@honig.net).
+  # Header carrying the Tailscale login name (e.g. jch@honig.net).
+  # Must match the header_up name in the Caddyfile.
   user_header: Tailscale-User-Login
 
   # Optional headers for display name and avatar URL.
@@ -581,9 +603,16 @@ With debug logging enabled, the auth middleware logs a message on every request 
 ### Checklist for Tailscale auth
 
 1. **`tailscale_auth.enabled: true`** is set in `config.yaml`.
-2. The Caddyfile has **`tailscale_auth`** before `reverse_proxy` — this is what injects the identity headers.
-3. The user has their Tailscale login (e.g. `jch@honig.net`) in their **Tailscale Usernames** field. Open **My Profile** — if you are connecting through caddy-tailscale an **Add \<login\>** button appears automatically when the login is not yet mapped.
-4. YAAMon is not directly reachable from clients — only Caddy should reach it, otherwise headers can be spoofed.
+2. The Caddyfile has **`tailscale_auth`** before `reverse_proxy`.
+3. The `reverse_proxy` block has **`header_up`** lines mapping the Caddy auth user fields to the headers YAAMon expects:
+   ```caddyfile
+   header_up Tailscale-User-Login       {http.auth.user.tailscale_login}
+   header_up Tailscale-User-Name        {http.auth.user.tailscale_name}
+   header_up Tailscale-User-Profile-Pic {http.auth.user.tailscale_profile_picture}
+   ```
+   Without these, `tailscale_auth` authenticates the request but no identity is forwarded to YAAMon.
+4. The user has their Tailscale login (e.g. `jch@honig.net`) in their **Tailscale Usernames** field. Open **My Profile** — if you are connecting through caddy-tailscale an **Add \<login\>** button appears automatically when the login is not yet mapped.
+5. YAAMon is not directly reachable from clients — only Caddy should reach it, otherwise headers can be spoofed.
 
 ### Checklist for OAuth2 / oauth2-proxy auth
 
