@@ -1,5 +1,7 @@
 # YAAMon Documentation
 
+> For the full CLI command reference see [REFERENCE.md](REFERENCE.md).
+
 - [First-Time Setup](#first-time-setup)
 - [User Roles](#user-roles)
 - [Managing Users](#managing-users)

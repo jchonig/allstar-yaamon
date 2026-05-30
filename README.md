@@ -263,7 +263,7 @@ The Asterisk Manager Interface (AMI) used to connect to your nodes transmits cre
 - A VPN (WireGuard, OpenVPN) between the YAAMon host and the remote node
 - An SSH tunnel: `ssh -L 5038:localhost:5038 user@remote-node`
 
-See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed setup guidance.
+See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed setup guidance and [REFERENCE.md](REFERENCE.md) for the full CLI reference.
 
 ---
 
