@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Permission levels in descending order.
@@ -138,10 +139,34 @@ func (db *DB) UpdateUserProfile(ctx context.Context, id int64, fullName, avatarU
 }
 
 // UpdateUserTailscaleUsernames updates the comma-separated Tailscale login list for a user.
+// Returns an error if any login in the list is already assigned to a different user.
 func (db *DB) UpdateUserTailscaleUsernames(ctx context.Context, id int64, usernames string) error {
+	for _, login := range splitLogins(usernames) {
+		var owner string
+		err := db.sql.QueryRowContext(ctx,
+			`SELECT username FROM users WHERE id != ? AND ','||tailscale_usernames||',' LIKE '%,'||?||',%'`,
+			id, login,
+		).Scan(&owner)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("check tailscale conflict: %w", err)
+		}
+		if owner != "" {
+			return fmt.Errorf("tailscale login %q is already assigned to user %q", login, owner)
+		}
+	}
 	_, err := db.sql.ExecContext(ctx,
 		`UPDATE users SET tailscale_usernames = ? WHERE id = ?`, usernames, id)
 	return err
+}
+
+func splitLogins(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if l := strings.TrimSpace(part); l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // UpdateUserPassword sets a new bcrypt-hashed password.

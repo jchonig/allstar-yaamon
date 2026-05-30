@@ -134,7 +134,7 @@ func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) 
 
 	if body.TailscaleUsernames != nil {
 		if err := s.db.UpdateUserTailscaleUsernames(r.Context(), sess.UserID, *body.TailscaleUsernames); err != nil {
-			http.Error(w, "update tailscale usernames: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "update tailscale usernames: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
