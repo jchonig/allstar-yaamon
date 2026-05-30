@@ -63,11 +63,17 @@ func (s *Server) handleAPIGetProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "user not found", http.StatusNotFound)
 		return
 	}
+
+	// Include the Tailscale login detected in this request (if any) so the UI
+	// can offer a one-click "add" when the header is present but not yet mapped.
+	tailscaleLogin := strings.TrimSpace(r.Header.Get(s.cfg.TailscaleAuth.UserHeader))
+
 	writeJSON(w, map[string]any{
 		"username":            user.Username,
 		"full_name":           user.FullName,
 		"avatar_url":          s.effectiveAvatarURL(r, user.ID, user.AvatarURL),
 		"tailscale_usernames": user.TailscaleUsernames,
+		"tailscale_login":     tailscaleLogin,
 	})
 }
 

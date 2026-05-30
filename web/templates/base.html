@@ -160,9 +160,13 @@
           </div>
           <div class="mb-3">
             <label for="profile-tailscale" class="form-label">Tailscale Usernames</label>
-            <input type="text" class="form-control" id="profile-tailscale"
-                   placeholder="jch@honig.net" autocomplete="off"
-                   data-tailscale-usernames>
+            <div class="input-group">
+              <input type="text" class="form-control" id="profile-tailscale"
+                     placeholder="jch@honig.net" autocomplete="off">
+              <button class="btn btn-outline-secondary" type="button"
+                      id="profile-tailscale-add" style="display:none"
+                      onclick="addTailscaleLogin()"></button>
+            </div>
             <div class="form-text">Comma-separated Tailscale login names for automatic sign-in.</div>
           </div>
           <hr>
@@ -193,6 +197,7 @@
     const fileInput = document.getElementById('avatar-file');
     if (fileInput) fileInput.addEventListener('change', onAvatarFileChosen);
   });
+  let _detectedTailscaleLogin = '';
   async function openProfileModal() {
     document.getElementById('profile-error').textContent = '';
     document.getElementById('avatar-error').textContent = '';
@@ -200,14 +205,32 @@
     document.getElementById('profile-new-pw').value = '';
     document.getElementById('avatar-file').value = '';
     document.getElementById('avatar-upload-btn').style.display = 'none';
+    _detectedTailscaleLogin = '';
+    const addBtn = document.getElementById('profile-tailscale-add');
+    addBtn.style.display = 'none';
     try {
       const resp = await fetch('/api/profile');
       if (resp.ok) {
         const profile = await resp.json();
-        document.getElementById('profile-tailscale').value = profile.tailscale_usernames || '';
+        const current = profile.tailscale_usernames || '';
+        document.getElementById('profile-tailscale').value = current;
+        _detectedTailscaleLogin = profile.tailscale_login || '';
+        if (_detectedTailscaleLogin && !containsLogin(current, _detectedTailscaleLogin)) {
+          addBtn.textContent = 'Add ' + _detectedTailscaleLogin;
+          addBtn.style.display = '';
+        }
       }
     } catch (_) {}
     _profileModal.show();
+  }
+  function containsLogin(list, login) {
+    return list.split(',').map(s => s.trim()).filter(Boolean).includes(login);
+  }
+  function addTailscaleLogin() {
+    const input = document.getElementById('profile-tailscale');
+    const current = input.value.trim();
+    input.value = current ? current + ',' + _detectedTailscaleLogin : _detectedTailscaleLogin;
+    document.getElementById('profile-tailscale-add').style.display = 'none';
   }
   function onAvatarFileChosen(e) {
     const file = e.target.files[0];
