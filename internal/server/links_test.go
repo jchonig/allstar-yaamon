@@ -112,6 +112,21 @@ func TestParseRPTALinks_KeyedState(t *testing.T) {
 	}
 }
 
+func TestParseRPTALinks_CallsignNodeIdent(t *testing.T) {
+	// Direct/IAXRPT clients appear with a callsign instead of a numeric node number.
+	output := "RPT_ALINKS=2,667342TU,KR4YXXTK\n"
+	links := parseRPTALinks(output)
+	if len(links) != 2 {
+		t.Fatalf("expected 2 links, got %d: %v", len(links), links)
+	}
+	if links["667342"].Type != "T" || links["667342"].Keyed {
+		t.Errorf("667342: expected T/unkeyed, got %+v", links["667342"])
+	}
+	if links["KR4YXX"].Type != "T" || !links["KR4YXX"].Keyed {
+		t.Errorf("KR4YXX: expected T/keyed, got %+v", links["KR4YXX"])
+	}
+}
+
 func TestParseRPTTXKeyed_Keyed(t *testing.T) {
 	output := "Value: RPT_TXKEYED=1\n"
 	if !parseRPTTXKeyed(output) {
