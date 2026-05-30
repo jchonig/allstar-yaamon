@@ -600,7 +600,8 @@ With debug logging enabled, the auth middleware logs a message on every request 
 | `tailscale auth: header absent` | The configured `user_header` was not present in the request. The Caddyfile is missing the `tailscale_auth` directive, or caddy-tailscale is not in use. |
 | `tailscale auth: no matching user` | The header was present but no DB user has that Tailscale login in their **Tailscale Usernames** profile field. Add the login via **My Profile** or **Admin → Users**. |
 | `tailscale auth: matched user` | Tailscale auth succeeded — session established. |
-| `oauth2 auth: header absent` | The configured `username_header` was not present. The proxy (oauth2-proxy / Caddy) is not injecting auth headers, or `proxy_auth.enabled` is false. |
+| `oauth2 auth: header absent` | The configured `username_header` was not present. The proxy (oauth2-proxy / Caddy) is not injecting auth headers. |
+| *(no `oauth2 auth` log lines at all)* | `proxy_auth.enabled` is `false` (the default). If you see no `oauth2 auth` lines even with debug logging, check that `proxy_auth.enabled: true` is explicitly in your `config.yaml`. |
 | `oauth2 auth: group_roles is not configured` | `proxy_auth.enabled: true` but `group_roles` is empty. Add a `group_roles` mapping to `config.yaml`. All requests are denied until this is configured. |
 | `oauth2 auth: no matching group` | The username header was present but none of the user's groups appear in `group_roles`. Check the group names in the log against your `group_roles` mapping. |
 | `oauth2 auth: matched role` | OAuth2 auth succeeded — session established with the mapped role. |
@@ -621,11 +622,12 @@ With debug logging enabled, the auth middleware logs a message on every request 
 
 ### Checklist for OAuth2 / oauth2-proxy auth
 
-1. **`proxy_auth.enabled: true`** is set in `config.yaml`.
+1. **`proxy_auth.enabled: true`** is set in `config.yaml`. This key defaults to `false` — if it is absent or `false`, the middleware is completely bypassed and no `oauth2 auth` log lines appear, even with debug logging.
 2. The `username_header` and `groups_header` values match what oauth2-proxy injects (defaults are `X-Auth-Request-Preferred-Username` and `X-Auth-Request-Groups`).
-3. The user's Kanidm (or other OIDC provider) groups appear in `group_roles`.
-4. oauth2-proxy is configured with `set-xauthrequest = true` (or equivalent) to inject the headers.
-5. YAAMon is not directly reachable from clients — only the proxy should reach it.
+3. **`group_roles`** is configured with at least one group → role mapping. If it is empty, every proxy-auth request is denied (403) and a WARN is logged.
+4. The user's Kanidm (or other OIDC provider) groups appear in `group_roles`.
+5. oauth2-proxy is configured with `set-xauthrequest = true` (or equivalent) to inject the headers.
+6. YAAMon is not directly reachable from clients — only the proxy should reach it.
 
 ---
 

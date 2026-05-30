@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"allstar-yaamon/internal/auth"
+	"allstar-yaamon/internal/config"
 	"allstar-yaamon/internal/db"
 )
 
@@ -38,6 +39,7 @@ func newProfileTestServer(t *testing.T) (*Server, *db.DB, *auth.Manager) {
 	t.Cleanup(func() { database.Close() })
 	mgr := auth.NewManager(make([]byte, 32), false)
 	s := &Server{
+		cfg:        &config.Config{},
 		db:         database,
 		sessions:   mgr,
 		statsCache: newStatsCache(),
@@ -359,5 +361,82 @@ func TestHandleAPIGetAvatar_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 when no avatar stored", w.Code)
+	}
+}
+
+// --- tailscale_usernames via profile API ---
+
+func TestHandleAPIGetProfile_TailscaleLogins(t *testing.T) {
+	s, database, mgr := newProfileTestServer(t)
+	u := seedUser(t, database, "alice", "password123", db.PermReadOnly)
+	_ = database.SetTailscaleLogins(t.Context(), u.ID, []string{"alice@github"})
+
+	req := authedReq(t, mgr, u.ID, u.Username, u.Permission, "", "", "GET", "/api/profile", nil)
+	w := httptest.NewRecorder()
+	s.handleAPIGetProfile(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	var body map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got := body["tailscale_usernames"]; got != "alice@github" {
+		t.Errorf("tailscale_usernames = %v, want alice@github", got)
+	}
+}
+
+func TestHandleAPIUpdateProfile_TailscaleLogins(t *testing.T) {
+	s, database, mgr := newProfileTestServer(t)
+	u := seedUser(t, database, "alice", "password123", db.PermReadOnly)
+
+	logins := "alice@github"
+	req := authedReq(t, mgr, u.ID, u.Username, u.Permission, "", "", "PUT", "/api/profile",
+		jsonBody(map[string]any{"full_name": "Alice", "tailscale_usernames": logins}))
+	w := httptest.NewRecorder()
+	s.handleAPIUpdateProfile(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	got, _ := database.GetTailscaleLogins(t.Context(), u.ID)
+	if len(got) != 1 || got[0] != "alice@github" {
+		t.Errorf("logins = %v, want [alice@github]", got)
+	}
+}
+
+func TestHandleAPIUpdateProfile_TailscaleLogins_DuplicateAcrossUsers(t *testing.T) {
+	s, database, mgr := newProfileTestServer(t)
+	u1 := seedUser(t, database, "alice", "password123", db.PermReadOnly)
+	u2 := seedUser(t, database, "bob", "password123", db.PermReadOnly)
+	_ = database.SetTailscaleLogins(t.Context(), u1.ID, []string{"shared@ts"})
+
+	// bob tries to claim alice's login
+	req := authedReq(t, mgr, u2.ID, u2.Username, u2.Permission, "", "", "PUT", "/api/profile",
+		jsonBody(map[string]any{"full_name": "Bob", "tailscale_usernames": "shared@ts"}))
+	w := httptest.NewRecorder()
+	s.handleAPIUpdateProfile(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for duplicate login", w.Code)
+	}
+}
+
+func TestHandleAPIUpdateProfile_TailscaleLogins_DeduplicatesWithinInput(t *testing.T) {
+	s, database, mgr := newProfileTestServer(t)
+	u := seedUser(t, database, "alice", "password123", db.PermReadOnly)
+
+	req := authedReq(t, mgr, u.ID, u.Username, u.Permission, "", "", "PUT", "/api/profile",
+		jsonBody(map[string]any{"full_name": "Alice", "tailscale_usernames": "alice@ts,alice@ts"}))
+	w := httptest.NewRecorder()
+	s.handleAPIUpdateProfile(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	got, _ := database.GetTailscaleLogins(t.Context(), u.ID)
+	if len(got) != 1 {
+		t.Errorf("expected 1 login after dedup, got %d: %v", len(got), got)
 	}
 }
