@@ -15,12 +15,11 @@ func (db *DB) LoadStatsCache(ctx context.Context) (map[string]json.RawMessage, e
 	defer rows.Close()
 	out := make(map[string]json.RawMessage)
 	for rows.Next() {
-		var num string
-		var raw json.RawMessage
+		var num, raw string
 		if err := rows.Scan(&num, &raw); err != nil {
 			return nil, err
 		}
-		out[num] = raw
+		out[num] = json.RawMessage(raw)
 	}
 	return out, rows.Err()
 }
