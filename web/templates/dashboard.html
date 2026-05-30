@@ -1313,6 +1313,7 @@ function showDTMF(digit) {
       if (!rec) return;
       const content = formatQRZ(rec);
       const pop = new bootstrap.Popover(el, {
+        title:     esc(rec.callsign || callsign),
         content:   content,
         html:      true,
         trigger:   'manual',
