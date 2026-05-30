@@ -1,5 +1,7 @@
 # YAAMon Documentation
 
+> For the full CLI command reference see [REFERENCE.md](REFERENCE.md).
+
 - [First-Time Setup](#first-time-setup)
 - [User Roles](#user-roles)
 - [Managing Users](#managing-users)
@@ -12,6 +14,9 @@
 - [Your Profile](#your-profile)
 - [Themes](#themes)
 - [Backup and Restore](#backup-and-restore)
+- [Proxy Authentication (OAuth2 / oauth2-proxy)](#proxy-authentication-oauth2--oauth2-proxy)
+- [Tailscale Authentication](#tailscale-authentication)
+- [Troubleshooting](#troubleshooting)
 - [Docker — Bind-mount Ownership (PUID / PGID)](#docker--bind-mount-ownership-puid--pgid)
 - [Declarative State (yaamon apply)](#declarative-state-yaamon-apply)
 
@@ -317,6 +322,12 @@ Enter your name in the **Full Name** field. It appears in the navbar dropdown in
 
 Enter your current password and a new password to change it. Passwords must be at least 8 characters. Leave both fields blank to keep the current password.
 
+> Accounts created automatically by proxy auth (OAuth2) have password-based login disabled. The password fields are not available for those accounts.
+
+### Tailscale Usernames
+
+If your site uses [Tailscale authentication](#tailscale-authentication), enter your Tailscale login name (e.g. `jch@honig.net`) here. Separate multiple logins with commas. When a request arrives from Tailscale with a matching identity header, you will be logged in automatically without a password.
+
 ---
 
 ## Themes
@@ -438,6 +449,185 @@ services:
       - /var/lib/asterisk:/asterisk:ro
       - ./data:/var/lib/yaamon
 ```
+
+---
+
+## Proxy Authentication (OAuth2 / oauth2-proxy)
+
+When YAAMon sits behind an [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) reverse proxy (or any proxy that injects `X-Auth-Request-*` headers), it can derive a session automatically from those headers without requiring users to log in through the YAAMon login page.
+
+### How it works
+
+On every request the proxy injects headers identifying the authenticated user. YAAMon reads the username and group membership from those headers and maps the user's groups to a YAAMon role. No session cookie is written — the session is re-derived from the headers on every request.
+
+If the user does not yet have a YAAMon account and `create_users: true` (the default), an account is created automatically with the mapped role. The password is stored as `*`, which prevents local login — the account is only usable via proxy auth.
+
+### Configuration
+
+```yaml
+proxy_auth:
+  enabled: false
+
+  # Header that carries the authenticated username.
+  # For oauth2-proxy with the preferred_username claim:
+  username_header: X-Auth-Request-Preferred-Username
+
+  # Header that carries the comma-separated group claim values.
+  groups_header: X-Auth-Request-Groups
+
+  # Map group claim values to YAAMon roles (group → role).
+  # YAAMon grants the highest role found across all groups the user belongs to.
+  # If the user is in none of these groups, the request is denied (403).
+  # This mapping MUST be configured — if it is empty, every proxy-auth request
+  # is denied and a WARN is logged explaining what is missing.
+  group_roles:
+    yaamon_superadmin: superuser
+    yaamon_admin:      admin
+    yaamon_rw:         readwrite
+    yaamon_access:     readonly
+
+  # Create a DB account on first proxy-auth login (default: true).
+  # Set to false to require pre-created accounts.
+  create_users: true
+
+  # If true, update the DB account's stored role to the OAuth-mapped role on
+  # every successful auth. If false (default), the DB role is ignored while the
+  # proxy is active — the OAuth-mapped role always governs the session.
+  update_db_role: false
+```
+
+### Security considerations
+
+YAAMon trusts the proxy headers unconditionally. Ensure that:
+
+- YAAMon is **not reachable directly** from the internet or from untrusted clients — only the proxy should be able to reach it.
+- The proxy is configured to **strip** any incoming `X-Auth-Request-*` headers from external requests before adding its own.
+
+When `proxy_auth.enabled: true`, the local login page still works for accounts that do not have the `*` password sentinel. This allows a fallback superuser created during initial setup to log in even when the proxy is not in front, which is useful for testing and emergency access.
+
+### Auth indicator
+
+When a session is established via proxy auth, a shield icon (🛡) appears next to your username in the top-right dropdown. Hover over it to see `Authenticated via OAuth2`.
+
+---
+
+## Tailscale Authentication
+
+When YAAMon sits behind [caddy-tailscale](https://github.com/tailscale/caddy-tailscale), it can automatically log in users arriving from the Tailscale network without a password.
+
+### How it works
+
+caddy-tailscale's `tailscale_auth` directive identifies the Tailscale user making each request and populates Caddy auth user fields. Those fields are then mapped to HTTP headers by the `reverse_proxy` block and forwarded to YAAMon. YAAMon reads the login name from the configured header and looks for a YAAMon DB user whose **Tailscale Usernames** profile field contains that login. If found, the user is logged in with their DB role. If not found, YAAMon falls through to the cookie session (if any) or the login page — users without a Tailscale mapping can still log in with a password.
+
+Unlike OAuth2 proxy auth, Tailscale auth **does not create users automatically**. The mapping must be configured by editing the user's profile.
+
+> **Note:** `tailscale_auth` identifies the *connecting user's* device. It does not work when the connecting client is itself a tagged (service) device, only for user-owned devices.
+
+### Caddyfile configuration
+
+The `tailscale_auth` directive must appear before `reverse_proxy`, and the Caddy auth user fields must be explicitly mapped to headers:
+
+```caddyfile
+https://yaamon.example.ts.net {
+    bind tailscale/yaamon
+
+    tailscale_auth
+
+    reverse_proxy yaamon:80 {
+        header_up Tailscale-User-Login       {http.auth.user.tailscale_user}
+        header_up Tailscale-User-Name        {http.auth.user.tailscale_name}
+        header_up Tailscale-User-Profile-Pic {http.auth.user.tailscale_profile_picture}
+    }
+}
+```
+
+Use `tailscale_user` (not `tailscale_login`) for the login header — `tailscale_user` is the full namespace-qualified ID (e.g. `jchonig@github`) while `tailscale_login` is just the username portion (`jchonig`). Using the full ID avoids ambiguity when users from different Tailscale tailnets might share the same short username.
+
+### YAAMon configuration
+
+```yaml
+tailscale_auth:
+  enabled: true
+
+  # Header carrying the Tailscale login name (e.g. jch@honig.net).
+  # Must match the header_up name in the Caddyfile.
+  user_header: Tailscale-User-Login
+
+  # Optional headers for display name and avatar URL.
+  name_header:   Tailscale-User-Name
+  avatar_header: Tailscale-User-Profile-Pic
+```
+
+### Mapping a DB user to a Tailscale login
+
+Each user can list one or more Tailscale login names in their profile. When a request arrives with a matching `Tailscale-User-Login` header, that user is automatically logged in.
+
+**Self-service (users):** Open **My Profile** from the top-right dropdown. Enter your Tailscale login name (e.g. `jch@honig.net`) in the **Tailscale Usernames** field. Separate multiple logins with commas if you have more than one Tailscale identity.
+
+**Admin:** Admins and superusers can set the Tailscale Usernames field for any user on the **Admin → Users** page.
+
+### Display name and avatar
+
+If your YAAMon profile has no display name or avatar set, they are filled in opportunistically from the Tailscale headers (`Tailscale-User-Name` and `Tailscale-User-Profile-Pic`) for that request. To make the values permanent, save them in your profile.
+
+### Auth indicator
+
+When a session is established via Tailscale auth, a shield icon (🛡) appears next to your username in the top-right dropdown. Hover over it to see `Authenticated via tailscale`. If the Tailscale login name differs from your YAAMon username (e.g. you logged in as `jch@honig.net` but your account is `jch`), the Tailscale login is shown in parentheses: `Authenticated via tailscale (jch@honig.net)`.
+
+---
+
+## Troubleshooting
+
+### Enabling debug logging
+
+Set the log level to `debug` in `config.yaml` (or via environment variable) to see detailed diagnostic output:
+
+```yaml
+log:
+  level: debug
+```
+
+```bash
+YAAMON_LOG_LEVEL=debug
+```
+
+### Proxy auth / Tailscale auth not working
+
+With debug logging enabled, the auth middleware logs a message on every request explaining what it found. Look for lines with `tailscale auth` or `oauth2 auth`:
+
+| Message | Meaning |
+|---------|---------|
+| `tailscale auth: header absent` | The configured `user_header` was not present in the request. The Caddyfile is missing the `tailscale_auth` directive, or caddy-tailscale is not in use. |
+| `tailscale auth: no matching user` | The header was present but no DB user has that Tailscale login in their **Tailscale Usernames** profile field. Add the login via **My Profile** or **Admin → Users**. |
+| `tailscale auth: matched user` | Tailscale auth succeeded — session established. |
+| `oauth2 auth: header absent` | The configured `username_header` was not present. The proxy (oauth2-proxy / Caddy) is not injecting auth headers. |
+| *(no `oauth2 auth` log lines at all)* | `proxy_auth.enabled` is `false` (the default). If you see no `oauth2 auth` lines even with debug logging, check that `proxy_auth.enabled: true` is explicitly in your `config.yaml`. |
+| `oauth2 auth: group_roles is not configured` | `proxy_auth.enabled: true` but `group_roles` is empty. Add a `group_roles` mapping to `config.yaml`. All requests are denied until this is configured. |
+| `oauth2 auth: no matching group` | The username header was present but none of the user's groups appear in `group_roles`. Check the group names in the log against your `group_roles` mapping. |
+| `oauth2 auth: matched role` | OAuth2 auth succeeded — session established with the mapped role. |
+
+### Checklist for Tailscale auth
+
+1. **`tailscale_auth.enabled: true`** is set in `config.yaml`.
+2. The Caddyfile has **`tailscale_auth`** before `reverse_proxy`.
+3. The `reverse_proxy` block has **`header_up`** lines mapping the Caddy auth user fields to the headers YAAMon expects:
+   ```caddyfile
+   header_up Tailscale-User-Login       {http.auth.user.tailscale_login}
+   header_up Tailscale-User-Name        {http.auth.user.tailscale_name}
+   header_up Tailscale-User-Profile-Pic {http.auth.user.tailscale_profile_picture}
+   ```
+   Without these, `tailscale_auth` authenticates the request but no identity is forwarded to YAAMon.
+4. The user has their Tailscale login (e.g. `jch@honig.net`) in their **Tailscale Usernames** field. Open **My Profile** — if you are connecting through caddy-tailscale an **Add \<login\>** button appears automatically when the login is not yet mapped.
+5. YAAMon is not directly reachable from clients — only Caddy should reach it, otherwise headers can be spoofed.
+
+### Checklist for OAuth2 / oauth2-proxy auth
+
+1. **`proxy_auth.enabled: true`** is set in `config.yaml`. This key defaults to `false` — if it is absent or `false`, the middleware is completely bypassed and no `oauth2 auth` log lines appear, even with debug logging.
+2. The `username_header` and `groups_header` values match what oauth2-proxy injects (defaults are `X-Auth-Request-Preferred-Username` and `X-Auth-Request-Groups`).
+3. **`group_roles`** is configured with at least one group → role mapping. If it is empty, every proxy-auth request is denied (403) and a WARN is logged.
+4. The user's Kanidm (or other OIDC provider) groups appear in `group_roles`.
+5. oauth2-proxy is configured with `set-xauthrequest = true` (or equivalent) to inject the headers.
+6. YAAMon is not directly reachable from clients — only the proxy should reach it.
 
 ---
 

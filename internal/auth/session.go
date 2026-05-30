@@ -25,12 +25,14 @@ const sessionKey contextKey = iota
 
 // Session holds the authenticated user's data embedded in the cookie.
 type Session struct {
-	UserID     int64  `json:"uid"`
-	Username   string `json:"u"`
-	Permission string `json:"p"`
-	FullName   string `json:"fn,omitempty"`
-	AvatarURL  string `json:"av,omitempty"`
-	Expires    int64  `json:"exp"` // Unix timestamp
+	UserID          int64  `json:"uid"`
+	Username        string `json:"u"`
+	Permission      string `json:"p"`
+	FullName        string `json:"fn,omitempty"`
+	AvatarURL       string `json:"av,omitempty"`
+	Expires         int64  `json:"exp"` // Unix timestamp
+	AuthMethod      string `json:"am,omitempty"`
+	ExternalUsername string `json:"eu,omitempty"`
 }
 
 // Manager handles session signing and verification.
@@ -146,15 +148,19 @@ func FromContext(ctx context.Context) *Session {
 	return s
 }
 
-func withSession(ctx context.Context, s *Session) context.Context {
+// WithSession stores a session in the context. Used by proxy auth middleware.
+func WithSession(ctx context.Context, s *Session) context.Context {
 	return context.WithValue(ctx, sessionKey, s)
 }
 
 // Middleware injects the session (if valid) into the request context.
+// It does not overwrite a session already set by proxy auth middleware.
 func (m *Manager) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s := m.GetSession(r); s != nil {
-			r = r.WithContext(withSession(r.Context(), s))
+		if FromContext(r.Context()) == nil {
+			if s := m.GetSession(r); s != nil {
+				r = r.WithContext(WithSession(r.Context(), s))
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

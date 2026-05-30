@@ -38,7 +38,17 @@
             <span class="d-none d-md-inline">{{if .FullName}}{{.FullName}}{{else}}{{.Username}}{{end}}</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><h6 class="dropdown-header">{{.Permission}}</h6></li>
+            <li>
+              <h6 class="dropdown-header">
+                {{.Username}}
+                {{if .AuthMethod}}
+                <i class="bi bi-shield-check ms-1 text-info"
+                   data-bs-toggle="tooltip" data-bs-placement="right"
+                   title="Authenticated via {{.AuthMethod}}{{if and .ExternalUsername (ne .ExternalUsername .Username)}} ({{.ExternalUsername}}){{end}}"></i>
+                {{end}}
+              </h6>
+            </li>
+            <li><h6 class="dropdown-header text-muted" style="font-size:.75rem;padding-top:0">{{.Permission}}</h6></li>
             <li><hr class="dropdown-divider"></li>
             <li><button class="dropdown-item" onclick="openProfileModal()"><i class="bi bi-person-gear me-2"></i>My Profile</button></li>
             {{if or (eq .Permission "superuser") (eq .Permission "admin") (eq .Permission "readwrite")}}
@@ -95,6 +105,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/static/app.js"></script>
+  <script>document.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el=>new bootstrap.Tooltip(el))});</script>
   {{block "scripts" .}}{{end}}
   {{if .Username}}
   <!-- Profile Modal -->
@@ -147,6 +158,17 @@
             <input type="text" class="form-control" id="profile-fullname"
                    placeholder="Your name" value="{{.FullName}}">
           </div>
+          <div class="mb-3">
+            <label for="profile-tailscale" class="form-label">Tailscale Usernames</label>
+            <div class="input-group">
+              <input type="text" class="form-control" id="profile-tailscale"
+                     placeholder="jch@honig.net" autocomplete="off">
+              <button class="btn btn-outline-secondary" type="button"
+                      id="profile-tailscale-add" style="display:none"
+                      onclick="addTailscaleLogin()"></button>
+            </div>
+            <div class="form-text">Comma-separated Tailscale login names for automatic sign-in.</div>
+          </div>
           <hr>
           <div class="mb-3">
             <label for="profile-current-pw" class="form-label">Current Password</label>
@@ -175,14 +197,40 @@
     const fileInput = document.getElementById('avatar-file');
     if (fileInput) fileInput.addEventListener('change', onAvatarFileChosen);
   });
-  function openProfileModal() {
+  let _detectedTailscaleLogin = '';
+  async function openProfileModal() {
     document.getElementById('profile-error').textContent = '';
     document.getElementById('avatar-error').textContent = '';
     document.getElementById('profile-current-pw').value = '';
     document.getElementById('profile-new-pw').value = '';
     document.getElementById('avatar-file').value = '';
     document.getElementById('avatar-upload-btn').style.display = 'none';
+    _detectedTailscaleLogin = '';
+    const addBtn = document.getElementById('profile-tailscale-add');
+    addBtn.style.display = 'none';
+    try {
+      const resp = await fetch('/api/profile');
+      if (resp.ok) {
+        const profile = await resp.json();
+        const current = profile.tailscale_usernames || '';
+        document.getElementById('profile-tailscale').value = current;
+        _detectedTailscaleLogin = profile.tailscale_login || '';
+        if (_detectedTailscaleLogin && !containsLogin(current, _detectedTailscaleLogin)) {
+          addBtn.textContent = 'Add ' + _detectedTailscaleLogin;
+          addBtn.style.display = '';
+        }
+      }
+    } catch (_) {}
     _profileModal.show();
+  }
+  function containsLogin(list, login) {
+    return list.split(',').map(s => s.trim()).filter(Boolean).includes(login);
+  }
+  function addTailscaleLogin() {
+    const input = document.getElementById('profile-tailscale');
+    const current = input.value.trim();
+    input.value = current ? current + ',' + _detectedTailscaleLogin : _detectedTailscaleLogin;
+    document.getElementById('profile-tailscale-add').style.display = 'none';
   }
   function onAvatarFileChosen(e) {
     const file = e.target.files[0];
@@ -263,6 +311,7 @@
       return;
     }
     const body = {full_name: document.getElementById('profile-fullname').value.trim()};
+    body.tailscale_usernames = document.getElementById('profile-tailscale').value.trim();
     const avatarURL = document.getElementById('profile-avatar-url').value.trim();
     if (avatarURL) body.avatar_url = avatarURL;
     if (newPw) { body.current_password = currentPw; body.new_password = newPw; }

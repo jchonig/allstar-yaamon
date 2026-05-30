@@ -155,6 +155,7 @@ func (s *Server) Run() error {
 	r.Use(middleware.Recoverer)
 	r.Use(csrfMiddleware)
 	r.Use(s.setupGuard) // redirect to /setup before auth fires when no users exist
+	r.Use(proxyAuthMiddleware(s.cfg.ProxyAuth, s.cfg.TailscaleAuth, s.db))
 	r.Use(s.sessions.Middleware)
 	r.Use(s.validateSessionUser) // reject sessions for deleted accounts
 
@@ -192,6 +193,7 @@ func (s *Server) Run() error {
 		r.Get("/api/nodes/{id}/stats", s.handleAPINodeStats)
 		r.Get("/api/nodes/{id}/connections/{nodeNumber}", s.handleAPIConnections)
 		r.Get("/graph/{nodeNumber}", s.handleGraphPage)
+		r.Get("/api/profile", s.handleAPIGetProfile)
 		r.Put("/api/profile", s.handleAPIUpdateProfile)
 		r.Post("/api/profile/avatar", s.handleAPIUploadAvatar)
 		r.Delete("/api/profile/avatar", s.handleAPIDeleteAvatar)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -12,21 +13,44 @@ import (
 )
 
 type userJSON struct {
-	ID         int64  `json:"id"`
-	Username   string `json:"username"`
-	Permission string `json:"permission"`
-	FullName   string `json:"full_name,omitempty"`
-	AvatarURL  string `json:"avatar_url,omitempty"`
+	ID                 int64  `json:"id"`
+	Username           string `json:"username"`
+	Permission         string `json:"permission"`
+	FullName           string `json:"full_name,omitempty"`
+	AvatarURL          string `json:"avatar_url,omitempty"`
+	TailscaleUsernames string `json:"tailscale_usernames,omitempty"`
 }
 
 type userInput struct {
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	Permission string `json:"permission"`
+	Username           string  `json:"username"`
+	Password           string  `json:"password"`
+	Permission         string  `json:"permission"`
+	TailscaleUsernames *string `json:"tailscale_usernames"`
 }
 
-func userToJSON(u db.User) userJSON {
-	return userJSON{ID: u.ID, Username: u.Username, Permission: u.Permission, FullName: u.FullName, AvatarURL: u.AvatarURL}
+func userToJSON(u db.User, logins []string) userJSON {
+	return userJSON{
+		ID:                 u.ID,
+		Username:           u.Username,
+		Permission:         u.Permission,
+		FullName:           u.FullName,
+		AvatarURL:          u.AvatarURL,
+		TailscaleUsernames: strings.Join(logins, ","),
+	}
+}
+
+func splitLogins(s string) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if l := strings.TrimSpace(part); l != "" {
+			if _, dup := seen[l]; !dup {
+				seen[l] = struct{}{}
+				out = append(out, l)
+			}
+		}
+	}
+	return out
 }
 
 // handleAPIListUsers returns all users (no password hash).
@@ -38,7 +62,8 @@ func (s *Server) handleAPIListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	result := make([]userJSON, len(users))
 	for i, u := range users {
-		result[i] = userToJSON(u)
+		logins, _ := s.db.GetTailscaleLogins(r.Context(), u.ID)
+		result[i] = userToJSON(u, logins)
 	}
 	writeJSON(w, result)
 }
@@ -75,7 +100,7 @@ func (s *Server) handleAPICreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, userToJSON(*u))
+	writeJSON(w, userToJSON(*u, nil))
 }
 
 // handleAPIUpdateUser updates a user's permission and/or password.
@@ -131,7 +156,15 @@ func (s *Server) handleAPIUpdateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, userToJSON(*existing))
+	if in.TailscaleUsernames != nil {
+		if err := s.db.SetTailscaleLogins(r.Context(), id, splitLogins(*in.TailscaleUsernames)); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	logins, _ := s.db.GetTailscaleLogins(r.Context(), id)
+	writeJSON(w, userToJSON(*existing, logins))
 }
 
 // handleAPIDeleteUser deletes a user. Only superusers can delete; last superuser is protected.

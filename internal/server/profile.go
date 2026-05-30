@@ -31,10 +31,11 @@ func (s *Server) effectiveAvatarURL(r *http.Request, userID int64, externalURL s
 }
 
 // validateSessionUser verifies the session user still exists in the database.
+// Proxy-auth sessions (AuthMethod != "") are stateless and don't need DB validation.
 // Deleted accounts are cleared and the request is redirected/rejected.
 func (s *Server) validateSessionUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if sess := auth.FromContext(r.Context()); sess != nil {
+		if sess := auth.FromContext(r.Context()); sess != nil && sess.AuthMethod == "" {
 			if _, err := s.db.GetUserByID(r.Context(), sess.UserID); err != nil {
 				s.sessions.ClearSession(w)
 				if strings.HasPrefix(r.URL.Path, "/api/") {
@@ -46,6 +47,39 @@ func (s *Server) validateSessionUser(next http.Handler) http.Handler {
 			}
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+// handleAPIGetProfile returns the current user's profile fields.
+// GET /api/profile
+func (s *Server) handleAPIGetProfile(w http.ResponseWriter, r *http.Request) {
+	sess := auth.FromContext(r.Context())
+	if sess == nil {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	user, err := s.db.GetUserByID(r.Context(), sess.UserID)
+	if err != nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	tailscaleLogins, err := s.db.GetTailscaleLogins(r.Context(), user.ID)
+	if err != nil {
+		http.Error(w, "get tailscale logins: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Include the Tailscale login detected in this request (if any) so the UI
+	// can offer a one-click "add" when the header is present but not yet mapped.
+	tailscaleLogin := strings.TrimSpace(r.Header.Get(s.cfg.TailscaleAuth.UserHeader))
+
+	writeJSON(w, map[string]any{
+		"username":            user.Username,
+		"full_name":           user.FullName,
+		"avatar_url":          s.effectiveAvatarURL(r, user.ID, user.AvatarURL),
+		"tailscale_usernames": strings.Join(tailscaleLogins, ","),
+		"tailscale_login":     tailscaleLogin,
 	})
 }
 
@@ -61,11 +95,12 @@ func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var body struct {
-		FullName        string `json:"full_name"`
-		AvatarURL       string `json:"avatar_url"`       // external URL; clears uploaded avatar if non-empty
-		ClearAvatar     bool   `json:"clear_avatar"`     // true when explicitly clearing avatar URL
-		CurrentPassword string `json:"current_password"`
-		NewPassword     string `json:"new_password"`
+		FullName           string  `json:"full_name"`
+		AvatarURL          string  `json:"avatar_url"`       // external URL; clears uploaded avatar if non-empty
+		ClearAvatar        bool    `json:"clear_avatar"`     // true when explicitly clearing avatar URL
+		CurrentPassword    string  `json:"current_password"`
+		NewPassword        string  `json:"new_password"`
+		TailscaleUsernames *string `json:"tailscale_usernames"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -78,7 +113,12 @@ func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Local password change is disallowed for proxy-auth accounts ("*" sentinel).
 	if body.NewPassword != "" {
+		if user.Password == "*" {
+			http.Error(w, "password change not available for proxy-authenticated accounts", http.StatusForbidden)
+			return
+		}
 		if body.CurrentPassword == "" {
 			http.Error(w, "current password is required to set a new password", http.StatusBadRequest)
 			return
@@ -94,6 +134,13 @@ func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) 
 		}
 		if err := s.db.UpdateUserPassword(r.Context(), sess.UserID, hash); err != nil {
 			http.Error(w, "update password: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if body.TailscaleUsernames != nil {
+		if err := s.db.SetTailscaleLogins(r.Context(), sess.UserID, splitLogins(*body.TailscaleUsernames)); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
@@ -120,10 +167,13 @@ func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	avatarURL := s.effectiveAvatarURL(r, user.ID, user.AvatarURL)
-	if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission, user.FullName, avatarURL); err != nil {
-		http.Error(w, "session error", http.StatusInternalServerError)
-		return
+	// Proxy-auth sessions are stateless; no cookie to refresh.
+	if sess.AuthMethod == "" {
+		avatarURL := s.effectiveAvatarURL(r, user.ID, user.AvatarURL)
+		if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission, user.FullName, avatarURL); err != nil {
+			http.Error(w, "session error", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	writeJSON(w, map[string]any{"ok": true, "full_name": user.FullName})
@@ -170,9 +220,11 @@ func (s *Server) handleAPIUploadAvatar(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "update profile: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission, user.FullName, apiPath); err != nil {
-		http.Error(w, "session error", http.StatusInternalServerError)
-		return
+	if sess.AuthMethod == "" {
+		if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission, user.FullName, apiPath); err != nil {
+			http.Error(w, "session error", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	writeJSON(w, map[string]any{"ok": true, "avatar_url": apiPath})
@@ -201,9 +253,11 @@ func (s *Server) handleAPIDeleteAvatar(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "update profile: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission, user.FullName, ""); err != nil {
-		http.Error(w, "session error", http.StatusInternalServerError)
-		return
+	if sess.AuthMethod == "" {
+		if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission, user.FullName, ""); err != nil {
+			http.Error(w, "session error", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	writeJSON(w, map[string]any{"ok": true})
