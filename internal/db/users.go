@@ -36,19 +36,23 @@ func ValidPermission(p string) bool {
 }
 
 type User struct {
-	ID         int64
-	Username   string
-	Password   string // bcrypt hash; "*" means local login disabled
-	Permission string
-	FullName   string
-	AvatarURL  string
+	ID             int64
+	Username       string
+	Password       string // bcrypt hash; "*" means local login disabled
+	Permission     string
+	FullName       string
+	AvatarURL      string
+	QRZUsername    string
+	QRZPasswordEnc string
+	LookupSource   string
 }
 
-const userSelectCols = `id, username, password, permission, full_name, avatar_url`
+const userSelectCols = `id, username, password, permission, full_name, avatar_url, qrz_username, qrz_password_enc, lookup_source`
 
 func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	u := &User{}
-	err := row.Scan(&u.ID, &u.Username, &u.Password, &u.Permission, &u.FullName, &u.AvatarURL)
+	err := row.Scan(&u.ID, &u.Username, &u.Password, &u.Permission, &u.FullName, &u.AvatarURL,
+		&u.QRZUsername, &u.QRZPasswordEnc, &u.LookupSource)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +137,21 @@ func (db *DB) UpdateUserPassword(ctx context.Context, id int64, passwordHash str
 func (db *DB) UpdateUserPermission(ctx context.Context, id int64, permission string) error {
 	_, err := db.sql.ExecContext(ctx,
 		`UPDATE users SET permission = ? WHERE id = ?`, permission, id)
+	return err
+}
+
+// UpdateUserQRZ stores encrypted QRZ credentials for a user.
+func (db *DB) UpdateUserQRZ(ctx context.Context, id int64, username, encPassword string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE users SET qrz_username = ?, qrz_password_enc = ? WHERE id = ?`,
+		username, encPassword, id)
+	return err
+}
+
+// UpdateUserLookupSource saves the callsign lookup source preference for a user.
+func (db *DB) UpdateUserLookupSource(ctx context.Context, id int64, source string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE users SET lookup_source = ? WHERE id = ?`, source, id)
 	return err
 }
 

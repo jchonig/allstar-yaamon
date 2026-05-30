@@ -25,6 +25,12 @@ func (db *DB) LoadQRZCache(ctx context.Context) (map[string]json.RawMessage, err
 	return out, rows.Err()
 }
 
+// ClearQRZCache deletes all cached QRZ records.
+func (db *DB) ClearQRZCache(ctx context.Context) error {
+	_, err := db.sql.ExecContext(ctx, `DELETE FROM qrz_cache`)
+	return err
+}
+
 // SaveQRZRecord upserts a single QRZ record into the cache.
 func (db *DB) SaveQRZRecord(ctx context.Context, callsign string, record json.RawMessage, fetchedAt time.Time) error {
 	_, err := db.sql.ExecContext(ctx,

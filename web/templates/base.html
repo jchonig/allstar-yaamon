@@ -59,7 +59,6 @@
             <li><a class="dropdown-item" href="/admin/nodes"><i class="bi bi-diagram-3 me-2"></i>Nodes</a></li>
             <li><a class="dropdown-item" href="/admin/users"><i class="bi bi-people me-2"></i>Users</a></li>
             <li><a class="dropdown-item" href="/admin/backup"><i class="bi bi-archive me-2"></i>Backup</a></li>
-            <li><a class="dropdown-item" href="/admin/integrations"><i class="bi bi-plug me-2"></i>Integrations</a></li>
             <li><button class="dropdown-item" onclick="openSiteSettingsModal()"><i class="bi bi-sliders me-2"></i>Site Settings</button></li>
             {{end}}
             <li><hr class="dropdown-divider"></li>
@@ -171,6 +170,54 @@
             <div class="form-text">Comma-separated Tailscale login names for automatic sign-in.</div>
           </div>
           <hr>
+          <div class="mb-2">
+            <label class="form-label fw-semibold"><i class="bi bi-search me-1"></i>Callsign Lookup</label>
+            <div class="mb-2">
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="profile-lookup-src" id="pls-auto" value="auto">
+                <label class="form-check-label" for="pls-auto">Automatic</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="profile-lookup-src" id="pls-callook" value="callook">
+                <label class="form-check-label" for="pls-callook">callook.info</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="profile-lookup-src" id="pls-qrz" value="qrz">
+                <label class="form-check-label" for="pls-qrz">QRZ.com</label>
+              </div>
+              <div class="form-text">Automatic uses QRZ.com when configured, otherwise callook.info (free, US only).</div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small"><i class="bi bi-person-badge me-1"></i>QRZ.com Credentials</label>
+            <div id="profile-qrz-status" class="mb-2"></div>
+            <div class="mb-2">
+              <input type="text" class="form-control form-control-sm" id="profile-qrz-user"
+                     autocomplete="username" placeholder="QRZ Username">
+            </div>
+            <div class="mb-2">
+              <div class="input-group input-group-sm">
+                <input type="password" class="form-control" id="profile-qrz-pass"
+                       autocomplete="current-password" placeholder="QRZ Password (leave blank to keep current)">
+                <button class="btn btn-outline-secondary" type="button"
+                        onclick="toggleQRZPass()"><i class="bi bi-eye" id="profile-qrz-eye"></i></button>
+              </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-sm btn-outline-primary" onclick="saveQRZProfile()">
+                <i class="bi bi-check-lg me-1"></i>Save QRZ
+              </button>
+              <button class="btn btn-sm btn-outline-danger" id="profile-qrz-remove" style="display:none"
+                      onclick="deleteQRZProfile()">
+                <i class="bi bi-trash me-1"></i>Remove
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="clearMyCallsignCache()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Clear cache
+              </button>
+            </div>
+            <div class="text-danger small mt-1" id="profile-qrz-error"></div>
+          </div>
+          <hr>
           <div class="mb-3">
             <label for="profile-current-pw" class="form-label">Current Password</label>
             <input type="password" class="form-control" id="profile-current-pw"
@@ -209,6 +256,13 @@
     _detectedTailscaleLogin = '';
     const addBtn = document.getElementById('profile-tailscale-add');
     addBtn.style.display = 'none';
+    document.getElementById('profile-qrz-user').value = '';
+    document.getElementById('profile-qrz-pass').value = '';
+    document.getElementById('profile-qrz-error').textContent = '';
+    document.getElementById('profile-qrz-remove').style.display = 'none';
+    document.getElementById('profile-qrz-status').innerHTML = '';
+    // reset lookup source to auto
+    document.querySelector('input[name="profile-lookup-src"][value="auto"]').checked = true;
     try {
       const resp = await fetch('/api/profile');
       if (resp.ok) {
@@ -220,6 +274,15 @@
           addBtn.textContent = 'Add ' + _detectedTailscaleLogin;
           addBtn.style.display = '';
         }
+        // populate lookup source
+        const src = profile.lookup_source || 'auto';
+        const radio = document.querySelector(`input[name="profile-lookup-src"][value="${src}"]`);
+        if (radio) radio.checked = true;
+        // populate QRZ
+        document.getElementById('profile-qrz-user').value = profile.qrz_username || '';
+        document.getElementById('profile-qrz-pass').value = '';
+        document.getElementById('profile-qrz-error').textContent = '';
+        setProfileQRZConfigured(!!profile.qrz_configured);
       }
     } catch (_) {}
     _profileModal.show();
@@ -316,6 +379,8 @@
     const avatarURL = document.getElementById('profile-avatar-url').value.trim();
     if (avatarURL) body.avatar_url = avatarURL;
     if (newPw) { body.current_password = currentPw; body.new_password = newPw; }
+    const srcRadio = document.querySelector('input[name="profile-lookup-src"]:checked');
+    if (srcRadio) body.lookup_source = srcRadio.value;
     const btn = document.getElementById('profile-save-btn');
     btn.disabled = true;
     try {
@@ -335,6 +400,61 @@
     } finally {
       btn.disabled = false;
     }
+  }
+  function setProfileQRZConfigured(configured) {
+    const removeBtn = document.getElementById('profile-qrz-remove');
+    const statusEl = document.getElementById('profile-qrz-status');
+    removeBtn.style.display = configured ? '' : 'none';
+    statusEl.innerHTML = configured
+      ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Configured</span>'
+      : '<span class="badge bg-secondary">Not configured</span>';
+  }
+  function toggleQRZPass() {
+    const el = document.getElementById('profile-qrz-pass');
+    const icon = document.getElementById('profile-qrz-eye');
+    el.type = el.type === 'password' ? 'text' : 'password';
+    icon.className = el.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+  }
+  async function saveQRZProfile() {
+    const username = document.getElementById('profile-qrz-user').value.trim();
+    const password = document.getElementById('profile-qrz-pass').value;
+    const errEl = document.getElementById('profile-qrz-error');
+    errEl.textContent = '';
+    if (!username) { errEl.textContent = 'Username is required.'; return; }
+    const body = { username };
+    if (password) body.password = password;
+    try {
+      const res = await fetch('/api/profile/qrz', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) { errEl.textContent = await res.text(); return; }
+      document.getElementById('profile-qrz-pass').value = '';
+      setProfileQRZConfigured(true);
+    } catch (e) {
+      errEl.textContent = 'Error: ' + e.message;
+    }
+  }
+  async function deleteQRZProfile() {
+    if (!confirm('Remove QRZ credentials?')) return;
+    const errEl = document.getElementById('profile-qrz-error');
+    errEl.textContent = '';
+    try {
+      const res = await fetch('/api/profile/qrz', { method: 'DELETE' });
+      if (!res.ok) { errEl.textContent = await res.text(); return; }
+      document.getElementById('profile-qrz-user').value = '';
+      document.getElementById('profile-qrz-pass').value = '';
+      setProfileQRZConfigured(false);
+    } catch (e) {
+      errEl.textContent = 'Error: ' + e.message;
+    }
+  }
+  async function clearMyCallsignCache() {
+    if (!confirm('Clear your callsign cache? Tooltips will re-fetch on next hover.')) return;
+    try {
+      await fetch('/api/profile/qrz/cache', { method: 'DELETE' });
+    } catch (_) {}
   }
   </script>
   {{end}}

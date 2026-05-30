@@ -74,12 +74,19 @@ func (s *Server) handleAPIGetProfile(w http.ResponseWriter, r *http.Request) {
 	// can offer a one-click "add" when the header is present but not yet mapped.
 	tailscaleLogin := strings.TrimSpace(r.Header.Get(s.cfg.TailscaleAuth.UserHeader))
 
+	lookupSource := user.LookupSource
+	if lookupSource == "" {
+		lookupSource = "auto"
+	}
 	writeJSON(w, map[string]any{
 		"username":            user.Username,
 		"full_name":           user.FullName,
 		"avatar_url":          s.effectiveAvatarURL(r, user.ID, user.AvatarURL),
 		"tailscale_usernames": strings.Join(tailscaleLogins, ","),
 		"tailscale_login":     tailscaleLogin,
+		"lookup_source":       lookupSource,
+		"qrz_username":        user.QRZUsername,
+		"qrz_configured":      user.QRZUsername != "" && user.QRZPasswordEnc != "",
 	})
 }
 
@@ -101,6 +108,7 @@ func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) 
 		CurrentPassword    string  `json:"current_password"`
 		NewPassword        string  `json:"new_password"`
 		TailscaleUsernames *string `json:"tailscale_usernames"`
+		LookupSource       string  `json:"lookup_source"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -141,6 +149,20 @@ func (s *Server) handleAPIUpdateProfile(w http.ResponseWriter, r *http.Request) 
 	if body.TailscaleUsernames != nil {
 		if err := s.db.SetTailscaleLogins(r.Context(), sess.UserID, splitLogins(*body.TailscaleUsernames)); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Validate and save lookup_source
+	if body.LookupSource != "" {
+		switch body.LookupSource {
+		case "auto", "qrz", "callook":
+			if err := s.db.UpdateUserLookupSource(r.Context(), sess.UserID, body.LookupSource); err != nil {
+				http.Error(w, "save lookup source: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		default:
+			http.Error(w, "lookup_source must be auto, qrz, or callook", http.StatusBadRequest)
 			return
 		}
 	}

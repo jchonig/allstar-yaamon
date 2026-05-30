@@ -507,11 +507,19 @@ async function loadFavs() {
     favsData = (await r.json()) || [];
   } catch { favsData = []; }
 
-  // Also load cached stats immediately.
+  // Also load cached stats immediately. Merge into statsData rather than
+  // replacing it: SSE may have already delivered fresher data for some nodes.
   try {
     const r2 = await fetch(`/api/nodes/${NODE_ID}/stats`);
-    statsData = (await r2.json()) || {};
-  } catch { statsData = {}; }
+    const httpStats = (await r2.json()) || {};
+    for (const [k, v] of Object.entries(httpStats)) {
+      const cur = statsData[k];
+      if (!cur || !cur.fetched_at ||
+          (v.fetched_at && new Date(v.fetched_at) >= new Date(cur.fetched_at))) {
+        statsData[k] = v;
+      }
+    }
+  } catch {}
 
   if (statsData[NODE_NUM]) setASLBadge(!isStale(statsData[NODE_NUM].fetched_at));
   renderFavs();
@@ -690,7 +698,13 @@ function rebuildAllActionCells() {
   favsData.forEach(f => {
     const row = tbody.querySelector(`tr[data-node-num="${f.node_number}"]`);
     if (!row) return;
-    row.cells[0].innerHTML = keyedDot(f.node_number);
+    // Update the status dot only when we have real-time AMI data for this node
+    // or when stats are fresh — prevents a links event from resetting green dots
+    // to grey while stats are still loading.
+    const s = statsData[f.node_number];
+    if ((f.node_number in amiLinks) || (s && s.fetched_at && !isStale(s.fetched_at))) {
+      row.cells[0].innerHTML = keyedDot(f.node_number);
+    }
     if (CAN_WRITE) row.cells[7].innerHTML = actionCell(f.node_number, f.id);
     row.classList.toggle('row-connected', isConnected(f.node_number));
   });
@@ -1259,10 +1273,17 @@ function showDTMF(digit) {
   }
 
   function formatQRZ(r) {
-    const name = [r.first_name, r.last_name].filter(Boolean).join(' ');
-    const loc  = [r.address, r.state, r.country].filter(Boolean).join(', ');
-    const cls  = r.class ? `<span class="badge bg-secondary ms-1">${esc(r.class)}</span>` : '';
-    return `<div class="fw-semibold">${esc(name)}${cls}</div>${loc ? `<div class="text-muted small">${esc(loc)}</div>` : ''}`;
+    const name    = [r.first_name, r.last_name].filter(Boolean).join(' ');
+    const loc     = [r.address, r.state, r.country].filter(Boolean).join(', ');
+    const cls     = r.class ? `<span class="badge bg-secondary ms-1">${esc(r.class)}</span>` : '';
+    const contact = [r.email, r.phone].filter(Boolean).join(' · ');
+    const srcLabel = r.source === 'qrz' ? 'QRZ.com' : r.source === 'callook' ? 'callook.info' : '';
+    return [
+      `<div class="fw-semibold">${esc(name)}${cls}</div>`,
+      loc     ? `<div class="text-muted small">${esc(loc)}</div>` : '',
+      contact ? `<div class="text-muted small">${esc(contact)}</div>` : '',
+      srcLabel ? `<div class="text-muted" style="font-size:.7rem">via ${esc(srcLabel)}</div>` : '',
+    ].join('');
   }
 
   async function fetchQRZ(callsign) {

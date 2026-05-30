@@ -102,6 +102,7 @@ func fetchCallook(ctx context.Context, callsign string) (Record, error) {
 		State:     state,
 		Country:   country,
 		Class:     r.Current.OperClass,
+		Source:    "callook",
 		FetchedAt: time.Now().UTC(),
 	}, nil
 }

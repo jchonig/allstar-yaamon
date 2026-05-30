@@ -50,7 +50,9 @@ type Server struct {
 	sseBroker    *sse.Broker
 	tmpls        map[string]*template.Template
 	loginLimiter *loginLimiter
-	qrzClient    *qrz.Client
+	callookClient *qrz.Client           // shared cache + callook; no QRZ credentials
+	qrzClients    map[int64]*qrz.Client // per-user QRZ XML clients (credentials set)
+	qrzMu         sync.RWMutex
 	cipherKey    [32]byte
 
 	// adaptive stats-fetch mode: switches between individual and bulk endpoint
@@ -86,7 +88,8 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 	s.linksCache = newLinksCache()
 	s.sseBroker = sse.NewBroker()
 	s.loginLimiter = newLoginLimiter()
-	s.qrzClient = qrz.New("", "") // always available; credentials set in initQRZ
+	s.callookClient = qrz.New("", "") // always available; per-user credentials in qrzClients
+	s.qrzClients = make(map[int64]*qrz.Client)
 	s.initQRZ(ctx)
 	return s, nil
 }
@@ -126,7 +129,7 @@ func (s *Server) initSessions() error {
 }
 
 func (s *Server) parseTemplates() error {
-	pages := []string{"login", "dashboard", "setup", "nodes", "users", "backup", "favorites", "graph", "integrations"}
+	pages := []string{"login", "dashboard", "setup", "nodes", "users", "backup", "favorites", "graph"}
 	s.tmpls = make(map[string]*template.Template, len(pages))
 	ui := s.cfg.UI
 	funcMap := template.FuncMap{
@@ -212,6 +215,10 @@ func (s *Server) Run() error {
 		r.Put("/api/profile", s.handleAPIUpdateProfile)
 		r.Post("/api/profile/avatar", s.handleAPIUploadAvatar)
 		r.Delete("/api/profile/avatar", s.handleAPIDeleteAvatar)
+		r.Get("/api/profile/qrz", s.handleAPIGetUserQRZ)
+		r.Put("/api/profile/qrz", s.handleAPISetUserQRZ)
+		r.Delete("/api/profile/qrz", s.handleAPIDeleteUserQRZ)
+		r.Delete("/api/profile/qrz/cache", s.handleAPIClearUserQRZCache)
 		r.Get("/api/users/{id}/avatar", s.handleAPIGetAvatar)
 		r.Get("/api/qrz/{callsign}", s.handleAPIQRZLookup)
 	})
@@ -252,12 +259,7 @@ func (s *Server) Run() error {
 		r.Post("/api/backup", s.handleAPIBackup)
 		r.Post("/api/backup/inspect", s.handleAPIBackupInspect)
 		r.Post("/api/backup/restore", s.handleAPIBackupRestore)
-		r.Get("/admin/integrations", s.handleIntegrationsPage)
-		r.Get("/api/admin/integrations/qrz", s.handleAPIGetQRZCredentials)
-		r.Put("/api/admin/integrations/qrz", s.handleAPISetQRZCredentials)
-		r.Delete("/api/admin/integrations/qrz", s.handleAPIDeleteQRZCredentials)
-		r.Get("/api/admin/integrations/lookup_source", s.handleAPIGetLookupSource)
-		r.Put("/api/admin/integrations/lookup_source", s.handleAPISetLookupSource)
+		r.Delete("/api/admin/integrations/qrz/cache", s.handleAPIClearQRZCache)
 	})
 
 	// Readwrite+ favorites export/import
