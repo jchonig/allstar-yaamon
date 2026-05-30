@@ -187,4 +187,9 @@ var migrations = []migration{
 	     ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT '';`},
 	{version: 5, sql: `ALTER TABLE users ADD COLUMN tailscale_usernames TEXT NOT NULL DEFAULT '';`},
 	{version: 6, fn: migration6},
+	{version: 7, sql: `CREATE TABLE IF NOT EXISTS stats_cache (
+		node_number TEXT PRIMARY KEY,
+		stats_json  TEXT NOT NULL,
+		updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`},
 }
