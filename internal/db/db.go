@@ -8,6 +8,11 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// migrationFn is a Go function for migrations too complex to express in a
+// single SQL string. It runs inside the same transaction as the schema_version
+// update, so it is applied atomically.
+type migrationFn func(ctx context.Context, tx *sql.Tx) error
+
 // DB wraps a SQLite connection with migration support.
 type DB struct {
 	sql  *sql.DB
@@ -94,11 +99,27 @@ func (db *DB) migrate() error {
 		if m.version <= current {
 			continue
 		}
-		if _, err := db.sql.ExecContext(ctx, m.sql); err != nil {
-			return fmt.Errorf("migration %d: %w", m.version, err)
+		tx, err := db.sql.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("migration %d: begin: %w", m.version, err)
 		}
-		if _, err := db.sql.ExecContext(ctx, `INSERT INTO schema_version (version) VALUES (?)`, m.version); err != nil {
+		if m.fn != nil {
+			if err := m.fn(ctx, tx); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("migration %d: %w", m.version, err)
+			}
+		} else if m.sql != "" {
+			if _, err := tx.ExecContext(ctx, m.sql); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("migration %d: %w", m.version, err)
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_version (version) VALUES (?)`, m.version); err != nil {
+			tx.Rollback()
 			return fmt.Errorf("recording migration %d: %w", m.version, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("migration %d: commit: %w", m.version, err)
 		}
 	}
 	return nil
@@ -107,10 +128,11 @@ func (db *DB) migrate() error {
 type migration struct {
 	version int
 	sql     string
+	fn      migrationFn
 }
 
 var migrations = []migration{
-	{1, `
+	{version: 1, sql: `
 		CREATE TABLE IF NOT EXISTS nodes (
 			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			name         TEXT NOT NULL,
@@ -157,20 +179,12 @@ var migrations = []migration{
 			generated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 	`},
-	{2, `ALTER TABLE favorites ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+	{version: 2, sql: `ALTER TABLE favorites ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
 	     UPDATE favorites SET position = id WHERE position = 0;`},
-	{3, `ALTER TABLE nodes ADD COLUMN description TEXT NOT NULL DEFAULT '';
+	{version: 3, sql: `ALTER TABLE nodes ADD COLUMN description TEXT NOT NULL DEFAULT '';
 	     ALTER TABLE nodes ADD COLUMN location TEXT NOT NULL DEFAULT '';`},
-	{4, `ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT '';
+	{version: 4, sql: `ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT '';
 	     ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT '';`},
-	{5, `ALTER TABLE users ADD COLUMN tailscale_usernames TEXT NOT NULL DEFAULT '';`},
-	{6, `CREATE TABLE tailscale_logins (
-		login   TEXT PRIMARY KEY,
-		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
-	);
-	INSERT INTO tailscale_logins (login, user_id)
-		SELECT trim(j.value), u.id
-		FROM users u, json_each('["' || replace(u.tailscale_usernames, ',', '","') || '"]') j
-		WHERE trim(u.tailscale_usernames) != '' AND trim(j.value) != '';
-	ALTER TABLE users DROP COLUMN tailscale_usernames;`},
+	{version: 5, sql: `ALTER TABLE users ADD COLUMN tailscale_usernames TEXT NOT NULL DEFAULT '';`},
+	{version: 6, fn: migration6},
 }

@@ -4,6 +4,10 @@
 
 YAAMon uses a single SQLite file (WAL mode, `PRAGMA foreign_keys = ON`). All
 schema changes are applied at startup through a versioned migration table.
+Each migration runs inside its own transaction together with the
+`schema_version` insert, so a failed migration is rolled back cleanly and
+retried on the next start. Complex migrations that cannot be expressed as a
+single SQL string use a Go `migrationFn` instead.
 
 ### Tables
 

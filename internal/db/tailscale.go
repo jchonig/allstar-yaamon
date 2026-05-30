@@ -7,6 +7,37 @@ import (
 	"fmt"
 )
 
+// migration6 creates the tailscale_logins join table, migrates any existing
+// comma-separated data from users.tailscale_usernames, and drops that column.
+// It is written as a Go function rather than SQL so it can check for column
+// existence before the INSERT and DROP, making it safe to re-run after a
+// previously interrupted attempt.
+func migration6(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS tailscale_logins (
+		login   TEXT PRIMARY KEY,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+	)`); err != nil {
+		return err
+	}
+
+	// Only migrate and drop if the source column still exists.
+	var colCount int
+	_ = tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name = 'tailscale_usernames'`).Scan(&colCount)
+	if colCount > 0 {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO tailscale_logins (login, user_id)
+			SELECT trim(j.value), u.id
+			FROM users u, json_each('["' || replace(u.tailscale_usernames, ',', '","') || '"]') j
+			WHERE trim(u.tailscale_usernames) != '' AND trim(j.value) != ''`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE users DROP COLUMN tailscale_usernames`); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetUserByTailscaleLogin returns the user whose tailscale_logins entry matches login, or ErrNotFound.
 func (db *DB) GetUserByTailscaleLogin(ctx context.Context, login string) (*User, error) {
 	row := db.sql.QueryRowContext(ctx,
