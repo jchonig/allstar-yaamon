@@ -109,7 +109,7 @@ proxy_auth:
 
   # Map claim values to yaamon roles.
   # Grant the highest role present; deny if none match.
-  group_permissions:
+  group_roles:
     yaamon_superadmin: superuser
     yaamon_admin:      admin
     yaamon_rw:         readwrite
@@ -224,7 +224,7 @@ Two new `pageData` fields carry this information:
    establish a session (or treat each request as stateless if preferred).
 
 2. **Group mapping**: Walk `X-Auth-Request-Groups` (split on `,`).  Assign the
-   highest role found in `group_permissions`.  If no group matches, return 403.
+   highest role found in `group_roles`.  If no group matches, return 403.
 
 3. **No headers → local auth**: If the proxy auth headers are absent (e.g.
    direct access during development, or proxy auth not configured), fall back

@@ -28,7 +28,7 @@ type ProxyAuthConfig struct {
 	Enabled          bool              `mapstructure:"enabled"`
 	UsernameHeader   string            `mapstructure:"username_header"`
 	GroupsHeader     string            `mapstructure:"groups_header"`
-	GroupPermissions map[string]string `mapstructure:"group_permissions"`
+	GroupRoles map[string]string `mapstructure:"group_roles"`
 	CreateUsers      bool              `mapstructure:"create_users"`
 	UpdateDBRole     bool              `mapstructure:"update_db_role"`
 }

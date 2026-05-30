@@ -146,7 +146,7 @@ by an upstream reverse proxy (e.g., oauth2-proxy).
 
 - `username_header` identifies the user (`X-Auth-Request-Preferred-Username`).
 - `groups_header` carries comma-separated group memberships.
-- `group_permissions` maps group names to YAAMon permission levels; the
+- `group_roles` maps group names to YAAMon permission levels; the
   highest-ranked group wins.
 - If the user does not exist in the DB and `create_users: true`, a new account
   is created with password `*`.

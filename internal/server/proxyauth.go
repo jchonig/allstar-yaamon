@@ -99,9 +99,13 @@ func oauthSession(r *http.Request, cfg config.ProxyAuthConfig, database *db.DB) 
 	}
 
 	groupsHdr := r.Header.Get(cfg.GroupsHeader)
-	role, ok := highestRole(groupsHdr, cfg.GroupPermissions)
+	role, ok := highestRole(groupsHdr, cfg.GroupRoles)
 	if !ok {
-		slog.Debug("oauth2 auth: no matching group", "username", username, "groups", groupsHdr)
+		if len(cfg.GroupRoles) == 0 {
+			slog.Warn("oauth2 auth: group_roles is not configured — add a group_roles mapping to config.yaml to grant access", "username", username, "groups", groupsHdr)
+		} else {
+			slog.Warn("oauth2 auth: no matching group", "username", username, "groups", groupsHdr, "configured_groups", cfg.GroupRoles)
+		}
 		return nil, true // header present but no group matches → 403
 	}
 	slog.Debug("oauth2 auth: matched role", "username", username, "role", role)
@@ -144,7 +148,7 @@ func oauthSession(r *http.Request, cfg config.ProxyAuthConfig, database *db.DB) 
 
 // highestRole returns the highest-ranked role found in the comma-separated
 // groups header, using the configured group→role mapping.
-func highestRole(groupsHdr string, permissions map[string]string) (string, bool) {
+func highestRole(groupsHdr string, groupRoles map[string]string) (string, bool) {
 	rank := map[string]int{
 		db.PermSuperuser: 4,
 		db.PermAdmin:     3,
@@ -156,7 +160,7 @@ func highestRole(groupsHdr string, permissions map[string]string) (string, bool)
 	bestRank := -1
 	for _, group := range strings.Split(groupsHdr, ",") {
 		group = strings.TrimSpace(group)
-		if role, ok := permissions[group]; ok {
+		if role, ok := groupRoles[group]; ok {
 			if r := rank[role]; r > bestRank {
 				bestRank = r
 				best = role
