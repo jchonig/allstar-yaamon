@@ -71,6 +71,15 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 	s.fetcher = aslstats.New("")
 	s.nodeDB = astdb.New(cfg.AstDB.Path, cfg.AstDB.Update)
 	s.statsCache = newStatsCache()
+	ctx := context.Background()
+	if err := s.statsCache.loadFromDB(ctx, database); err != nil {
+		slog.Warn("stats cache: failed to load from DB", "err", err)
+	}
+	if n, err := database.PruneStatsCache(ctx); err != nil {
+		slog.Warn("stats cache: prune failed", "err", err)
+	} else if n > 0 {
+		slog.Info("stats cache: pruned stale entries", "count", n)
+	}
 	s.linksCache = newLinksCache()
 	s.sseBroker = sse.NewBroker()
 	s.loginLimiter = newLoginLimiter()

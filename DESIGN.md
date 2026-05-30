@@ -99,6 +99,18 @@ Known config keys:
 | `user_avatar_{id}` | Base64-encoded raw image bytes for uploaded avatars |
 | `favicon` / `favicon-256.png` | Base64-encoded custom favicon images |
 
+#### `stats_cache`
+Persists the last-known ASL stats for each node across server restarts. On startup the
+cache is pre-loaded from this table so the UI shows values immediately while fresh data
+is fetched in the background. Only successful (non-error) fetch results are stored. Rows
+whose `node_number` no longer appears in `nodes` or `favorites` are pruned at startup.
+
+| Column | Type | Notes |
+|---|---|---|
+| `node_number` | TEXT PRIMARY KEY | AllStar node number |
+| `stats_json` | TEXT NOT NULL | JSON-encoded `NodeStats` |
+| `updated_at` | DATETIME | Last successful fetch time |
+
 #### `tls_certs`
 Stores a self-signed TLS certificate and private key generated at first start
 when `tls.mode = self_signed`.
@@ -115,6 +127,7 @@ when `tls.mode = self_signed`.
 ```
 nodes ──< favorites
 users ──< tailscale_logins
+nodes, favorites ──> stats_cache (pruned by cross-reference)
 ```
 
 ### Migration history
@@ -127,6 +140,7 @@ users ──< tailscale_logins
 | 4 | Add `users.full_name`, `users.avatar_url` |
 | 5 | Add `users.tailscale_usernames` (comma-separated — superseded by migration 6) |
 | 6 | Create `tailscale_logins` join table; migrate comma-separated data; drop `tailscale_usernames` column |
+| 7 | Add `stats_cache` table for persisting ASL stats across server restarts |
 
 ---
 

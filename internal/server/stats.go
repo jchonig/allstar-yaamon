@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"allstar-yaamon/internal/aslstats"
+	"allstar-yaamon/internal/db"
 )
 
 // statsCache is a thread-safe in-memory cache of fetched node stats.
@@ -51,6 +52,43 @@ func (c *statsCache) update(results map[string]aslstats.NodeStats) {
 		if v.Error == "" {
 			c.stats[k] = v
 		}
+	}
+}
+
+// loadFromDB pre-populates the cache from the stats_cache table so last-known
+// values are available immediately after a server restart.
+func (c *statsCache) loadFromDB(ctx context.Context, database *db.DB) error {
+	rows, err := database.LoadStatsCache(ctx)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for num, raw := range rows {
+		var s aslstats.NodeStats
+		if json.Unmarshal(raw, &s) == nil {
+			c.stats[num] = s
+		}
+	}
+	slog.Info("stats cache: loaded from DB", "count", len(rows))
+	return nil
+}
+
+// saveStatsCacheToDB persists successful fetch results to the stats_cache table.
+// Error entries are skipped — only successful (non-error) results are stored.
+func (s *Server) saveStatsCacheToDB(ctx context.Context, results map[string]aslstats.NodeStats) {
+	entries := make(map[string]json.RawMessage, len(results))
+	for num, st := range results {
+		if st.Error != "" {
+			continue
+		}
+		raw, err := json.Marshal(st)
+		if err == nil {
+			entries[num] = raw
+		}
+	}
+	if err := s.db.SaveStatsCache(ctx, entries); err != nil {
+		slog.Warn("stats cache: save to DB failed", "err", err)
 	}
 }
 
@@ -148,6 +186,7 @@ func (s *Server) pollStats(ctx context.Context) {
 		// Store everything returned — bulk fetches include nodes beyond what
 		// was explicitly requested, and we keep all of them.
 		s.statsCache.update(results)
+		s.saveStatsCacheToDB(ctx, results)
 	}
 
 	// Publish fresh cache snapshot to each node's SSE subscribers.
@@ -274,6 +313,7 @@ func (s *Server) pollNodeStats(ctx context.Context, nodeID int64) {
 	if len(stale) > 0 {
 		results := s.fetcher.FetchDirect(ctx, stale, len(stale), 8)
 		s.statsCache.update(results)
+		s.saveStatsCacheToDB(ctx, results)
 	}
 
 	s.publishCachedStats(nodeID, nums)
