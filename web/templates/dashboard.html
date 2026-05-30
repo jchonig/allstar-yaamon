@@ -1272,14 +1272,15 @@ function showDTMF(digit) {
     }
   }
 
-  function formatQRZ(r) {
+  function formatQRZ(callsign, r) {
     const name    = [r.first_name, r.last_name].filter(Boolean).join(' ');
     const loc     = [r.address, r.state, r.country].filter(Boolean).join(', ');
     const cls     = r.class ? `<span class="badge bg-secondary ms-1">${esc(r.class)}</span>` : '';
     const contact = [r.email, r.phone].filter(Boolean).join(' · ');
     const srcLabel = r.source === 'qrz' ? 'QRZ.com' : r.source === 'callook' ? 'callook.info' : '';
     return [
-      `<div class="fw-semibold">${esc(name)}${cls}</div>`,
+      `<div class="fw-bold">${esc(r.callsign || callsign)}${cls}</div>`,
+      name    ? `<div class="fw-semibold">${esc(name)}</div>` : '',
       loc     ? `<div class="text-muted small">${esc(loc)}</div>` : '',
       contact ? `<div class="text-muted small">${esc(contact)}</div>` : '',
       srcLabel ? `<div class="text-muted" style="font-size:.7rem">via ${esc(srcLabel)}</div>` : '',
@@ -1311,14 +1312,14 @@ function showDTMF(digit) {
       const rec = await fetchQRZ(callsign);
       if (!el.matches(':hover')) return;
       if (!rec) return;
-      const content = formatQRZ(rec);
+      const content = formatQRZ(callsign, rec);
       const pop = new bootstrap.Popover(el, {
-        title:     esc(rec.callsign || callsign),
         content:   content,
         html:      true,
         trigger:   'manual',
         placement: 'top',
         container: 'body',
+        template:  '<div class="popover" role="tooltip"><div class="popover-arrow"></div><div class="popover-body py-2 px-3"></div></div>',
       });
       pop.show();
       activePopover = pop;

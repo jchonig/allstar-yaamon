@@ -430,3 +430,71 @@ func TestPermissionHelpers(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateUserQRZ(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	u, err := db.CreateUser(ctx, "alice", "hash", PermReadOnly)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	// Set credentials.
+	if err := db.UpdateUserQRZ(ctx, u.ID, "W1AW", "encryptedpass"); err != nil {
+		t.Fatalf("UpdateUserQRZ set: %v", err)
+	}
+	got, _ := db.GetUserByID(ctx, u.ID)
+	if got.QRZUsername != "W1AW" {
+		t.Errorf("QRZUsername = %q, want %q", got.QRZUsername, "W1AW")
+	}
+	if got.QRZPasswordEnc != "encryptedpass" {
+		t.Errorf("QRZPasswordEnc = %q, want %q", got.QRZPasswordEnc, "encryptedpass")
+	}
+
+	// Clear credentials.
+	if err := db.UpdateUserQRZ(ctx, u.ID, "", ""); err != nil {
+		t.Fatalf("UpdateUserQRZ clear: %v", err)
+	}
+	got, _ = db.GetUserByID(ctx, u.ID)
+	if got.QRZUsername != "" || got.QRZPasswordEnc != "" {
+		t.Errorf("credentials not cleared: %+v", got)
+	}
+}
+
+func TestUpdateUserLookupSource(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	u, err := db.CreateUser(ctx, "bob", "hash", PermReadOnly)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	for _, src := range []string{"auto", "qrz", "callook", ""} {
+		if err := db.UpdateUserLookupSource(ctx, u.ID, src); err != nil {
+			t.Fatalf("UpdateUserLookupSource(%q): %v", src, err)
+		}
+		got, _ := db.GetUserByID(ctx, u.ID)
+		if got.LookupSource != src {
+			t.Errorf("LookupSource = %q, want %q", got.LookupSource, src)
+		}
+	}
+}
+
+func TestUserQRZFieldsInListUsers(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	u, _ := db.CreateUser(ctx, "carol", "hash", PermAdmin)
+	db.UpdateUserQRZ(ctx, u.ID, "W1AW", "enc") //nolint:errcheck
+	db.UpdateUserLookupSource(ctx, u.ID, "qrz") //nolint:errcheck
+
+	users, err := db.ListUsers(ctx)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) != 1 || users[0].QRZUsername != "W1AW" || users[0].LookupSource != "qrz" {
+		t.Errorf("ListUsers QRZ fields mismatch: %+v", users)
+	}
+}
