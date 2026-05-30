@@ -170,19 +170,18 @@ func parseRPTALinks(output string) map[string]LinkState {
 	result := make(map[string]LinkState, len(parts)-1)
 	for _, p := range parts[1:] {
 		p = strings.TrimSpace(p)
-		// Format: <nodenum><typechar><keyedstate> — digits, then type char, then K or U.
-		i := 0
-		for i < len(p) && p[i] >= '0' && p[i] <= '9' {
-			i++
-		}
-		if i == 0 || i >= len(p) {
+		// Format: <nodeident><typechar><keyedstate>
+		// nodeident may be a numeric node number (e.g. "667342") or a callsign
+		// (e.g. "KR4YXX" for a direct/IAXRPT client). The last char is always
+		// the keyed state (K or U) and the second-to-last is the type char.
+		if len(p) < 3 {
 			continue
 		}
-		ls := LinkState{Type: string(p[i])}
-		if i+1 < len(p) {
-			ls.Keyed = p[i+1] == 'K'
+		nodeNum := p[:len(p)-2]
+		result[nodeNum] = LinkState{
+			Type:  string(p[len(p)-2]),
+			Keyed: p[len(p)-1] == 'K',
 		}
-		result[p[:i]] = ls
 	}
 	return result
 }
