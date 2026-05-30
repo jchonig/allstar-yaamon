@@ -14,6 +14,7 @@
 - [Backup and Restore](#backup-and-restore)
 - [Proxy Authentication (OAuth2 / oauth2-proxy)](#proxy-authentication-oauth2--oauth2-proxy)
 - [Tailscale Authentication](#tailscale-authentication)
+- [Troubleshooting](#troubleshooting)
 - [Docker — Bind-mount Ownership (PUID / PGID)](#docker--bind-mount-ownership-puid--pgid)
 - [Declarative State (yaamon apply)](#declarative-state-yaamon-apply)
 
@@ -546,6 +547,51 @@ If your YAAMon profile has no display name or avatar set, they are filled in opp
 ### Auth indicator
 
 When a session is established via Tailscale auth, a shield icon (🛡) appears next to your username in the top-right dropdown. Hover over it to see `Authenticated via tailscale`. If the Tailscale login name differs from your YAAMon username (e.g. you logged in as `jch@honig.net` but your account is `jch`), the Tailscale login is shown in parentheses: `Authenticated via tailscale (jch@honig.net)`.
+
+---
+
+## Troubleshooting
+
+### Enabling debug logging
+
+Set the log level to `debug` in `config.yaml` (or via environment variable) to see detailed diagnostic output:
+
+```yaml
+log:
+  level: debug
+```
+
+```bash
+YAAMON_LOG_LEVEL=debug
+```
+
+### Proxy auth / Tailscale auth not working
+
+With debug logging enabled, the auth middleware logs a message on every request explaining what it found. Look for lines with `tailscale auth` or `oauth2 auth`:
+
+| Message | Meaning |
+|---------|---------|
+| `tailscale auth: header absent` | The configured `user_header` was not present in the request. The Caddyfile is missing the `tailscale_auth` directive, or caddy-tailscale is not in use. |
+| `tailscale auth: no matching user` | The header was present but no DB user has that Tailscale login in their **Tailscale Usernames** profile field. Add the login via **My Profile** or **Admin → Users**. |
+| `tailscale auth: matched user` | Tailscale auth succeeded — session established. |
+| `oauth2 auth: header absent` | The configured `username_header` was not present. The proxy (oauth2-proxy / Caddy) is not injecting auth headers, or `proxy_auth.enabled` is false. |
+| `oauth2 auth: no matching group` | The username header was present but none of the user's groups appear in `group_permissions`. The user will receive a 403. |
+| `oauth2 auth: matched role` | OAuth2 auth succeeded — session established with the mapped role. |
+
+### Checklist for Tailscale auth
+
+1. **`tailscale_auth.enabled: true`** is set in `config.yaml`.
+2. The Caddyfile has **`tailscale_auth`** before `reverse_proxy` — this is what injects the identity headers.
+3. The user has their Tailscale login (e.g. `jch@honig.net`) in their **Tailscale Usernames** field. Open **My Profile** — if you are connecting through caddy-tailscale an **Add \<login\>** button appears automatically when the login is not yet mapped.
+4. YAAMon is not directly reachable from clients — only Caddy should reach it, otherwise headers can be spoofed.
+
+### Checklist for OAuth2 / oauth2-proxy auth
+
+1. **`proxy_auth.enabled: true`** is set in `config.yaml`.
+2. The `username_header` and `groups_header` values match what oauth2-proxy injects (defaults are `X-Auth-Request-Preferred-Username` and `X-Auth-Request-Groups`).
+3. The user's Kanidm (or other OIDC provider) groups appear in `group_permissions`.
+4. oauth2-proxy is configured with `set-xauthrequest = true` (or equivalent) to inject the headers.
+5. YAAMon is not directly reachable from clients — only the proxy should reach it.
 
 ---
 
