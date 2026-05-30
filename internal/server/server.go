@@ -26,6 +26,7 @@ import (
 	"allstar-yaamon/internal/auth"
 	"allstar-yaamon/internal/config"
 	"allstar-yaamon/internal/db"
+	"allstar-yaamon/internal/qrz"
 	"allstar-yaamon/internal/sse"
 	tlsserver "allstar-yaamon/internal/tls"
 )
@@ -49,6 +50,8 @@ type Server struct {
 	sseBroker    *sse.Broker
 	tmpls        map[string]*template.Template
 	loginLimiter *loginLimiter
+	qrzClient    *qrz.Client
+	cipherKey    [32]byte
 
 	// adaptive stats-fetch mode: switches between individual and bulk endpoint
 	// based on how many stale node numbers are pending (see fetchAdaptive).
@@ -83,6 +86,7 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 	s.linksCache = newLinksCache()
 	s.sseBroker = sse.NewBroker()
 	s.loginLimiter = newLoginLimiter()
+	s.initQRZ(ctx)
 	return s, nil
 }
 
@@ -116,11 +120,12 @@ func (s *Server) initSessions() error {
 		return fmt.Errorf("invalid session secret: %w", err)
 	}
 	s.sessions = auth.NewManager(raw, s.cfg.TLS.Mode != "disabled")
+	s.cipherKey = deriveQRZKey(raw)
 	return nil
 }
 
 func (s *Server) parseTemplates() error {
-	pages := []string{"login", "dashboard", "setup", "nodes", "users", "backup", "favorites", "graph"}
+	pages := []string{"login", "dashboard", "setup", "nodes", "users", "backup", "favorites", "graph", "integrations"}
 	s.tmpls = make(map[string]*template.Template, len(pages))
 	ui := s.cfg.UI
 	funcMap := template.FuncMap{
@@ -207,6 +212,7 @@ func (s *Server) Run() error {
 		r.Post("/api/profile/avatar", s.handleAPIUploadAvatar)
 		r.Delete("/api/profile/avatar", s.handleAPIDeleteAvatar)
 		r.Get("/api/users/{id}/avatar", s.handleAPIGetAvatar)
+		r.Get("/api/qrz/{callsign}", s.handleAPIQRZLookup)
 	})
 
 	// Readwrite+ routes — can connect/disconnect and manage favorites
@@ -245,6 +251,10 @@ func (s *Server) Run() error {
 		r.Post("/api/backup", s.handleAPIBackup)
 		r.Post("/api/backup/inspect", s.handleAPIBackupInspect)
 		r.Post("/api/backup/restore", s.handleAPIBackupRestore)
+		r.Get("/admin/integrations", s.handleIntegrationsPage)
+		r.Get("/api/admin/integrations/qrz", s.handleAPIGetQRZCredentials)
+		r.Put("/api/admin/integrations/qrz", s.handleAPISetQRZCredentials)
+		r.Delete("/api/admin/integrations/qrz", s.handleAPIDeleteQRZCredentials)
 	})
 
 	// Readwrite+ favorites export/import
