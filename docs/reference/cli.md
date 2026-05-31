@@ -1,7 +1,6 @@
 # YAAMon CLI Reference
 
-`yaamon` is the command-line interface for managing YAAMon. All subcommands
-read the same `config.yaml` that the server uses to locate the database.
+`yaamon` is the command-line interface for managing YAAMon. All subcommands read the same `config.yaml` that the server uses to locate the database.
 
 ## Global flags
 
@@ -40,9 +39,7 @@ Start the web server.
 yaamon serve [--config <path>]
 ```
 
-Reads `config.yaml`, opens the database (running any pending migrations), and
-starts listening on the configured HTTP or HTTPS port. Blocks until interrupted
-(`SIGINT` / `SIGTERM`), then gracefully shuts down.
+Reads `config.yaml`, opens the database (running any pending migrations), and starts listening on the configured HTTP or HTTPS port. Blocks until interrupted (`SIGINT` / `SIGTERM`), then gracefully shuts down.
 
 ---
 
@@ -59,10 +56,7 @@ yaamon apply <state-file> [flags]
 | `--dry-run` | Print planned changes without writing anything |
 | `--reset-passwords` | Overwrite existing user passwords from the state file (by default passwords are only set on creation) |
 
-`apply` is idempotent — it only creates or updates records. Records not
-mentioned in the state file are left alone unless a `purge` section enables
-deletion. See [Declarative State](DOCUMENTATION.md#declarative-state-yaamon-apply)
-for the full state file format.
+`apply` is idempotent — it only creates or updates records. Records not mentioned in the state file are left alone unless a `purge` section enables deletion. See [Declarative State](../configuration/declarative-state.md) for the full state file format.
 
 ---
 
@@ -105,8 +99,7 @@ yaamon user passwd <username> [flags]
 |---|---|---|
 | `-p, --password <pw>` | *(prompted)* | New password; prompted interactively if omitted |
 
-Useful for recovering access when the web UI is unavailable. Also resets the
-`*` sentinel on OAuth2-created accounts, re-enabling local login.
+Useful for recovering access when the web UI is unavailable. Also resets the `*` sentinel on OAuth2-created accounts, re-enabling local login.
 
 ### user permission
 
@@ -132,8 +125,7 @@ Refuses to delete the last superuser account.
 
 ## node
 
-Manage AllStar nodes. Node subcommands that take an `<id>` use the numeric
-database ID shown by `node list`, not the AllStar node number.
+Manage AllStar nodes. Node subcommands that take an `<id>` use the numeric database ID shown by `node list`, not the AllStar node number.
 
 ### node list
 
@@ -141,8 +133,7 @@ database ID shown by `node list`, not the AllStar node number.
 yaamon node list
 ```
 
-Print all nodes with their ID, name, node number, AMI host, port, username,
-and enabled state.
+Print all nodes with their ID, name, node number, AMI host, port, username, and enabled state.
 
 ### node add
 
@@ -165,8 +156,7 @@ yaamon node add <name> -n <node-number> [flags]
 yaamon node edit <id> [flags]
 ```
 
-Only flags that are explicitly provided are changed; omitted flags leave the
-existing value intact.
+Only flags that are explicitly provided are changed; omitted flags leave the existing value intact.
 
 | Flag | Description |
 |---|---|
@@ -184,8 +174,7 @@ yaamon node enable <id>
 yaamon node disable <id>
 ```
 
-Enable or disable the AMI connection for a node without deleting it. Takes
-effect after a server restart.
+Enable or disable the AMI connection for a node without deleting it. Takes effect after a server restart.
 
 ### node delete
 
@@ -201,9 +190,7 @@ Deletes the node and all of its favorites (cascaded).
 yaamon node test <id>
 ```
 
-Opens an AMI connection to the node and immediately closes it, reporting
-success or the error. Useful for verifying credentials and network
-connectivity without starting the full server.
+Opens an AMI connection to the node and immediately closes it, reporting success or the error. Useful for verifying credentials and network connectivity without starting the full server.
 
 ---
 
@@ -220,8 +207,7 @@ yaamon backup [flags]
 | `-o, --output <file>` | `yaamon-<timestamp>.owbackup` | Output file path |
 | `-p, --passphrase <pw>` | *(none)* | Encrypt the backup with a passphrase |
 
-The backup includes all nodes, favorites, users, and config records. TLS
-certificates are excluded. The server does not need to be stopped.
+The backup includes all nodes, favorites, users, and config records. TLS certificates are excluded. The server does not need to be stopped.
 
 ---
 
@@ -237,8 +223,7 @@ yaamon restore <file.owbackup> [flags]
 |---|---|---|
 | `-p, --passphrase <pw>` | *(none)* | Passphrase for an encrypted backup |
 
-Before overwriting the database, a pre-restore backup is written to the same
-directory. The server must be restarted after a successful restore.
+Before overwriting the database, a pre-restore backup is written to the same directory. The server must be restarted after a successful restore.
 
 ---
 
@@ -250,8 +235,7 @@ Print the manifest of a `.owbackup` file without restoring it.
 yaamon inspect <file.owbackup>
 ```
 
-Outputs format, app version, schema version, creation time, hostname,
-encryption status, and record counts. Does not require database access.
+Outputs format, app version, schema version, creation time, hostname, encryption status, and record counts. Does not require database access.
 
 Example output:
 

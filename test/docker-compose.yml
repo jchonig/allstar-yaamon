@@ -27,8 +27,12 @@ services:
           path: ../
           ignore:
             - test/
+            - integration_tests/
+            - e2e/
             - .git/
+            - docs/
             - "*.md"
+            - "**/*_test.go"
         # Fast binary swap: run 'make compile' to trigger without a full image rebuild.
         - action: sync+restart
           path: ./yaamon
