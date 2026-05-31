@@ -1,8 +1,10 @@
 # Development compose file.
-# Usage:  make run        — start in background (builds image first)
-#         make stop       — stop and remove the container
-#         make logs       — follow container logs
-#         docker compose -f test/docker-compose.yml watch  — foreground with auto-rebuild
+# Usage:  make run     — start in background (builds image first)
+#         make stop    — stop and remove the container
+#         make logs    — follow container logs
+#         make watch   — foreground watch mode; rebuilds image on source changes,
+#                        or run 'make compile' in a second terminal for a faster
+#                        binary-only swap without a full image rebuild.
 
 services:
   yaamon:
@@ -20,11 +22,18 @@ services:
       TEST_VIEWER_PASSWORD: ${TEST_VIEWER_PASSWORD:-viewerpassword}
     develop:
       watch:
-        # Sync the pre-compiled linux binary and restart (fast; run 'make compile' to trigger).
+        # Rebuild the image when Go sources or templates change (automatic, slower).
+        - action: rebuild
+          path: ../
+          ignore:
+            - test/
+            - .git/
+            - "*.md"
+        # Fast binary swap: run 'make compile' to trigger without a full image rebuild.
         - action: sync+restart
           path: ./yaamon
           target: /usr/local/bin/yaamon
-        # Sync config/state files and restart (re-runs entrypoint / yaamon apply).
+        # Sync config/state files and restart.
         - action: sync+restart
           path: ./config
           target: /etc/yaamon

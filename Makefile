@@ -110,7 +110,9 @@ logs:
 	docker compose -f test/docker-compose.yml logs -f
 
 ## Start docker-compose in foreground watch mode.
-## In a separate terminal, run 'make compile' to push binary updates without a full image rebuild.
+## Automatically rebuilds the image when Go sources or templates change.
+## For faster iteration, run 'make compile' in a second terminal to do a
+## binary-only swap (sync+restart) without a full image rebuild.
 watch:
 	docker compose -f test/docker-compose.yml watch
 
