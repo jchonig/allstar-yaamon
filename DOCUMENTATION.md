@@ -30,6 +30,8 @@ When you open YAAMon for the first time — before any users exist — you are r
 
 After creating the account you are taken to the login page. Sign in with the credentials you just created.
 
+![Login page](docs/images/login.png)
+
 > If you need to bootstrap a fresh install non-interactively (e.g., in a Docker environment), set `YAAMON_STATE_FILE` to the path of a state file — it will be applied automatically on container start. See [Declarative State](#declarative-state-yaamon-apply).
 
 ---
@@ -632,7 +634,7 @@ When `webauthn.rpid` and `webauthn.rp_origins` are both set, the configured valu
 
 ### Signing in with a passkey
 
-On the login page, click **Sign in with passkey** below the password form. The browser will present any stored credentials for the site.
+On the login page (see [login screenshot](#first-time-setup) above), click **Sign in with passkey** below the password form. The browser will present any stored credentials for the site.
 
 ### Managing passkeys
 
