@@ -173,6 +173,9 @@ func (s *Server) initSessions() error {
 		return fmt.Errorf("invalid session secret: %w", err)
 	}
 	s.sessions = auth.NewManager(raw, s.cfg.TLS.Mode != "disabled")
+	if bp := s.cfg.Server.BasePath; bp != "" {
+		s.sessions.SetLoginURL(bp + "/login")
+	}
 	s.cipherKey = deriveQRZKey(raw)
 	return nil
 }
@@ -251,7 +254,7 @@ func (s *Server) Run() error {
 	r.Group(func(r chi.Router) {
 		r.Use(s.sessions.RequirePermission(db.PermReadOnly))
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/dashboard", http.StatusFound)
+			http.Redirect(w, r, s.url("/dashboard"), http.StatusFound)
 		})
 		r.Get("/dashboard", s.handleDashboard)
 		r.Get("/dashboard/overview", s.handleDashboardOverview)

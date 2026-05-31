@@ -37,13 +37,20 @@ type Session struct {
 
 // Manager handles session signing and verification.
 type Manager struct {
-	secret []byte
-	secure bool // set true when TLS is enabled
+	secret   []byte
+	secure   bool   // set true when TLS is enabled
+	loginURL string // redirect target for unauthenticated requests; defaults to /login
 }
 
 // NewManager creates a session manager with the given HMAC secret.
 func NewManager(secret []byte, secure bool) *Manager {
-	return &Manager{secret: secret, secure: secure}
+	return &Manager{secret: secret, secure: secure, loginURL: "/login"}
+}
+
+// SetLoginURL sets the URL that unauthenticated requests are redirected to.
+// Call this once during server setup when base_path is configured.
+func (m *Manager) SetLoginURL(url string) {
+	m.loginURL = url
 }
 
 // IsSecure reports whether the session manager is configured for HTTPS-only cookies.
@@ -177,7 +184,7 @@ func (m *Manager) RequirePermission(minPerm string) func(http.Handler) http.Hand
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s := FromContext(r.Context())
 			if s == nil {
-				http.Redirect(w, r, "/login?next="+r.URL.RequestURI(), http.StatusSeeOther)
+				http.Redirect(w, r, m.loginURL+"?next="+r.URL.RequestURI(), http.StatusSeeOther)
 				return
 			}
 			if !permissionAtLeast(s.Permission, minPerm) {
