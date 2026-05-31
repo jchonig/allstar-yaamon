@@ -12,16 +12,22 @@ import (
 var DefaultFooterURL string
 
 type Config struct {
-	Server       ServerConfig       `mapstructure:"server"`
-	TLS          TLSConfig          `mapstructure:"tls"`
-	DB           DBConfig           `mapstructure:"db"`
-	AstDB        AstDBConfig        `mapstructure:"astdb"`
-	Log          LogConfig          `mapstructure:"log"`
-	UI           UIConfig           `mapstructure:"ui"`
-	ProxyAuth    ProxyAuthConfig    `mapstructure:"proxy_auth"`
+	Server        ServerConfig        `mapstructure:"server"`
+	TLS           TLSConfig           `mapstructure:"tls"`
+	DB            DBConfig            `mapstructure:"db"`
+	AstDB         AstDBConfig         `mapstructure:"astdb"`
+	Log           LogConfig           `mapstructure:"log"`
+	UI            UIConfig            `mapstructure:"ui"`
+	ProxyAuth     ProxyAuthConfig     `mapstructure:"proxy_auth"`
 	TailscaleAuth TailscaleAuthConfig `mapstructure:"tailscale_auth"`
+	WebAuthn      WebAuthnConfig      `mapstructure:"webauthn"`
 
 	configFile string // resolved path of the config file actually loaded
+}
+
+type WebAuthnConfig struct {
+	RPID      string   `mapstructure:"rpid"`
+	RPOrigins []string `mapstructure:"rp_origins"`
 }
 
 type ProxyAuthConfig struct {

@@ -46,6 +46,9 @@ func NewManager(secret []byte, secure bool) *Manager {
 	return &Manager{secret: secret, secure: secure}
 }
 
+// IsSecure reports whether the session manager is configured for HTTPS-only cookies.
+func (m *Manager) IsSecure() bool { return m.secure }
+
 // GenerateSecret creates a random 32-byte secret suitable for HMAC.
 func GenerateSecret() (string, error) {
 	b := make([]byte, 32)

@@ -209,4 +209,30 @@ var migrations = []migration{
 		}
 		return nil
 	}},
+	{version: 10, fn: func(ctx context.Context, tx *sql.Tx) error {
+		for _, stmt := range []string{
+			`ALTER TABLE users ADD COLUMN webauthn_id BLOB`,
+			`CREATE TABLE IF NOT EXISTS webauthn_credentials (
+				id              INTEGER PRIMARY KEY AUTOINCREMENT,
+				user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				credential_id   BLOB UNIQUE NOT NULL,
+				name            TEXT NOT NULL DEFAULT '',
+				credential_json TEXT NOT NULL,
+				created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+				last_used_at    DATETIME
+			)`,
+			`CREATE TABLE IF NOT EXISTS webauthn_sessions (
+				session_id   TEXT PRIMARY KEY,
+				ceremony     TEXT NOT NULL,
+				user_id      INTEGER,
+				session_json TEXT NOT NULL,
+				expires_at   DATETIME NOT NULL
+			)`,
+		} {
+			if _, err := tx.ExecContext(ctx, stmt); err != nil {
+				return err
+			}
+		}
+		return nil
+	}},
 }

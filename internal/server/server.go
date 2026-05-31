@@ -19,6 +19,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	wawebauthn "github.com/go-webauthn/webauthn/webauthn"
 
 	"allstar-yaamon/internal/ami"
 	"allstar-yaamon/internal/aslstats"
@@ -53,7 +54,8 @@ type Server struct {
 	callookClient *qrz.Client           // shared cache + callook; no QRZ credentials
 	qrzClients    map[int64]*qrz.Client // per-user QRZ XML clients (credentials set)
 	qrzMu         sync.RWMutex
-	cipherKey    [32]byte
+	cipherKey     [32]byte
+	webAuthn      *wawebauthn.WebAuthn
 
 	// adaptive stats-fetch mode: switches between individual and bulk endpoint
 	// based on how many stale node numbers are pending (see fetchAdaptive).
@@ -91,7 +93,47 @@ func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 	s.callookClient = qrz.New("", "") // always available; per-user credentials in qrzClients
 	s.qrzClients = make(map[int64]*qrz.Client)
 	s.initQRZ(ctx)
+	s.initWebAuthn()
 	return s, nil
+}
+
+func (s *Server) initWebAuthn() {
+	wac := s.cfg.WebAuthn
+	rpid := wac.RPID
+	if rpid == "" {
+		if d := s.cfg.TLS.ACMEDomain; d != "" {
+			rpid = d
+		} else {
+			rpid = "localhost"
+		}
+	}
+	origins := wac.RPOrigins
+	if len(origins) == 0 {
+		scheme := "http"
+		if s.cfg.TLS.Mode != "disabled" {
+			scheme = "https"
+		}
+		port := s.cfg.Server.HTTPPort
+		if s.cfg.TLS.Mode != "disabled" {
+			port = s.cfg.Server.HTTPSPort
+		}
+		if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) {
+			origins = []string{fmt.Sprintf("%s://%s", scheme, rpid)}
+		} else {
+			origins = []string{fmt.Sprintf("%s://%s:%d", scheme, rpid, port)}
+		}
+	}
+	wa, err := wawebauthn.New(&wawebauthn.Config{
+		RPDisplayName: "YAAMon",
+		RPID:          rpid,
+		RPOrigins:     origins,
+	})
+	if err != nil {
+		slog.Warn("WebAuthn init failed — passkeys disabled", "err", err)
+		return
+	}
+	s.webAuthn = wa
+	slog.Info("WebAuthn enabled", "rpid", rpid, "origins", origins)
 }
 
 func (s *Server) initAMI() error {
@@ -195,6 +237,8 @@ func (s *Server) Run() error {
 	r.Get("/login", s.handleLoginGet)
 	r.Post("/login", s.handleLoginPost)
 	r.Get("/logout", s.handleLogout)
+	r.Post("/api/passkeys/login/begin", s.handleAPIPasskeysLoginBegin)
+	r.Post("/api/passkeys/login/finish", s.handleAPIPasskeysLoginFinish)
 
 	// Protected routes — readonly+
 	r.Group(func(r chi.Router) {
@@ -221,6 +265,11 @@ func (s *Server) Run() error {
 		r.Delete("/api/profile/qrz/cache", s.handleAPIClearUserQRZCache)
 		r.Get("/api/users/{id}/avatar", s.handleAPIGetAvatar)
 		r.Get("/api/qrz/{callsign}", s.handleAPIQRZLookup)
+		r.Get("/api/passkeys", s.handleAPIListPasskeys)
+		r.Post("/api/passkeys/register/begin", s.handleAPIPasskeysRegisterBegin)
+		r.Post("/api/passkeys/register/finish", s.handleAPIPasskeysRegisterFinish)
+		r.Patch("/api/passkeys/{id}", s.handleAPIRenamePasskey)
+		r.Delete("/api/passkeys/{id}", s.handleAPIDeletePasskey)
 	})
 
 	// Readwrite+ routes — can connect/disconnect and manage favorites
