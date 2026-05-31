@@ -4,6 +4,7 @@ package integration_tests
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -17,13 +18,15 @@ import (
 // basePath is set from YAAMON_TEST_BASEPATH (e.g. "/yaamon").
 // If either is empty, all tests in this file are skipped.
 var (
-	basepathURL string
-	basePath    string
+	basepathURL      string
+	basePath         string
+	basepathFreshURL string
 )
 
 func init() {
 	basepathURL = os.Getenv("YAAMON_TEST_BASEPATH_URL")
 	basePath = os.Getenv("YAAMON_TEST_BASEPATH")
+	basepathFreshURL = os.Getenv("YAAMON_TEST_BASEPATH_FRESH_URL")
 }
 
 // bpURL returns the full URL for a path under the base path.
@@ -31,11 +34,24 @@ func bpURL(path string) string {
 	return basepathURL + basePath + path
 }
 
+// bpFreshURL returns the full URL for a path under the base path on the fresh (no-users) server.
+func bpFreshURL(path string) string {
+	return basepathFreshURL + basePath + path
+}
+
 // skipIfNoBP skips the test if the base-path server is not configured.
 func skipIfNoBP(t *testing.T) {
 	t.Helper()
 	if basepathURL == "" || basePath == "" {
 		t.Skip("YAAMON_TEST_BASEPATH_URL or YAAMON_TEST_BASEPATH not set; skipping base-path tests")
+	}
+}
+
+// skipIfNoBPFresh skips the test if the fresh base-path server is not configured.
+func skipIfNoBPFresh(t *testing.T) {
+	t.Helper()
+	if basepathFreshURL == "" || basePath == "" {
+		t.Skip("YAAMON_TEST_BASEPATH_FRESH_URL or YAAMON_TEST_BASEPATH not set; skipping fresh base-path tests")
 	}
 }
 
@@ -55,6 +71,24 @@ func waitForBPServer(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 	}
 	t.Fatalf("base-path server at %s not ready after 30s", basepathURL)
+}
+
+// waitForBPFreshServer polls /health on the fresh server.
+func waitForBPFreshServer(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(basepathFreshURL + "/health")
+		if err == nil && resp.StatusCode == http.StatusOK {
+			resp.Body.Close()
+			return
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	t.Fatalf("fresh base-path server at %s not ready after 30s", basepathFreshURL)
 }
 
 // loginBP logs in via the base-path prefixed login endpoint.
@@ -109,7 +143,7 @@ func TestBasePath_HealthNotUnderBasePath(t *testing.T) {
 		t.Fatalf("GET %s/health: %v", basePath, err)
 	}
 	resp.Body.Close()
-	// Expect 404 — health is not mounted under base_path.
+	// Expect non-200 — health is not mounted under base_path.
 	if resp.StatusCode == http.StatusOK {
 		t.Errorf("%s/health: expected non-200 (should not be served under base_path), got 200", basePath)
 	}
@@ -130,19 +164,59 @@ func TestBasePath_LoginPageServed(t *testing.T) {
 	}
 }
 
-// TestBasePath_StaticAssets verifies static assets are served under the base path.
+// TestBasePath_StaticAssets verifies static assets are served under the base path
+// with the correct content types. This catches the http.StripPrefix bug where
+// r.URL.Path includes the base_path prefix but the strip prefix did not.
 func TestBasePath_StaticAssets(t *testing.T) {
 	skipIfNoBP(t)
 	waitForBPServer(t)
 
-	for _, asset := range []string{"/static/app.css", "/static/app.js", "/favicon.png"} {
-		resp, err := http.Get(bpURL(asset))
+	cases := []struct {
+		path            string
+		wantContentType string
+	}{
+		{"/static/app.css", "text/css"},
+		{"/static/app.js", "application/javascript"},
+		{"/favicon.png", "image/png"},
+		{"/favicon.ico", "image/x-icon"},
+	}
+	for _, tc := range cases {
+		resp, err := http.Get(bpURL(tc.path))
 		if err != nil {
-			t.Fatalf("GET %s%s: %v", basePath, asset, err)
+			t.Fatalf("GET %s%s: %v", basePath, tc.path, err)
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			t.Errorf("%s%s: expected 200, got %d", basePath, asset, resp.StatusCode)
+			t.Errorf("%s%s: expected 200, got %d", basePath, tc.path, resp.StatusCode)
+			continue
+		}
+		if len(body) == 0 {
+			t.Errorf("%s%s: response body is empty", basePath, tc.path)
+		}
+		ct := resp.Header.Get("Content-Type")
+		if !strings.Contains(ct, tc.wantContentType) {
+			t.Errorf("%s%s: expected Content-Type containing %q, got %q", basePath, tc.path, tc.wantContentType, ct)
+		}
+	}
+}
+
+// TestBasePath_StaticAssetsNotAtRoot verifies static assets are not leaked at root paths.
+func TestBasePath_StaticAssetsNotAtRoot(t *testing.T) {
+	skipIfNoBP(t)
+	waitForBPServer(t)
+
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	for _, path := range []string{"/static/app.css", "/static/app.js", "/favicon.png"} {
+		resp, err := client.Get(basepathURL + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			t.Errorf("%s: expected non-200 (should only be served under %s), got 200", path, basePath)
 		}
 	}
 }
@@ -197,7 +271,10 @@ func TestBasePath_LogoutRedirectsToLogin(t *testing.T) {
 	}
 }
 
-// TestBasePath_APIRequiresAuth verifies that the API returns 401/redirect for unauthenticated requests.
+// TestBasePath_APIRequiresAuth verifies that API endpoints return 401 (not a redirect
+// to a bare /login) for unauthenticated requests. This catches the profile.go bug where
+// strings.HasPrefix(r.URL.Path, "/api/") failed when base_path was set, causing a page
+// redirect instead of a 401 JSON response.
 func TestBasePath_APIRequiresAuth(t *testing.T) {
 	skipIfNoBP(t)
 	waitForBPServer(t)
@@ -205,13 +282,23 @@ func TestBasePath_APIRequiresAuth(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, err := client.Get(bpURL("/api/nodes"))
-	if err != nil {
-		t.Fatalf("GET %s/api/nodes: %v", basePath, err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode == http.StatusOK {
-		t.Errorf("%s/api/nodes: expected non-200 for unauthenticated request, got 200", basePath)
+	for _, path := range []string{"/api/nodes", "/api/profile"} {
+		resp, err := client.Get(bpURL(path))
+		if err != nil {
+			t.Fatalf("GET %s%s: %v", basePath, path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			t.Errorf("%s%s: expected non-200 for unauthenticated request, got 200", basePath, path)
+		}
+		// A redirect to /login (not /yaamon/login) indicates the base_path-aware
+		// API path check is broken.
+		if resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusSeeOther {
+			loc := resp.Header.Get("Location")
+			if !strings.HasPrefix(loc, basePath) {
+				t.Errorf("%s%s: unauthenticated redirect Location %q does not include base_path %q", basePath, path, loc, basePath)
+			}
+		}
 	}
 }
 
@@ -227,7 +314,6 @@ func TestBasePath_AuthenticatedAPI(t *testing.T) {
 			return http.ErrUseLastResponse
 		},
 	}
-	// login
 	resp, err := client.PostForm(bpURL("/login"), url.Values{
 		"username": {"admin"},
 		"password": {adminPassword},
@@ -237,7 +323,6 @@ func TestBasePath_AuthenticatedAPI(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// hit the API
 	resp, err = client.Get(bpURL("/api/nodes"))
 	if err != nil {
 		t.Fatalf("GET %s/api/nodes: %v", basePath, err)
@@ -312,14 +397,12 @@ func TestBasePath_RootNotFound(t *testing.T) {
 }
 
 // TestBasePath_SSEEndpointReachable verifies that the SSE endpoint URL includes the base path.
-// (We just check that the endpoint is not 404; a full SSE connection would need a real node.)
 func TestBasePath_SSEEndpointReachable(t *testing.T) {
 	skipIfNoBP(t)
 	waitForBPServer(t)
 
 	client := loginBP(t, "admin", adminPassword)
 
-	// Get node ID first.
 	resp, err := client.Get(bpURL("/api/nodes"))
 	if err != nil {
 		t.Fatalf("GET %s/api/nodes: %v", basePath, err)
@@ -335,21 +418,90 @@ func TestBasePath_SSEEndpointReachable(t *testing.T) {
 	sseURL := bpURL(fmt.Sprintf("/sse/%d", nodes[0].ID))
 	req, _ := http.NewRequest(http.MethodGet, sseURL, nil)
 	req.Header.Set("Accept", "text/event-stream")
-	// Use a client that doesn't follow redirects and has a short timeout.
 	sseClient := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	// Copy cookies from the authenticated client jar.
 	sseResp, err := sseClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET %s: %v", sseURL, err)
 	}
 	sseResp.Body.Close()
-	// 200 (connected) or 401 (cookie jar not passed) are both acceptable here;
-	// the key check is that it's not 404, which would mean the route is missing.
 	if sseResp.StatusCode == http.StatusNotFound {
 		t.Errorf("%s: SSE endpoint returned 404 — route not registered under base_path", sseURL)
+	}
+}
+
+// --- Fresh server tests (no users seeded) ---
+
+// TestBasePathFresh_SetupPageRendered verifies that the setup page renders (200) when no
+// users exist. This catches the setupGuard redirect loop: when base_path is set,
+// r.URL.Path is /yaamon/setup (not /setup), so the guard's exemption check must use
+// s.url("/setup") to avoid redirecting /setup → /setup infinitely.
+func TestBasePathFresh_SetupPageRendered(t *testing.T) {
+	skipIfNoBPFresh(t)
+	waitForBPFreshServer(t)
+
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Get(bpFreshURL("/setup"))
+	if err != nil {
+		t.Fatalf("GET %s/setup: %v", basePath, err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("%s/setup (no users): expected 200, got %d — possible redirect loop", basePath, resp.StatusCode)
+	}
+	if !strings.Contains(string(body), "setup") && !strings.Contains(string(body), "Setup") {
+		t.Errorf("%s/setup: response body doesn't look like a setup page", basePath)
+	}
+}
+
+// TestBasePathFresh_RootRedirectsToSetup verifies that the root redirects to setup (not bare /setup)
+// when no users exist.
+func TestBasePathFresh_RootRedirectsToSetup(t *testing.T) {
+	skipIfNoBPFresh(t)
+	waitForBPFreshServer(t)
+
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Get(bpFreshURL("/"))
+	if err != nil {
+		t.Fatalf("GET %s/: %v", basePath, err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("%s/ (no users): expected 302, got %d", basePath, resp.StatusCode)
+	}
+	loc := resp.Header.Get("Location")
+	if !strings.HasPrefix(loc, basePath+"/setup") {
+		t.Errorf("%s/ redirect: expected Location to start with %s/setup, got %q — setupGuard may not include base_path", basePath, basePath, loc)
+	}
+}
+
+// TestBasePathFresh_StaticAssetsBeforeSetup verifies that static assets load on the setup
+// page (before any users exist). The CSS and JS must be accessible or the setup form
+// is unusable.
+func TestBasePathFresh_StaticAssetsBeforeSetup(t *testing.T) {
+	skipIfNoBPFresh(t)
+	waitForBPFreshServer(t)
+
+	for _, asset := range []string{"/static/app.css", "/static/app.js", "/favicon.png"} {
+		resp, err := http.Get(bpFreshURL(asset))
+		if err != nil {
+			t.Fatalf("GET %s%s: %v", basePath, asset, err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("%s%s (no users): expected 200, got %d", basePath, asset, resp.StatusCode)
+		}
+		if len(body) == 0 {
+			t.Errorf("%s%s (no users): response body is empty", basePath, asset)
+		}
 	}
 }
