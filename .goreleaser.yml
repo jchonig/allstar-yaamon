@@ -31,6 +31,9 @@ archives:
       - LICENSE
       - examples/config.yaml.example
       - contrib/yaamon.service
+      - contrib/apache2-subfolder.conf
+      - contrib/apache2-subdomain.conf
+      - contrib/yaamon-asl3-card.js
 
 nfpms:
   - id: yaamon-deb
@@ -48,6 +51,14 @@ nfpms:
         type: config|noreplace
       - src: contrib/yaamon.service
         dst: /lib/systemd/system/yaamon.service
+      - src: contrib/apache2-subfolder.conf
+        dst: /etc/apache2/conf-available/yaamon-subfolder.conf
+        type: config|noreplace
+      - src: contrib/apache2-subdomain.conf
+        dst: /etc/apache2/conf-available/yaamon-subdomain.conf
+        type: config|noreplace
+      - src: contrib/yaamon-asl3-card.js
+        dst: /var/www/html/js/yaamon-asl3-card.js
     scripts:
       postinstall: contrib/postinstall.sh
       preremove: contrib/preremove.sh

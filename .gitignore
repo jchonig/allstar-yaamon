@@ -31,6 +31,8 @@ test/yaamon
 
 # Runtime database (persisted between make run / make test-integration)
 test/data/
+test/data-bp/
+test/data-bp-fresh/
 e2e/node_modules/
 e2e/package-lock.json
 e2e/playwright-report/

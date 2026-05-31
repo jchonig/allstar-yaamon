@@ -25,7 +25,7 @@ func avatarConfigKey(userID int64) string {
 func (s *Server) effectiveAvatarURL(r *http.Request, userID int64, externalURL string) string {
 	data, _ := s.db.GetConfig(r.Context(), avatarConfigKey(userID))
 	if data != "" {
-		return fmt.Sprintf("/api/users/%d/avatar", userID)
+		return s.url(fmt.Sprintf("/api/users/%d/avatar", userID))
 	}
 	return externalURL
 }
@@ -38,11 +38,11 @@ func (s *Server) validateSessionUser(next http.Handler) http.Handler {
 		if sess := auth.FromContext(r.Context()); sess != nil && sess.AuthMethod == "" {
 			if _, err := s.db.GetUserByID(r.Context(), sess.UserID); err != nil {
 				s.sessions.ClearSession(w)
-				if strings.HasPrefix(r.URL.Path, "/api/") {
+				if strings.HasPrefix(r.URL.Path, s.url("/api/")) {
 					http.Error(w, "session expired", http.StatusUnauthorized)
 					return
 				}
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				http.Redirect(w, r, s.url("/login"), http.StatusSeeOther)
 				return
 			}
 		}

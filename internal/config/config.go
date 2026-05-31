@@ -57,10 +57,12 @@ type UIConfig struct {
 }
 
 type ServerConfig struct {
-	HTTPPort     int  `mapstructure:"http_port"`
-	HTTPSPort    int  `mapstructure:"https_port"`
-	RedirectHTTP bool `mapstructure:"redirect_http"`
-	QUIC         bool `mapstructure:"quic"`
+	HTTPPort     int    `mapstructure:"http_port"`
+	HTTPSPort    int    `mapstructure:"https_port"`
+	RedirectHTTP bool   `mapstructure:"redirect_http"`
+	QUIC         bool   `mapstructure:"quic"`
+	BindAddress  string `mapstructure:"bind_address"`
+	BasePath     string `mapstructure:"base_path"`
 }
 
 type TLSConfig struct {
@@ -91,6 +93,8 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("server.https_port", 443)
 	v.SetDefault("server.redirect_http", true)
 	v.SetDefault("server.quic", true)
+	v.SetDefault("server.bind_address", "")
+	v.SetDefault("server.base_path", "")
 	v.SetDefault("tls.mode", "disabled")
 	v.SetDefault("tls.acme_cache_dir", "/etc/yaamon/acme")
 	v.SetDefault("db.path", "/var/lib/yaamon/yaamon.db")
@@ -137,7 +141,19 @@ func Load(cfgFile string) (*Config, error) {
 	}
 
 	cfg.configFile = v.ConfigFileUsed()
+	if err := normalise(&cfg); err != nil {
+		return nil, err
+	}
 	return &cfg, validate(&cfg)
+}
+
+func normalise(cfg *Config) error {
+	bp := strings.TrimRight(cfg.Server.BasePath, "/")
+	if bp != "" && !strings.HasPrefix(bp, "/") {
+		bp = "/" + bp
+	}
+	cfg.Server.BasePath = bp
+	return nil
 }
 
 func validate(cfg *Config) error {

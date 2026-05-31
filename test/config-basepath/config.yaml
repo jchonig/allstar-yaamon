@@ -1,0 +1,12 @@
+server:
+  http_port: 80
+  redirect_http: false
+  base_path: /yaamon
+tls:
+  mode: disabled
+db:
+  path: /var/lib/yaamon/yaamon.db
+astdb:
+  path: /var/lib/yaamon/astdb.txt
+log:
+  level: debug

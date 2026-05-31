@@ -258,7 +258,7 @@ func (s *Server) handleAPIPasskeysLoginFinish(w http.ResponseWriter, r *http.Req
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"redirect": "/"})
+	json.NewEncoder(w).Encode(map[string]string{"redirect": s.url("/")})
 }
 
 // --- Protected: Registration ---

@@ -21,8 +21,9 @@
 - [Tailscale Authentication](configuration/tailscale.md)
 
 - **[Web Server Configuration](configuration/web-server/README.md)**
-  - [Behind Apache (ASL3 Coexistence)](configuration/web-server/apache.md)
+  - [Behind Apache](configuration/web-server/apache.md)
   - [Behind Caddy](configuration/web-server/caddy.md)
+  - [Behind nginx](configuration/web-server/nginx.md)
   - [Standalone Web Server](configuration/web-server/standalone.md)
 
 ## [User Guide](user-guide/README.md)

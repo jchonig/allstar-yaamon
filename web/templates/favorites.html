@@ -30,7 +30,7 @@
 <div class="mb-3">
   <div class="btn-group btn-group-sm" role="group">
     {{range .Nodes}}
-    <a href="/settings/favorites/{{.ID}}"
+    <a href="{{$.BasePath}}/settings/favorites/{{.ID}}"
        class="btn {{if eq .ID $.ActiveNode.ID}}btn-primary{{else}}btn-outline-secondary{{end}}">
       {{.Name}}
     </a>
@@ -41,7 +41,7 @@
 
 {{if not .ActiveNode}}
 <div class="alert alert-info mt-3">
-  No nodes configured. <a href="/admin/nodes">Add a node</a> to get started.
+  No nodes configured. <a href="{{.BasePath}}/admin/nodes">Add a node</a> to get started.
 </div>
 {{else}}
 <div class="table-responsive">
@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadFavs() {
   try {
-    const r = await fetch(`/api/nodes/${NODE_ID}/favorites`);
+    const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/favorites`);
     favsData = (await r.json()) || [];
   } catch { favsData = []; }
   renderTable();
@@ -325,7 +325,7 @@ async function saveFavorite() {
   btn.disabled = true;
   try {
     const resp = await fetch(
-      id ? `/api/nodes/${NODE_ID}/favorites/${id}` : `/api/nodes/${NODE_ID}/favorites`,
+      id ? BASE_PATH + `/api/nodes/${NODE_ID}/favorites/${id}` : BASE_PATH + `/api/nodes/${NODE_ID}/favorites`,
       { method: id ? 'PUT' : 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(body) }
@@ -353,7 +353,7 @@ function openDeleteModal(id, num) {
 
 async function confirmDelete() {
   if (!pendingDeleteID) return;
-  await fetch(`/api/nodes/${NODE_ID}/favorites/${pendingDeleteID}`, {method: 'DELETE'});
+  await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/favorites/${pendingDeleteID}`, {method: 'DELETE'});
   pendingDeleteID = null;
   deleteModal.hide();
   loadFavs();
@@ -375,7 +375,7 @@ async function moveDown(idx) {
 
 async function saveOrder() {
   renderTable();
-  await fetch(`/api/nodes/${NODE_ID}/favorites/reorder`, {
+  await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/favorites/reorder`, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({order: favsData.map(f => f.id)}),
@@ -411,7 +411,7 @@ function initDragDrop() {
 // --- Export / Import INI ---
 
 function doExport() {
-  window.location = `/api/nodes/${NODE_ID}/favorites/export`;
+  window.location = BASE_PATH + `/api/nodes/${NODE_ID}/favorites/export`;
 }
 
 function openImportModal() {
@@ -438,7 +438,7 @@ async function doFavPreview() {
   const file = document.getElementById('fav-import-file').files[0];
   if (!file) { errEl.textContent = 'Choose a file first.'; return; }
 
-  const r = await fetch(`/api/nodes/${NODE_ID}/favorites/import/preview`, {
+  const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/favorites/import/preview`, {
     method: 'POST', body: file,
   });
   if (!r.ok) { errEl.textContent = await r.text(); return; }
@@ -454,7 +454,7 @@ async function doFavImport() {
   const file = document.getElementById('fav-import-file').files[0];
   if (!file) return;
 
-  const r = await fetch(`/api/nodes/${NODE_ID}/favorites/import`, {
+  const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/favorites/import`, {
     method: 'POST', body: file,
   });
   if (!r.ok) { errEl.textContent = await r.text(); return; }
@@ -482,7 +482,7 @@ async function loadCopySrc() {
   tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-2">Loading…</td></tr>';
   list.style.display = '';
   try {
-    const r = await fetch(`/api/nodes/${srcID}/favorites`);
+    const r = await fetch(BASE_PATH + `/api/nodes/${srcID}/favorites`);
     const favs = (await r.json()) || [];
     if (!favs.length) {
       tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-2">No favorites on that node.</td></tr>';
@@ -517,7 +517,7 @@ async function doCopy() {
   btn.disabled = true;
   status.textContent = '';
   try {
-    const r = await fetch(`/api/nodes/${NODE_ID}/favorites/copy`, {
+    const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/favorites/copy`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({source_node_id: srcID, ids}),

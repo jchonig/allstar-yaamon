@@ -1,54 +1,135 @@
-# Behind Apache (ASL3 Coexistence)
+# Behind Apache
 
-When YAAMon runs on an ASL3 node alongside Apache2, the simplest setup is to keep YAAMon on port 8080 and optionally add an Apache reverse proxy to expose it on port 80 under a path prefix.
+The `.deb` package installs two ready-to-use Apache reverse-proxy configs into
+`/etc/apache2/conf-available/`. Enable whichever fits your deployment:
 
-## Simple: YAAMon on port 8080
+| Config | Use case | Enabled with |
+|--------|----------|--------------|
+| `yaamon-subfolder` | ASL3 coexistence — YAAMon at `/yaamon/` on the existing site | `a2enconf yaamon-subfolder` |
+| `yaamon-subdomain` | Dedicated subdomain — `yaamon.example.com` | `a2enconf yaamon-subdomain` |
 
-No Apache configuration needed. Access YAAMon at `http://<node-ip>:8080/`.
-
-## Reverse proxy at root
-
-To serve YAAMon at `http://<node-ip>/` via Apache, enable the proxy modules and add a vhost or conf snippet:
-
-```bash
-sudo a2enmod proxy proxy_http
-```
-
-Create `/etc/apache2/conf-available/yaamon.conf`:
-
-```apache
-ProxyPreserveHost On
-ProxyPass        / http://127.0.0.1:8080/
-ProxyPassReverse / http://127.0.0.1:8080/
-```
+Enable the required modules first (one-time):
 
 ```bash
-sudo a2enconf yaamon
+sudo a2enmod proxy proxy_http substitute
+```
+
+---
+
+## Subfolder (ASL3 coexistence)
+
+Keeps the existing ASL3/Apache site at `/` and adds YAAMon under `/yaamon/`.
+
+**1. Edit `/etc/yaamon/config.yaml`:**
+
+```yaml
+server:
+  bind_address: 127.0.0.1
+  http_port: 8080
+  base_path: /yaamon
+tls:
+  mode: disabled
+```
+
+**2. Restart YAAMon:**
+
+```bash
+sudo systemctl restart yaamon
+```
+
+**3. Enable the Apache config:**
+
+```bash
+sudo a2enconf yaamon-subfolder
 sudo systemctl reload apache2
 ```
 
-## Reverse proxy at a path prefix
+YAAMon is now at `https://<node-hostname>/yaamon/`.
 
-> **Note**: Full subfolder support requires a base-path feature tracked in [issue #14](https://github.com/jchonig/allstar-yaamon/issues/14). Until that ships, proxy at root (`/` → `http://localhost:8080/`) is the recommended approach — links and redirects work correctly.
-
-When the feature is available, the configuration will be:
+The installed config (`/etc/apache2/conf-available/yaamon-subfolder.conf`):
 
 ```apache
+Redirect permanent /yaamon /yaamon/
+
 ProxyPreserveHost On
-ProxyPass        /yaamon/ http://127.0.0.1:8080/
-ProxyPassReverse /yaamon/ http://127.0.0.1:8080/
+ProxyPass        /yaamon/ http://127.0.0.1:8080/yaamon/ flushpackets=on
+ProxyPassReverse /yaamon/ http://127.0.0.1:8080/yaamon/
+
+# Inject a YAAMon card into the ASL3 dashboard without modifying index.html.
+<IfModule mod_substitute.c>
+  <Directory /var/www/html>
+    <Files "index.html">
+      AddOutputFilterByType SUBSTITUTE text/html
+      Substitute "s|</body>|<script src=\"/js/yaamon-asl3-card.js\"></script></body>|i"
+    </Files>
+  </Directory>
+</IfModule>
 ```
 
-## TLS with Apache
+`flushpackets=on` is required for live dashboard updates (SSE).
 
-Let Apache handle TLS (via `mod_ssl` or `certbot`) and forward plain HTTP to YAAMon:
+The config also uses `mod_substitute` to inject a YAAMon card into the ASL3 web dashboard automatically — no changes to ASL3's `index.html` are needed. The `.deb` installs the required JavaScript to `/var/www/html/js/yaamon-asl3-card.js`.
+
+---
+
+## Subdomain (dedicated virtual host)
+
+Serves YAAMon on its own hostname, e.g. `yaamon.example.com`. This creates a
+new VirtualHost so it works correctly alongside the existing ASL3 site.
+
+**1. Edit the template** — replace `yaamon.example.com` with your hostname:
+
+```bash
+sudo nano /etc/apache2/conf-available/yaamon-subdomain.conf
+```
+
+**2. Edit `/etc/yaamon/config.yaml`:**
 
 ```yaml
-# config.yaml — TLS disabled, plain HTTP to localhost
-tls:
-  mode: disabled
 server:
+  bind_address: 127.0.0.1
   http_port: 8080
+  # no base_path needed
+tls:
+  mode: disabled   # Apache handles TLS
 ```
 
-Configure Apache's SSL vhost to proxy to `http://127.0.0.1:8080/`.
+**3. Restart YAAMon:**
+
+```bash
+sudo systemctl restart yaamon
+```
+
+**4. Enable the config:**
+
+```bash
+sudo a2enconf yaamon-subdomain
+sudo systemctl reload apache2
+```
+
+**5. (Optional) Add TLS with Certbot:**
+
+```bash
+sudo certbot --apache -d yaamon.example.com
+```
+
+The installed template (`/etc/apache2/conf-available/yaamon-subdomain.conf`):
+
+```apache
+<VirtualHost *:80>
+    ServerName yaamon.example.com
+
+    ProxyPreserveHost On
+    ProxyPass        / http://127.0.0.1:8080/ flushpackets=on
+    ProxyPassReverse / http://127.0.0.1:8080/
+
+    ErrorLog  ${APACHE_LOG_DIR}/yaamon-error.log
+    CustomLog ${APACHE_LOG_DIR}/yaamon-access.log combined
+</VirtualHost>
+```
+
+---
+
+## Simple: YAAMon on port 8080 (no Apache needed)
+
+Access YAAMon directly at `http://<node-ip>:8080/` — no Apache configuration required.

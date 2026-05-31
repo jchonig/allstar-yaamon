@@ -65,6 +65,12 @@ type Server struct {
 	lastBulkAt time.Time
 }
 
+// url returns an absolute path prefixed with the configured base path.
+// Use this for all server-side redirects so they work under any base path.
+func (s *Server) url(path string) string {
+	return s.cfg.Server.BasePath + path
+}
+
 func New(cfg *config.Config, database *db.DB, webFS embed.FS) (*Server, error) {
 	s := &Server{cfg: cfg, db: database, webFS: webFS}
 	if err := s.initSessions(); err != nil {
@@ -167,6 +173,9 @@ func (s *Server) initSessions() error {
 		return fmt.Errorf("invalid session secret: %w", err)
 	}
 	s.sessions = auth.NewManager(raw, s.cfg.TLS.Mode != "disabled")
+	if bp := s.cfg.Server.BasePath; bp != "" {
+		s.sessions.SetLoginURL(bp + "/login")
+	}
 	s.cipherKey = deriveQRZKey(raw)
 	return nil
 }
@@ -229,7 +238,7 @@ func (s *Server) Run() error {
 	if err != nil {
 		return fmt.Errorf("web/static embed: %w", err)
 	}
-	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	r.Handle("/static/*", http.StripPrefix(s.cfg.Server.BasePath+"/static/", http.FileServer(http.FS(staticFS))))
 
 	// Public routes
 	r.Get("/health", s.handleHealth)
@@ -245,7 +254,7 @@ func (s *Server) Run() error {
 	r.Group(func(r chi.Router) {
 		r.Use(s.sessions.RequirePermission(db.PermReadOnly))
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/dashboard", http.StatusFound)
+			http.Redirect(w, r, s.url("/dashboard"), http.StatusFound)
 		})
 		r.Get("/dashboard", s.handleDashboard)
 		r.Get("/dashboard/overview", s.handleDashboardOverview)
@@ -323,6 +332,14 @@ func (s *Server) Run() error {
 		r.Post("/api/nodes/{id}/favorites/import", s.handleAPIFavoritesImport)
 	})
 
+	// When a base path is configured, mount the app router under it and expose
+	// /health at the root so Docker HEALTHCHECK always works.
+	if bp := s.cfg.Server.BasePath; bp != "" {
+		root := chi.NewRouter()
+		root.Get("/health", s.handleHealth)
+		root.Mount(bp, r)
+		return s.listenAndServe(root)
+	}
 	return s.listenAndServe(r)
 }
 
@@ -346,13 +363,13 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 	baseCtx := func(_ net.Listener) context.Context { return ctx }
 
 	if tlsCfg != nil {
-		httpsAddr := fmt.Sprintf(":%d", s.cfg.Server.HTTPSPort)
+		httpsAddr := s.cfg.Server.BindAddress + fmt.Sprintf(":%d", s.cfg.Server.HTTPSPort)
 
 		// Start HTTP/3 (QUIC) alongside HTTP/2 when enabled.
 		httpsHandler := hstsMiddleware(handler)
 		if s.cfg.Server.QUIC {
 			h3Server = &http3.Server{
-				Addr:      httpsAddr,
+				Addr:      httpsAddr, // already includes BindAddress
 				Handler:   httpsHandler,
 				TLSConfig: http3.ConfigureTLSConfig(tlsCfg.Clone()),
 			}
@@ -369,7 +386,7 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 			WriteTimeout: 30 * time.Second,
 		}
 		if s.cfg.Server.RedirectHTTP {
-			httpAddr := fmt.Sprintf(":%d", s.cfg.Server.HTTPPort)
+			httpAddr := s.cfg.Server.BindAddress + fmt.Sprintf(":%d", s.cfg.Server.HTTPPort)
 			redirect := &http.Server{
 				Addr:        httpAddr,
 				Handler:     tlsserver.RedirectHandler(s.cfg.Server.HTTPSPort),
@@ -382,9 +399,9 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 				}
 			}()
 		}
-		ln, err := net.Listen("tcp", httpsAddr)
+		ln, err := net.Listen("tcp", s.cfg.Server.BindAddress+httpsAddr)
 		if err != nil {
-			return fmt.Errorf("listen %s: %w", httpsAddr, err)
+			return fmt.Errorf("listen %s: %w", s.cfg.Server.BindAddress+httpsAddr, err)
 		}
 		slog.Info("HTTPS server listening", "addr", httpsAddr, "tls_mode", s.cfg.TLS.Mode)
 		go func() {
@@ -401,7 +418,7 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 			}()
 		}
 	} else {
-		httpAddr := fmt.Sprintf(":%d", s.cfg.Server.HTTPPort)
+		httpAddr := s.cfg.Server.BindAddress + fmt.Sprintf(":%d", s.cfg.Server.HTTPPort)
 		mainServer = &http.Server{
 			Addr:         httpAddr,
 			Handler:      handler,

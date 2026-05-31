@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadNodes() {
   try {
-    const resp = await fetch('/api/nodes');
+    const resp = await fetch(BASE_PATH + '/api/nodes');
     nodesData = (await resp.json()) || [];
   } catch {
     nodesData = [];
@@ -234,7 +234,7 @@ async function openEditModal(id) {
 
   // Fetch and pre-fill the stored password so the admin can verify it.
   try {
-    const r = await fetch(`/api/nodes/${id}/secret`);
+    const r = await fetch(BASE_PATH + `/api/nodes/${id}/secret`);
     if (r.ok) {
       const { secret } = await r.json();
       document.getElementById('node-ami-pass').value = secret;
@@ -274,7 +274,7 @@ async function saveNode() {
   saveBtn.disabled = true;
 
   try {
-    const resp = await fetch(id ? `/api/nodes/${id}` : '/api/nodes', {
+    const resp = await fetch(id ? BASE_PATH + `/api/nodes/${id}` : BASE_PATH + '/api/nodes', {
       method: id ? 'PUT' : 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body),
@@ -300,7 +300,7 @@ function openDeleteModal(id, name) {
 
 async function confirmDelete() {
   if (!pendingDeleteID) return;
-  await fetch(`/api/nodes/${pendingDeleteID}`, {method: 'DELETE'});
+  await fetch(BASE_PATH + `/api/nodes/${pendingDeleteID}`, {method: 'DELETE'});
   pendingDeleteID = null;
   deleteModal.hide();
   loadNodes();
@@ -314,7 +314,7 @@ async function testNode(evt, id) {
   errEl.style.display = 'none';
   errEl.textContent = '';
   try {
-    const resp = await fetch(`/api/nodes/${id}/test`, {method: 'POST'});
+    const resp = await fetch(BASE_PATH + `/api/nodes/${id}/test`, {method: 'POST'});
     const data = await resp.json();
     if (data.ok) {
       btn.textContent = '✓ OK';
@@ -372,7 +372,7 @@ async function previewAllmon3() {
   document.getElementById('allmon3-import-btn').style.display = 'none';
   if (!file) return;
 
-  const resp = await fetch('/api/admin/import/allmon3/preview', {method: 'POST', body: file});
+  const resp = await fetch(BASE_PATH + '/api/admin/import/allmon3/preview', {method: 'POST', body: file});
   if (!resp.ok) { errEl.textContent = await resp.text(); return; }
   allmon3Parsed = await resp.json();
 
@@ -405,7 +405,7 @@ async function confirmAllmon3Import() {
   const btn = document.getElementById('allmon3-import-btn');
   btn.disabled = true;
   try {
-    const resp = await fetch('/api/admin/import/allmon3', {
+    const resp = await fetch(BASE_PATH + '/api/admin/import/allmon3', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(selected),

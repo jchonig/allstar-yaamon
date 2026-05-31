@@ -15,7 +15,7 @@
         <div class="alert alert-danger py-2">{{.Error}}</div>
         {{end}}
 
-        <form method="POST" action="/login">
+        <form method="POST" action="{{.BasePath}}/login">
           <div class="mb-3">
             <label for="username" class="form-label">Username</label>
             <input type="text" class="form-control" id="username" name="username"
@@ -61,7 +61,7 @@
     errDiv.classList.add('d-none');
     btn.disabled = true;
     try {
-      const beginRes = await fetch('/api/passkeys/login/begin', { method: 'POST' });
+      const beginRes = await fetch(BASE_PATH + '/api/passkeys/login/begin', { method: 'POST' });
       if (!beginRes.ok) throw new Error(await beginRes.text());
       const options = await beginRes.json();
 
@@ -75,7 +75,7 @@
 
       const assertion = await navigator.credentials.get({ publicKey: options.publicKey });
 
-      const finishRes = await fetch('/api/passkeys/login/finish', {
+      const finishRes = await fetch(BASE_PATH + '/api/passkeys/login/finish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -92,7 +92,7 @@
       });
       if (!finishRes.ok) throw new Error(await finishRes.text());
       const data = await finishRes.json();
-      window.location.href = data.redirect || '/';
+      window.location.href = data.redirect || BASE_PATH + '/';
     } catch (err) {
       if (err.name !== 'NotAllowedError') showErr(err.message || 'Passkey sign-in failed');
       btn.disabled = false;
