@@ -2,12 +2,7 @@
 
 YAAMon is a modern, responsive web application for managing and monitoring [AllStarLink](https://allstarlink.org) amateur radio nodes. It replaces the PHP/Apache-based [AllScan](https://github.com/davidgsd/AllScan) and [Allmon3](https://github.com/AllStarLink/Allmon3) with a single self-contained binary that needs no web server, no PHP runtime, and no external database engine. The interface works on desktops, tablets, and phones.
 
-<table>
-<tr>
-<td><img src="docs/images/dashboard.png" alt="YAAMon dashboard (desktop)"></td>
-<td><img src="docs/images/dashboard-phone.png" alt="YAAMon dashboard (phone)" width="300"></td>
-</tr>
-</table>
+![YAAMon dashboard](docs/images/dashboard.png)
 
 **Key differences from AllScan and Allmon3:**
 
