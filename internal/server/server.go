@@ -344,6 +344,10 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) listenAndServe(handler http.Handler) error {
+	if err := checkPlaintextSafety(s.cfg); err != nil {
+		return err
+	}
+
 	tlsCfg, err := tlsserver.NewTLSConfig(&s.cfg.TLS)
 	if err != nil {
 		return fmt.Errorf("TLS config: %w", err)

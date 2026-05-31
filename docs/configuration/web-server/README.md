@@ -43,3 +43,25 @@ server:
   bind_address: 127.0.0.1   # only reachable from the proxy, not the network
   base_path: /yaamon         # omit for root proxy; set to match the proxy location
 ```
+
+## Plaintext HTTP safety check
+
+When `tls.mode: disabled` and no proxy auth is configured, YAAMon checks the
+bound address at startup. If any interface address is publicly routable
+(outside RFC 1918 / loopback / link-local ranges), YAAMon **refuses to start**
+and logs an error explaining the risk.
+
+This protects against accidentally running an unauthenticated, unencrypted
+server on a VPS or cloud host. The check is automatically skipped when:
+
+- `tls.mode` is anything other than `disabled` (TLS is active).
+- `proxy_auth.enabled: true` or `tailscale_auth.enabled: true` (the proxy owns TLS).
+- `server.bind_address` is set to a private address (e.g. `127.0.0.1`).
+
+If you have an external security layer and intentionally want plaintext HTTP on
+a public address, set:
+
+```yaml
+server:
+  allow_public_plaintext: true
+```

@@ -53,6 +53,7 @@ Environment variables take precedence over the config file.
 | `server` | `http_port` | `8080` | HTTP listen port |
 | `server` | `https_port` | `443` | HTTPS listen port |
 | `server` | `redirect_http` | `true` | 301 redirect HTTP → HTTPS when TLS is enabled |
+| `server` | `allow_public_plaintext` | `false` | Allow plaintext HTTP on public (non-RFC-1918) addresses. YAAMon refuses to start if `tls.mode: disabled` and the bound address is publicly routable. Set to `true` only if you have an external security layer and understand the risk. |
 | `tls` | `mode` | `disabled` | TLS mode: `disabled`, `self_signed`, `provided`, `acme` |
 | `tls` | `cert_file` | — | PEM certificate path (required for `mode: provided`) |
 | `tls` | `key_file` | — | PEM private key path (required for `mode: provided`) |

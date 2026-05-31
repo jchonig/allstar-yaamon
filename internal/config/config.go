@@ -57,12 +57,13 @@ type UIConfig struct {
 }
 
 type ServerConfig struct {
-	HTTPPort     int    `mapstructure:"http_port"`
-	HTTPSPort    int    `mapstructure:"https_port"`
-	RedirectHTTP bool   `mapstructure:"redirect_http"`
-	QUIC         bool   `mapstructure:"quic"`
-	BindAddress  string `mapstructure:"bind_address"`
-	BasePath     string `mapstructure:"base_path"`
+	HTTPPort             int    `mapstructure:"http_port"`
+	HTTPSPort            int    `mapstructure:"https_port"`
+	RedirectHTTP         bool   `mapstructure:"redirect_http"`
+	QUIC                 bool   `mapstructure:"quic"`
+	BindAddress          string `mapstructure:"bind_address"`
+	BasePath             string `mapstructure:"base_path"`
+	AllowPublicPlaintext bool   `mapstructure:"allow_public_plaintext"`
 }
 
 type TLSConfig struct {
@@ -95,6 +96,7 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("server.quic", true)
 	v.SetDefault("server.bind_address", "")
 	v.SetDefault("server.base_path", "")
+	v.SetDefault("server.allow_public_plaintext", false)
 	v.SetDefault("tls.mode", "disabled")
 	v.SetDefault("tls.acme_cache_dir", "/etc/yaamon/acme")
 	v.SetDefault("db.path", "/var/lib/yaamon/yaamon.db")
