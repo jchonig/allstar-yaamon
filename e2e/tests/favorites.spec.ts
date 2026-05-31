@@ -3,7 +3,13 @@ import { loginAsAdmin } from './fixtures';
 
 async function goToDashboard(page: Page) {
   await loginAsAdmin(page);
-  // Dashboard is already loaded after login.
+  const nodes: Array<{ id: number }> = await page.evaluate(async () => {
+    const r = await fetch('/api/nodes');
+    return r.json();
+  });
+  if (nodes.length > 0) {
+    await page.goto(`/dashboard/${nodes[0].id}`);
+  }
 }
 
 test.describe('Favorites — Add modal', () => {
@@ -11,13 +17,20 @@ test.describe('Favorites — Add modal', () => {
     await goToDashboard(page);
   });
 
-  test('Add Favorite button opens modal', async ({ page }) => {
-    await page.locator('button', { hasText: /Add Favorite/i }).click();
+  test('+ button in card header opens modal', async ({ page }) => {
+    await page.locator('button[title="Add Favorite"]').click();
     await expect(page.locator('#addFavModal')).toBeVisible();
+    await expect(page.locator('#fav-modal-title')).toHaveText('Add Favorite');
+    await expect(page.locator('#fav-node-number')).not.toBeDisabled();
+  });
+
+  test('clicking + does not collapse the favorites card', async ({ page }) => {
+    await page.locator('button[title="Add Favorite"]').click();
+    await expect(page.locator('#favorites-collapse')).toHaveClass(/show/);
   });
 
   test('modal has required fields', async ({ page }) => {
-    await page.locator('button', { hasText: /Add Favorite/i }).click();
+    await page.locator('button[title="Add Favorite"]').click();
     await expect(page.locator('#fav-node-number')).toBeVisible();
     await expect(page.locator('#fav-callsign')).toBeVisible();
     await expect(page.locator('#fav-description')).toBeVisible();
@@ -25,11 +38,11 @@ test.describe('Favorites — Add modal', () => {
   });
 
   test('can add and see a new favorite', async ({ page }) => {
-    await page.locator('button', { hasText: /Add Favorite/i }).click();
+    await page.locator('button[title="Add Favorite"]').click();
     await page.locator('#fav-node-number').fill('77777');
     await page.locator('#fav-callsign').fill('W1TEST');
     await page.locator('#fav-description').fill('E2E Test Node');
-    await page.locator('#addFavModal .modal-footer button', { hasText: /Add/i }).click();
+    await page.locator('#fav-modal-save-btn').click();
 
     // Modal closes and row appears.
     await expect(page.locator('#addFavModal')).not.toBeVisible();
@@ -38,7 +51,7 @@ test.describe('Favorites — Add modal', () => {
 
   test('cancel closes modal without adding', async ({ page }) => {
     const rowsBefore = await page.locator('#favs-tbody tr').count();
-    await page.locator('button', { hasText: /Add Favorite/i }).click();
+    await page.locator('button[title="Add Favorite"]').click();
     await page.locator('#addFavModal .btn-secondary', { hasText: 'Cancel' }).click();
     await expect(page.locator('#addFavModal')).not.toBeVisible();
     const rowsAfter = await page.locator('#favs-tbody tr').count();
@@ -46,21 +59,53 @@ test.describe('Favorites — Add modal', () => {
   });
 });
 
-test.describe('Favorites — Delete', () => {
-  test('delete button removes the row', async ({ page }) => {
+test.describe('Favorites — Edit and Delete from row', () => {
+  test.beforeEach(async ({ page }) => {
     await goToDashboard(page);
+    await page.locator('button[title="Add Favorite"]').click();
+    await page.locator('#fav-node-number').fill('55555');
+    await page.locator('#fav-callsign').fill('K1EDIT');
+    await page.locator('#fav-modal-save-btn').click();
+    await expect(page.locator('#addFavModal')).not.toBeVisible();
+    await expect(page.locator('#favs-tbody')).toContainText('55555');
+  });
 
-    // First add one to delete.
-    await page.locator('button', { hasText: /Add Favorite/i }).click();
-    await page.locator('#fav-node-number').fill('66666');
-    await page.locator('#addFavModal .modal-footer button', { hasText: /Add/i }).click();
-    await expect(page.locator('#favs-tbody')).toContainText('66666');
+  test('... dropdown on favorites row contains Edit and Delete', async ({ page }) => {
+    const row = page.locator('#favs-tbody tr', { hasText: '55555' });
+    await row.locator('button[title="More actions"]').last().click();
+    await expect(row.locator('.dropdown-menu').last()).toContainText('Edit');
+    await expect(row.locator('.dropdown-menu').last()).toContainText('Delete');
+  });
 
-    // Find its delete button and click it.
-    const row = page.locator('#favs-tbody tr', { hasText: '66666' });
-    await row.locator('button[title="Remove favorite"]').click();
+  test('Edit opens modal pre-populated with node data, node number disabled', async ({ page }) => {
+    const row = page.locator('#favs-tbody tr', { hasText: '55555' });
+    await row.locator('button[title="More actions"]').last().click();
+    // Use the visible (open) dropdown to avoid strict-mode violations when multiple rows match.
+    await page.locator('.dropdown-menu.show .dropdown-item', { hasText: 'Edit' }).click();
+    await expect(page.locator('#addFavModal')).toBeVisible();
+    await expect(page.locator('#fav-modal-title')).toHaveText('Edit Favorite');
+    await expect(page.locator('#fav-node-number')).toBeDisabled();
+    await expect(page.locator('#fav-node-number')).toHaveValue('55555');
+    await expect(page.locator('#fav-callsign')).toHaveValue('K1EDIT');
+  });
 
-    await expect(page.locator('#favs-tbody')).not.toContainText('66666');
+  test('Edit saves changes and updates table', async ({ page }) => {
+    const row = page.locator('#favs-tbody tr', { hasText: '55555' });
+    await row.locator('button[title="More actions"]').last().click();
+    await page.locator('.dropdown-menu.show .dropdown-item', { hasText: 'Edit' }).click();
+    await page.locator('#fav-callsign').fill('K1UPDATED');
+    await page.locator('#fav-modal-save-btn').click();
+    await expect(page.locator('#addFavModal')).not.toBeVisible();
+    await expect(page.locator('#favs-tbody')).toContainText('K1UPDATED');
+  });
+
+  test('Delete removes the row', async ({ page }) => {
+    const rows = page.locator('#favs-tbody tr', { hasText: '55555' });
+    const countBefore = await rows.count();
+    await rows.locator('button[title="More actions"]').last().click();
+    page.once('dialog', d => d.accept());
+    await page.locator('.dropdown-menu.show .dropdown-item', { hasText: 'Delete' }).click();
+    await expect(rows).toHaveCount(countBefore - 1);
   });
 });
 
@@ -76,10 +121,10 @@ test.describe('Favorites — Sort', () => {
     await goToDashboard(page);
     const header = page.locator('#favs-table th', { hasText: 'Node' });
     await header.click();
-    const iconAfterFirst = await header.locator('.sort-icon').textContent();
+    const classAfterFirst = await header.locator('.sort-icon').getAttribute('class');
     await header.click();
-    const iconAfterSecond = await header.locator('.sort-icon').textContent();
-    expect(iconAfterFirst).not.toBe(iconAfterSecond);
+    const classAfterSecond = await header.locator('.sort-icon').getAttribute('class');
+    expect(classAfterFirst).not.toBe(classAfterSecond);
   });
 
   test('third click resets to insertion order', async ({ page }) => {
@@ -108,9 +153,14 @@ test.describe('Favorites — Collapsible card', () => {
   test('clicking again expands the card', async ({ page }) => {
     await goToDashboard(page);
     const header = page.locator('[data-bs-target="#favorites-collapse"]');
+    const collapse = page.locator('#favorites-collapse');
     await header.click(); // collapse
+    // Wait for Bootstrap animation to fully complete (_isTransitioning=false) before clicking again.
+    // 'collapse' class is only present once the hide animation finishes; during animation it's 'collapsing'.
+    await expect(collapse).toHaveClass('collapse');
+    await expect(collapse).not.toHaveClass(/show/);
     await header.click(); // expand
-    await expect(page.locator('#favorites-collapse')).toHaveClass(/show/);
+    await expect(collapse).toHaveClass(/show/);
   });
 });
 
