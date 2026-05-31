@@ -235,7 +235,7 @@ func (s *Server) Run() error {
 	if err != nil {
 		return fmt.Errorf("web/static embed: %w", err)
 	}
-	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	r.Handle("/static/*", http.StripPrefix(s.cfg.Server.BasePath+"/static/", http.FileServer(http.FS(staticFS))))
 
 	// Public routes
 	r.Get("/health", s.handleHealth)
