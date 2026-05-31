@@ -16,7 +16,7 @@
         <div class="alert alert-danger py-2">{{.Error}}</div>
         {{end}}
 
-        <form method="POST" action="/setup">
+        <form method="POST" action="{{.BasePath}}/setup">
           <div class="mb-3">
             <label for="username" class="form-label">Username</label>
             <input type="text" class="form-control" id="username" name="username"

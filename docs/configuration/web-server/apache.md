@@ -1,20 +1,34 @@
 # Behind Apache (ASL3 Coexistence)
 
-When YAAMon runs on an ASL3 node alongside Apache2, the simplest setup is to keep YAAMon on port 8080 and optionally add an Apache reverse proxy to expose it on port 80 under a path prefix.
+When YAAMon runs on an ASL3 node alongside Apache2, the simplest setup is to keep YAAMon on port 8080 and access it directly. Optionally you can add an Apache reverse proxy to expose it on port 80 — either at the root path or under a sub-path.
 
-## Simple: YAAMon on port 8080
+## Simple: YAAMon on port 8080 (no Apache integration)
 
 No Apache configuration needed. Access YAAMon at `http://<node-ip>:8080/`.
 
-## Reverse proxy at root
+## Reverse proxy setup — prerequisites
 
-To serve YAAMon at `http://<node-ip>/` via Apache, enable the proxy modules and add a vhost or conf snippet:
+Enable the proxy modules and install the example config:
 
 ```bash
 sudo a2enmod proxy proxy_http
+sudo cp /usr/share/doc/yaamon/apache2-yaamon.conf /etc/apache2/conf-available/yaamon.conf
 ```
 
-Create `/etc/apache2/conf-available/yaamon.conf`:
+When running behind any reverse proxy, restrict YAAMon to localhost only:
+
+```yaml
+# /etc/yaamon/config.yaml
+server:
+  bind_address: 127.0.0.1
+  http_port: 8080
+```
+
+## Variant 1 — Proxy at root (`http://<host>/`)
+
+Use this when Apache serves a virtual host dedicated to YAAMon, or when YAAMon should answer all requests at the top level.
+
+Edit `/etc/apache2/conf-available/yaamon.conf` (uncomment the variant 1 block):
 
 ```apache
 ProxyPreserveHost On
@@ -22,33 +36,55 @@ ProxyPass        / http://127.0.0.1:8080/
 ProxyPassReverse / http://127.0.0.1:8080/
 ```
 
+No `base_path` setting needed — YAAMon remains at `/`.
+
 ```bash
 sudo a2enconf yaamon
 sudo systemctl reload apache2
 ```
 
-## Reverse proxy at a path prefix
+## Variant 2 — Proxy at a sub-path (`http://<host>/yaamon/`)
 
-> **Note**: Full subfolder support requires a base-path feature tracked in [issue #14](https://github.com/jchonig/allstar-yaamon/issues/14). Until that ships, proxy at root (`/` → `http://localhost:8080/`) is the recommended approach — links and redirects work correctly.
+Use this when Apache already serves other content at the root (e.g. the ASL3/Asterisk status page) and you want YAAMon under `/yaamon`.
 
-When the feature is available, the configuration will be:
+Set `base_path` in YAAMon's config to match:
+
+```yaml
+# /etc/yaamon/config.yaml
+server:
+  bind_address: 127.0.0.1
+  http_port: 8081          # use a port distinct from any other YAAMon instance
+  base_path: /yaamon
+```
+
+Edit `/etc/apache2/conf-available/yaamon.conf` (uncomment the variant 2 block):
 
 ```apache
 ProxyPreserveHost On
-ProxyPass        /yaamon/ http://127.0.0.1:8080/
-ProxyPassReverse /yaamon/ http://127.0.0.1:8080/
+ProxyPass        /yaamon/ http://127.0.0.1:8081/yaamon/
+ProxyPassReverse /yaamon/ http://127.0.0.1:8081/yaamon/
 ```
+
+```bash
+sudo a2enconf yaamon
+sudo systemctl reload apache2
+```
+
+YAAMon is now accessible at `http://<node-ip>/yaamon/`.
 
 ## TLS with Apache
 
-Let Apache handle TLS (via `mod_ssl` or `certbot`) and forward plain HTTP to YAAMon:
+Let Apache handle TLS (via `mod_ssl` or `certbot`) and forward plain HTTP to YAAMon. Disable TLS in YAAMon — Apache terminates it:
 
 ```yaml
-# config.yaml — TLS disabled, plain HTTP to localhost
+# /etc/yaamon/config.yaml
 tls:
   mode: disabled
 server:
+  bind_address: 127.0.0.1
   http_port: 8080
 ```
 
-Configure Apache's SSL vhost to proxy to `http://127.0.0.1:8080/`.
+Configure Apache's SSL virtual host to proxy to `http://127.0.0.1:8080/`.
+
+> **Note**: When Apache (or any proxy) handles TLS, set `quic: false` in YAAMon's config — the proxy is responsible for HTTP/3, not YAAMon.

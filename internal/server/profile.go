@@ -42,7 +42,7 @@ func (s *Server) validateSessionUser(next http.Handler) http.Handler {
 					http.Error(w, "session expired", http.StatusUnauthorized)
 					return
 				}
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				http.Redirect(w, r, s.url("/login"), http.StatusSeeOther)
 				return
 			}
 		}

@@ -24,12 +24,14 @@ type pageData struct {
 	RepoURL          string
 	AuthMethod       string
 	ExternalUsername string
+	BasePath         string
 }
 
 func (s *Server) newPageData() pageData {
 	return pageData{
-		Version: version.Version,
-		RepoURL: s.cfg.UI.FooterURL,
+		Version:  version.Version,
+		RepoURL:  s.cfg.UI.FooterURL,
+		BasePath: s.cfg.Server.BasePath,
 	}
 }
 
@@ -63,10 +65,10 @@ func (s *Server) handleSetupGet(w http.ResponseWriter, r *http.Request) {
 	// If users exist, setup is complete — redirect to login.
 	n, err := s.db.CountUsers(r.Context())
 	if err != nil || n > 0 {
-		http.Redirect(w, r, "/login", http.StatusFound)
+		http.Redirect(w, r, s.url("/login"), http.StatusFound)
 		return
 	}
-	s.render(w, "setup", setupData{})
+	s.render(w, "setup", setupData{pageData: s.newPageData()})
 }
 
 func (s *Server) handleSetupPost(w http.ResponseWriter, r *http.Request) {
@@ -74,12 +76,12 @@ func (s *Server) handleSetupPost(w http.ResponseWriter, r *http.Request) {
 
 	n, err := s.db.CountUsers(ctx)
 	if err != nil || n > 0 {
-		http.Redirect(w, r, "/login", http.StatusFound)
+		http.Redirect(w, r, s.url("/login"), http.StatusFound)
 		return
 	}
 
 	if err := r.ParseForm(); err != nil {
-		s.render(w, "setup", setupData{Error: "Invalid form data"})
+		s.render(w, "setup", setupData{pageData: s.newPageData(), Error: "Invalid form data"})
 		return
 	}
 
@@ -88,31 +90,31 @@ func (s *Server) handleSetupPost(w http.ResponseWriter, r *http.Request) {
 	confirm := r.FormValue("confirm")
 
 	if username == "" {
-		s.render(w, "setup", setupData{Error: "Username is required"})
+		s.render(w, "setup", setupData{pageData: s.newPageData(), Error: "Username is required"})
 		return
 	}
 	if password != confirm {
-		s.render(w, "setup", setupData{Error: "Passwords do not match"})
+		s.render(w, "setup", setupData{pageData: s.newPageData(), Error: "Passwords do not match"})
 		return
 	}
 
 	hash, err := auth.HashPassword(password)
 	if err != nil {
-		s.render(w, "setup", setupData{Error: err.Error()})
+		s.render(w, "setup", setupData{pageData: s.newPageData(), Error: err.Error()})
 		return
 	}
 
 	user, err := s.db.CreateUser(ctx, username, hash, db.PermSuperuser)
 	if err != nil {
-		s.render(w, "setup", setupData{Error: "Failed to create user: " + err.Error()})
+		s.render(w, "setup", setupData{pageData: s.newPageData(), Error: "Failed to create user: " + err.Error()})
 		return
 	}
 
 	if err := s.sessions.SetSession(w, user.ID, user.Username, user.Permission, user.FullName, user.AvatarURL); err != nil {
-		s.render(w, "setup", setupData{Error: "Session error"})
+		s.render(w, "setup", setupData{pageData: s.newPageData(), Error: "Session error"})
 		return
 	}
-	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+	http.Redirect(w, r, s.url("/dashboard"), http.StatusSeeOther)
 }
 
 // --- Login / Logout ---
@@ -124,16 +126,16 @@ type loginData struct {
 
 func (s *Server) handleLoginGet(w http.ResponseWriter, r *http.Request) {
 	if sess := auth.FromContext(r.Context()); sess != nil {
-		http.Redirect(w, r, "/dashboard", http.StatusFound)
+		http.Redirect(w, r, s.url("/dashboard"), http.StatusFound)
 		return
 	}
 	// If no users exist, redirect to setup.
 	n, _ := s.db.CountUsers(r.Context())
 	if n == 0 {
-		http.Redirect(w, r, "/setup", http.StatusFound)
+		http.Redirect(w, r, s.url("/setup"), http.StatusFound)
 		return
 	}
-	s.render(w, "login", loginData{})
+	s.render(w, "login", loginData{pageData: s.newPageData()})
 }
 
 func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +150,7 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
-		s.render(w, "login", loginData{Error: "Invalid form data"})
+		s.render(w, "login", loginData{pageData: s.newPageData(), Error: "Invalid form data"})
 		return
 	}
 
@@ -181,7 +183,7 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 
 	next := r.FormValue("next")
 	if next == "" || next[0] != '/' {
-		next = "/dashboard"
+		next = s.url("/dashboard")
 	}
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
@@ -190,12 +192,12 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 func (s *Server) renderLoginError(w http.ResponseWriter, r *http.Request) {
 	// Same error for unknown user and wrong password — don't leak which one.
 	w.WriteHeader(http.StatusUnauthorized)
-	s.render(w, "login", loginData{Error: "Invalid username or password"})
+	s.render(w, "login", loginData{pageData: s.newPageData(), Error: "Invalid username or password"})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	s.sessions.ClearSession(w)
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	http.Redirect(w, r, s.url("/login"), http.StatusSeeOther)
 }
 
 const lastDashboardCookie = "yaamon_last_dashboard"
@@ -204,7 +206,7 @@ const lastDashboardCookie = "yaamon_last_dashboard"
 // redirects to /dashboard, which will then show the summary page.
 func (s *Server) handleDashboardOverview(w http.ResponseWriter, r *http.Request) {
 	setLastDashboard(w, "overview")
-	http.Redirect(w, r, "/dashboard", http.StatusFound)
+	http.Redirect(w, r, s.url("/dashboard"), http.StatusFound)
 }
 
 func setLastDashboard(w http.ResponseWriter, value string) {
@@ -248,7 +250,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	if data.ActiveNode == nil {
 		if len(data.Nodes) == 1 {
 			// Single-node install: go straight to that node's dashboard.
-			http.Redirect(w, r, fmt.Sprintf("/dashboard/%d", data.Nodes[0].ID), http.StatusFound)
+			http.Redirect(w, r, s.url(fmt.Sprintf("/dashboard/%d", data.Nodes[0].ID)), http.StatusFound)
 			return
 		}
 		if len(data.Nodes) > 1 {
@@ -257,7 +259,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 				if id, err := strconv.ParseInt(c.Value, 10, 64); err == nil {
 					for i := range data.Nodes {
 						if data.Nodes[i].ID == id {
-							http.Redirect(w, r, fmt.Sprintf("/dashboard/%d", id), http.StatusFound)
+							http.Redirect(w, r, s.url(fmt.Sprintf("/dashboard/%d", id)), http.StatusFound)
 							return
 						}
 					}
@@ -300,7 +302,7 @@ func (s *Server) setupGuard(next http.Handler) http.Handler {
 		}
 		n, err := s.db.CountUsers(r.Context())
 		if err == nil && n == 0 {
-			http.Redirect(w, r, "/setup", http.StatusFound)
+			http.Redirect(w, r, s.url("/setup"), http.StatusFound)
 			return
 		}
 		next.ServeHTTP(w, r)

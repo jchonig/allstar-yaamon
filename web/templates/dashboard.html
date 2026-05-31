@@ -9,12 +9,12 @@
   <div id="nav-switcher-wrap" style="min-width:0;overflow:hidden">
     <div id="nav-switcher-buttons" class="btn-group btn-group-sm" role="group"
          style="display:none!important;white-space:nowrap">
-      <a href="/dashboard/overview"
+      <a href="{{$.BasePath}}/dashboard/overview"
          class="btn btn-outline-secondary"
          style="white-space:nowrap"
          title="Overview">Overview</a>
       {{range .Nodes}}
-      <a href="/dashboard/{{.ID}}"
+      <a href="{{$.BasePath}}/dashboard/{{.ID}}"
          class="btn {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}btn-primary{{else}}btn-outline-secondary{{end}}"
          style="white-space:nowrap"
          title="{{.Name}}">{{.Name}}</a>
@@ -28,11 +28,11 @@
       {{.ActiveNode.Name}}
     </button>
     <ul class="dropdown-menu">
-      <li><a class="dropdown-item" href="/dashboard/overview">Overview</a></li>
+      <li><a class="dropdown-item" href="{{$.BasePath}}/dashboard/overview">Overview</a></li>
       <li><hr class="dropdown-divider"></li>
       {{range .Nodes}}
       <li><a class="dropdown-item {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}active{{end}}"
-             href="/dashboard/{{.ID}}">
+             href="{{$.BasePath}}/dashboard/{{.ID}}">
         {{if and $.ActiveNode (eq .ID $.ActiveNode.ID)}}<i class="bi bi-check2 me-1"></i>{{end}}{{.Name}}
       </a></li>
       {{end}}
@@ -71,7 +71,7 @@
 {{if .Nodes}}
 {{/* Multiple nodes configured, none selected — summary grid */}}
 <div class="text-center mb-4">
-  <img src="/static/logo.svg" alt="YAAMon" style="max-height:12rem;max-width:100%;width:auto">
+  <img src="{{.BasePath}}/static/logo.svg" alt="YAAMon" style="max-height:12rem;max-width:100%;width:auto">
 </div>
 <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 mt-1">
   {{range .Nodes}}
@@ -79,13 +79,13 @@
     <div class="card h-100 summary-node-card position-relative">
       <div class="card-body">
         <div class="d-flex align-items-center gap-2 mb-1">
-          <img id="summary-ami-{{.ID}}" src="/static/asterisk-logo.png" class="asl-logo"
+          <img id="summary-ami-{{.ID}}" src="{{$.BasePath}}/static/asterisk-logo.png" class="asl-logo"
                style="height:.85rem;width:auto;vertical-align:middle" title="AMI: connecting…" alt="AMI">
-          <img id="summary-asl-{{.ID}}" src="/static/asl-logo.png" class="asl-logo"
+          <img id="summary-asl-{{.ID}}" src="{{$.BasePath}}/static/asl-logo.png" class="asl-logo"
                style="height:.85rem;width:auto;vertical-align:middle" title="ASL: unknown" alt="ASL">
           <h5 class="card-title mb-0 text-truncate flex-grow-1" title="{{.Name}}">{{.Name}}</h5>
           {{if or (eq $.Permission "superuser") (eq $.Permission "admin")}}
-          <a href="/admin/nodes?edit={{.ID}}" class="btn btn-sm btn-outline-secondary flex-shrink-0"
+          <a href="{{$.BasePath}}/admin/nodes?edit={{.ID}}" class="btn btn-sm btn-outline-secondary flex-shrink-0"
              style="position:relative;z-index:2" title="Edit node settings">
             <i class="bi bi-pencil"></i>
           </a>
@@ -97,7 +97,7 @@
         <p id="summary-links-{{.ID}}" class="card-text small text-muted mb-0 mt-1">
           <span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem"></span> Connecting…
         </p>
-        <a href="/dashboard/{{.ID}}" class="stretched-link" aria-label="Go to {{.Name}} dashboard"></a>
+        <a href="{{$.BasePath}}/dashboard/{{.ID}}" class="stretched-link" aria-label="Go to {{.Name}} dashboard"></a>
       </div>
     </div>
   </div>
@@ -109,7 +109,7 @@
   <i class="bi bi-info-circle me-2"></i>
   Welcome, <strong>{{.Username}}</strong>.
   {{if or (eq .Permission "superuser") (eq .Permission "admin")}}
-  <a href="/admin/nodes">Add a node</a> to get started.
+  <a href="{{.BasePath}}/admin/nodes">Add a node</a> to get started.
   {{else}}
   No nodes have been configured yet.
   {{end}}
@@ -122,9 +122,9 @@
   <div class="me-auto text-nowrap">
     <h5 class="mb-0 d-inline">{{.ActiveNode.Name}}</h5>
     <code class="text-muted ms-2">{{.ActiveNode.NodeNumber}}</code>
-    <img id="ami-badge" src="/static/asterisk-logo.png" class="asl-logo ms-2"
+    <img id="ami-badge" src="{{.BasePath}}/static/asterisk-logo.png" class="asl-logo ms-2"
          style="height:1rem;width:auto;vertical-align:middle" title="AMI: not connected" alt="AMI">
-    <img id="asl-badge" src="/static/asl-logo.png" class="asl-logo ms-2"
+    <img id="asl-badge" src="{{.BasePath}}/static/asl-logo.png" class="asl-logo ms-2"
          style="height:1rem;width:auto;vertical-align:middle" title="ASL: unknown" alt="ASL">
     <span id="dtmf-display" class="badge bg-warning text-dark ms-2"
           style="display:none;font-size:.85rem;font-family:monospace;min-width:1.6rem"
@@ -380,7 +380,7 @@
 {{if and (not .ActiveNode) .Nodes}}
 <script>
 [{{range .Nodes}}{"id":{{.ID}},"num":"{{.NodeNumber}}"},{{end}}].forEach(n => {
-  const es = new EventSource('/sse/' + n.id);
+  const es = new EventSource(BASE_PATH + '/sse/' + n.id);
   document.getElementById('summary-ami-' + n.id)?.classList.add('polling');
   document.getElementById('summary-asl-' + n.id)?.classList.add('polling');
   es.onmessage = evt => {
@@ -503,14 +503,14 @@ function updateSortHeaders() {
 
 async function loadFavs() {
   try {
-    const r = await fetch(`/api/nodes/${NODE_ID}/favorites`);
+    const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/favorites`);
     favsData = (await r.json()) || [];
   } catch { favsData = []; }
 
   // Also load cached stats immediately. Merge into statsData rather than
   // replacing it: SSE may have already delivered fresher data for some nodes.
   try {
-    const r2 = await fetch(`/api/nodes/${NODE_ID}/stats`);
+    const r2 = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/stats`);
     const httpStats = (await r2.json()) || {};
     for (const [k, v] of Object.entries(httpStats)) {
       const cur = statsData[k];
@@ -605,7 +605,7 @@ function applyStats(stats) {
 
 function connectSSE() {
   if (sseSource) sseSource.close();
-  sseSource = new EventSource(`/sse/${NODE_ID}`);
+  sseSource = new EventSource(BASE_PATH + `/sse/${NODE_ID}`);
   document.getElementById('ami-badge')?.classList.add('polling');
   // Only dim the ASL badge if we don't already have fresh cached data.
   if (!statsData[NODE_NUM] || isStale(statsData[NODE_NUM].fetched_at)) {
@@ -716,7 +716,7 @@ const TYPE_LABEL = { T: 'Transceive', R: 'Monitor', M: 'Monitor', L: 'Monitor Lo
 
 async function refreshAstdbCache() {
   try {
-    const r = await fetch(`/api/nodes/${NODE_ID}/connections/${NODE_NUM}`);
+    const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/connections/${NODE_NUM}`);
     if (!r.ok) return;
     const data = await r.json();
     for (const c of (data.connections || [])) {
@@ -881,7 +881,7 @@ function actionCell(nodeNum, favId) {
 // --- Connect / Disconnect ---
 
 async function doConnect(targetNum, mode, exclusive) {
-  const r = await fetch(`/api/nodes/${NODE_ID}/connect`, {
+  const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/connect`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({target: targetNum, mode, exclusive}),
@@ -892,7 +892,7 @@ async function doConnect(targetNum, mode, exclusive) {
 }
 
 async function doDisconnect(targetNum, permanent) {
-  const r = await fetch(`/api/nodes/${NODE_ID}/disconnect`, {
+  const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/disconnect`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({target: targetNum, permanent}),
@@ -929,7 +929,7 @@ async function saveFavorite() {
     location:     document.getElementById('fav-location').value.trim(),
     group_name:   document.getElementById('fav-group').value.trim() || 'default',
   };
-  const r = await fetch(`/api/nodes/${NODE_ID}/favorites`, {
+  const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/favorites`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(body),
@@ -944,7 +944,7 @@ async function saveFavorite() {
 
 async function deleteFav(favID) {
   if (!confirm('Remove this favorite?')) return;
-  await fetch(`/api/nodes/${NODE_ID}/favorites/${favID}`, {method: 'DELETE'});
+  await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/favorites/${favID}`, {method: 'DELETE'});
   loadFavs();
 }
 
@@ -1024,7 +1024,7 @@ async function openConnModal(nodeNum, lcnt) {
     (call ? `Node ${nodeNum} (${call})` : `Node ${nodeNum}`) +
     (lcnt > 0 ? ` — ${lcnt} Link${lcnt !== 1 ? 's' : ''}` : '');
   document.getElementById('conn-cache-age').textContent = '';
-  document.getElementById('conn-fullgraph-link').href = `/graph/${nodeNum}`;
+  document.getElementById('conn-fullgraph-link').href = BASE_PATH + `/graph/${nodeNum}`;
   document.getElementById('conn-bubble-link').href = `https://stats.allstarlink.org/getstatus.cgi?${nodeNum}`;
   document.getElementById('conn-list-content').innerHTML =
     '<div class="text-muted text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading…</div>';
@@ -1036,7 +1036,7 @@ async function openConnModal(nodeNum, lcnt) {
   setConnView(connView, false); // set tabs without re-triggering graph load
 
   try {
-    const r = await fetch(`/api/nodes/${NODE_ID}/connections/${nodeNum}`);
+    const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/connections/${nodeNum}`);
     connData = await r.json();
     renderConnList();
     if (connView === 'graph') loadD3ThenGraph();
@@ -1291,7 +1291,7 @@ function showDTMF(digit) {
   async function fetchQRZ(callsign) {
     if (qrzCache.has(callsign)) return qrzCache.get(callsign);
     try {
-      const res = await fetch(`/api/qrz/${encodeURIComponent(callsign)}`);
+      const res = await fetch(BASE_PATH + `/api/qrz/${encodeURIComponent(callsign)}`);
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
       qrzCache.set(callsign, data);

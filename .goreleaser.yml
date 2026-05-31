@@ -31,6 +31,7 @@ archives:
       - LICENSE
       - examples/config.yaml.example
       - contrib/yaamon.service
+      - contrib/apache2-yaamon.conf
 
 nfpms:
   - id: yaamon-deb
@@ -48,6 +49,8 @@ nfpms:
         type: config|noreplace
       - src: contrib/yaamon.service
         dst: /lib/systemd/system/yaamon.service
+      - src: contrib/apache2-yaamon.conf
+        dst: /usr/share/doc/yaamon/apache2-yaamon.conf
     scripts:
       postinstall: contrib/postinstall.sh
       preremove: contrib/preremove.sh

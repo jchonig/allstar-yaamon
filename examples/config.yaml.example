@@ -12,6 +12,17 @@ server:
   # quic: true               # HTTP/3 (QUIC) over UDP — enabled by default when TLS is active.
   #                          # Set to false if UDP is blocked or behind a proxy (proxy handles QUIC).
 
+  # bind_address: ""         # Listen on all interfaces (default).
+  #                          # Set to 127.0.0.1 when running behind a reverse proxy (Apache/nginx)
+  #                          # so YAAMon is not directly reachable from the network.
+  # bind_address: 127.0.0.1
+
+  # base_path: ""            # Serve YAAMon at the root path (default).
+  #                          # Set when mounting under a sub-path via a reverse proxy.
+  #                          # Must match the path prefix configured in Apache/nginx.
+  #                          # Example: base_path: /yaamon → accessible at http://host/yaamon/
+  # base_path: /yaamon
+
 tls:
   mode: disabled             # disabled | self_signed | provided | acme
   # cert_file: /etc/yaamon/fullchain.pem   # required for mode: provided

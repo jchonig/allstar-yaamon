@@ -115,7 +115,7 @@ async function doBackup() {
     if (!passphrase) { errEl.textContent = 'Passphrase is required.'; return; }
     if (passphrase !== confirm) { errEl.textContent = 'Passphrases do not match.'; return; }
   }
-  const r = await fetch('/api/backup', {
+  const r = await fetch(BASE_PATH + '/api/backup', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({passphrase}),
@@ -147,7 +147,7 @@ async function doInspect() {
   if (!file) { errEl.textContent = 'Choose a backup file first.'; return; }
 
   restoreFileData = await file.arrayBuffer();
-  const r = await fetch('/api/backup/inspect', {
+  const r = await fetch(BASE_PATH + '/api/backup/inspect', {
     method: 'POST',
     body: restoreFileData,
   });
@@ -184,7 +184,7 @@ async function doRestore() {
     headers['X-Backup-Passphrase'] = pp;
   }
 
-  const r = await fetch('/api/backup/restore', {
+  const r = await fetch(BASE_PATH + '/api/backup/restore', {
     method: 'POST',
     headers,
     body: restoreFileData,
@@ -195,8 +195,8 @@ async function doRestore() {
   // Poll /health until the server comes back, then reload.
   const poll = setInterval(async () => {
     try {
-      const h = await fetch('/health');
-      if (h.ok) { clearInterval(poll); location.href = '/dashboard'; }
+      const h = await fetch(BASE_PATH + '/health');
+      if (h.ok) { clearInterval(poll); location.href = BASE_PATH + '/dashboard'; }
     } catch {}
   }, 1000);
 }

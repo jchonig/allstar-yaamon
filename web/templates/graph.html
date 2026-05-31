@@ -18,9 +18,9 @@
     <li><h6 class="dropdown-header">{{.Permission}}</h6></li>
     <li><hr class="dropdown-divider"></li>
     <li><button class="dropdown-item" onclick="openProfileModal()"><i class="bi bi-person-gear me-2"></i>My Profile</button></li>
-    <li><a class="dropdown-item" href="/dashboard"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
+    <li><a class="dropdown-item" href="{{.BasePath}}/dashboard"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
     <li><hr class="dropdown-divider"></li>
-    <li><a class="dropdown-item text-danger" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
+    <li><a class="dropdown-item text-danger" href="{{.BasePath}}/logout"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</a></li>
   </ul>
 </div>
 {{end}}
@@ -32,7 +32,7 @@
   <span id="graph-node-callsign" class="text-muted"></span>
   <input id="graph-filter" type="search" class="form-control form-control-sm ms-auto" style="max-width:200px"
          placeholder="Filter by node or callsign" oninput="applyFilter(this.value)">
-  <a href="/dashboard" class="btn btn-sm btn-outline-secondary">
+  <a href="{{.BasePath}}/dashboard" class="btn btn-sm btn-outline-secondary">
     <i class="bi bi-arrow-left me-1"></i>Dashboard
   </a>
 </div>
@@ -83,7 +83,7 @@ let gNodes = null; // D3 selection of node <g> elements for filter updates
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const r = await fetch(`/api/nodes/${HOME_NODE_ID}/connections/${NODE_NUMBER}`);
+    const r = await fetch(BASE_PATH + `/api/nodes/${HOME_NODE_ID}/connections/${NODE_NUMBER}`);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
     if (data.callsign) {
@@ -207,7 +207,7 @@ function renderGraph(data) {
 
   node.on('click', (e, d) => {
     if (d.id !== rootNum && e.shiftKey) {
-      window.location.href = `/graph/${d.id}`;
+      window.location.href = BASE_PATH + `/graph/${d.id}`;
     }
   });
 

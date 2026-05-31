@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadUsers() {
   try {
-    const resp = await fetch('/api/users');
+    const resp = await fetch(BASE_PATH + '/api/users');
     usersData = (await resp.json()) || [];
   } catch {
     usersData = [];
@@ -210,7 +210,7 @@ async function saveUser() {
   saveBtn.disabled = true;
 
   try {
-    const resp = await fetch(id ? `/api/users/${id}` : '/api/users', {
+    const resp = await fetch(id ? BASE_PATH + `/api/users/${id}` : BASE_PATH + '/api/users', {
       method: id ? 'PUT' : 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body),
@@ -236,7 +236,7 @@ function openDeleteModal(id, name) {
 
 async function confirmDelete() {
   if (!pendingDeleteID) return;
-  const resp = await fetch(`/api/users/${pendingDeleteID}`, {method: 'DELETE'});
+  const resp = await fetch(BASE_PATH + `/api/users/${pendingDeleteID}`, {method: 'DELETE'});
   pendingDeleteID = null;
   deleteModal.hide();
   if (!resp.ok) {

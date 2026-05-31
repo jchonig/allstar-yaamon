@@ -26,7 +26,7 @@ TEST_VIEWER_PASSWORD := viewerpassword
 
 .PHONY: all build build-multi test test-unit coverage lint deps check \
         check-whitespace check-tidy check-docs-index docs-index compile run stop logs watch \
-        test-integration test-puid e2e e2e-dev snapshot \
+        test-integration test-integration-basepath test-puid e2e e2e-dev snapshot \
         test-deb-integration test-deb \
         install-hooks install-service uninstall-service version clean cleanall
 
@@ -173,6 +173,53 @@ test-integration:
 	docker stop $(TEST_SUT) >/dev/null 2>&1; \
 	docker rm   $(TEST_SUT) >/dev/null 2>&1; \
 	docker network rm $(TEST_NET) >/dev/null 2>&1; \
+	exit $$EXIT
+
+## Run integration tests with server.base_path=/yaamon to verify sub-path routing.
+TEST_NET_BP  := yaamon-test-bp-net
+TEST_SUT_BP  := yaamon-sut-bp
+test-integration-basepath: build
+	@docker rm -f $(TEST_SUT_BP) 2>/dev/null; \
+	docker network rm $(TEST_NET_BP) 2>/dev/null; \
+	mkdir -p test/data-bp && chmod a+w test/data-bp; \
+	docker network create $(TEST_NET_BP); \
+	docker run -d \
+	  --name $(TEST_SUT_BP) \
+	  --network $(TEST_NET_BP) \
+	  -v "$(CURDIR)/test/config-basepath:/etc/yaamon:ro" \
+	  -v "$(CURDIR)/test/data-bp:/var/lib/yaamon" \
+	  -e YAAMON_STATE_FILE=/etc/yaamon/state.yaml \
+	  -e YAAMON_APPLY_RESET_PASSWORDS=1 \
+	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
+	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
+	  yaamon:dev; \
+	echo "Waiting for base-path server..."; \
+	if ! timeout 30 sh -c 'until docker exec $(TEST_SUT_BP) curl -sf http://localhost/health >/dev/null 2>&1; do sleep 1; done'; then \
+	  echo "Server did not start in 30s — container logs:"; \
+	  docker logs $(TEST_SUT_BP); \
+	  docker stop $(TEST_SUT_BP) >/dev/null 2>&1; \
+	  docker rm   $(TEST_SUT_BP) >/dev/null 2>&1; \
+	  docker network rm $(TEST_NET_BP) >/dev/null 2>&1; \
+	  exit 1; \
+	fi; \
+	echo "Server ready. Running base-path integration tests..."; \
+	docker run --rm \
+	  --network $(TEST_NET_BP) \
+	  -v "$(CURDIR):/src" \
+	  -v "$(GOMODCACHE):/go/pkg/mod" \
+	  -v "$(GOCACHE):/root/.cache/go-build" \
+	  -w /src \
+	  -e YAAMON_TEST_URL=http://$(TEST_SUT_BP):80 \
+	  -e YAAMON_TEST_BASEPATH_URL=http://$(TEST_SUT_BP):80 \
+	  -e YAAMON_TEST_BASEPATH=/yaamon \
+	  -e TEST_ADMIN_PASSWORD=$(TEST_ADMIN_PASSWORD) \
+	  -e TEST_VIEWER_PASSWORD=$(TEST_VIEWER_PASSWORD) \
+	  $(BUILDER) \
+	  go test ./integration_tests/... -v -tags=integration -run TestBasePath -timeout=120s; \
+	EXIT=$$?; \
+	docker stop $(TEST_SUT_BP) >/dev/null 2>&1; \
+	docker rm   $(TEST_SUT_BP) >/dev/null 2>&1; \
+	docker network rm $(TEST_NET_BP) >/dev/null 2>&1; \
 	exit $$EXIT
 
 ## Verify PUID/PGID entrypoint: start container as uid/gid 1234, confirm server

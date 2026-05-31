@@ -14,7 +14,10 @@ if [ -d /run/systemd/system ]; then
     systemctl start yaamon || true
     echo ""
     echo "YAAMon installed and started."
-    echo "Open http://$(hostname).local/ to create your admin account."
+    echo "Open http://$(hostname).local:8080/ to create your admin account."
+    echo ""
+    echo "To expose YAAMon via Apache reverse proxy, see:"
+    echo "  /usr/share/doc/yaamon/apache2-yaamon.conf"
 else
     echo ""
     echo "YAAMon installed. Start it with: yaamon serve"

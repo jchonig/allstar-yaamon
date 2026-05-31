@@ -1,0 +1,22 @@
+# Declarative state seeded before base-path integration tests run.
+purge:
+  users: false
+  nodes: false
+  favorites: false
+
+users:
+  - username: admin
+    permission: superuser
+    password: $TEST_ADMIN_PASSWORD
+  - username: viewer
+    permission: readonly
+    password: $TEST_VIEWER_PASSWORD
+
+nodes:
+  - name: Test Node
+    node_number: "99999"
+    ami_host: localhost
+    ami_port: 5038
+    ami_user: admin
+    ami_pass: test
+    enabled: true
