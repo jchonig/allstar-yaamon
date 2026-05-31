@@ -551,7 +551,7 @@ function renderFavs() {
     return `<tr data-node-num="${esc(f.node_number)}" class="${isConnected(f.node_number) ? 'row-connected' : ''}">
       <td class="text-center">${dot}</td>
       <td ${numAttrs}><code>${esc(f.node_number)}</code></td>
-      <td>${call !== '—' ? `<span class="qrz-tip" data-callsign="${esc(call)}">${esc(call)}</span>` : '—'}</td>
+      <td>${call !== '—' ? `<span class="qrz-tip" data-callsign="${esc(call)}" data-node-num="${esc(f.node_number)}">${esc(call)}</span>` : '—'}</td>
       <td class="text-truncate d-none d-md-table-cell" style="max-width:200px" title="${esc(desc)}">${esc(desc)}</td>
       <td class="text-truncate d-none d-md-table-cell" style="max-width:150px" title="${esc(loc)}">${esc(loc)}</td>
       <td class="text-nowrap">${txTime}</td>
@@ -573,7 +573,7 @@ function applyStats(stats) {
     const fav = favsData.find(x => x.node_number === num);
     cells[0].innerHTML = keyedDot(num);
     if (s.callsign && !(fav && fav.callsign))
-      cells[2].innerHTML = `<span class="qrz-tip" data-callsign="${esc(s.callsign)}">${esc(s.callsign)}</span>`;
+      cells[2].innerHTML = `<span class="qrz-tip" data-callsign="${esc(s.callsign)}" data-node-num="${esc(num)}">${esc(s.callsign)}</span>`;
     if (s.description && !(fav && fav.description)) { cells[3].textContent = s.description; cells[3].title = s.description; }
     if (s.location    && !(fav && fav.location))    { cells[4].textContent = s.location;    cells[4].title = s.location; }
     if (s.description || s.location) {
@@ -1310,10 +1310,28 @@ function showDTMF(digit) {
     clearTimeout(hoverTimer);
     hoverTimer = setTimeout(async () => {
       if (!el.matches(':hover')) return;
-      const rec = await fetchQRZ(callsign);
+      const nodeNum = el.dataset.nodeNum;
+      const aslCallsign = nodeNum && statsData[nodeNum]?.callsign;
+      const hasFallback = aslCallsign && aslCallsign.toUpperCase() !== callsign.toUpperCase();
+      const [rec, aslRec] = await Promise.all([
+        fetchQRZ(callsign),
+        hasFallback ? fetchQRZ(aslCallsign) : Promise.resolve(null),
+      ]);
       if (!el.matches(':hover')) return;
-      if (!rec) return;
-      const content = formatQRZ(callsign, rec);
+      let content;
+      if (rec && aslRec) {
+        const sameResult = rec.callsign && aslRec.callsign &&
+          rec.callsign.toUpperCase() === aslRec.callsign.toUpperCase();
+        content = sameResult
+          ? formatQRZ(callsign, rec)
+          : formatQRZ(callsign, rec) + '<hr class="my-1">' + formatQRZ(aslCallsign, aslRec);
+      } else if (rec) {
+        content = formatQRZ(callsign, rec);
+      } else if (aslRec) {
+        content = formatQRZ(aslCallsign, aslRec);
+      } else {
+        return;
+      }
       const pop = new bootstrap.Popover(el, {
         content:   content,
         html:      true,
