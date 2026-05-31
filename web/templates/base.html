@@ -219,6 +219,15 @@
           </div>
           <hr>
           <div class="mb-3">
+            <label class="form-label fw-semibold">Passkeys</label>
+            <div id="passkey-list" class="mb-2"></div>
+            <button class="btn btn-sm btn-outline-primary" type="button" onclick="addPasskey()">
+              <i class="bi bi-key me-1"></i>Add passkey
+            </button>
+            <div class="text-danger small mt-1" id="passkey-error"></div>
+          </div>
+          <hr>
+          <div class="mb-3">
             <label for="profile-current-pw" class="form-label">Current Password</label>
             <input type="password" class="form-control" id="profile-current-pw"
                    autocomplete="current-password" placeholder="Required only if changing password">
@@ -285,6 +294,7 @@
         setProfileQRZConfigured(!!profile.qrz_configured);
       }
     } catch (_) {}
+    loadPasskeyList();
     _profileModal.show();
   }
   function containsLogin(list, login) {
@@ -455,6 +465,116 @@
     try {
       await fetch('/api/profile/qrz/cache', { method: 'DELETE' });
     } catch (_) {}
+  }
+
+  // --- Passkeys ---
+  function b64url(str) {
+    const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return buf.buffer;
+  }
+  function ab2b64(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
+
+  async function loadPasskeyList() {
+    const el = document.getElementById('passkey-list');
+    if (!el) return;
+    el.innerHTML = '<span class="text-muted small">Loading…</span>';
+    try {
+      const res = await fetch('/api/passkeys');
+      const creds = res.ok ? (await res.json()) : [];
+      if (!creds || !creds.length) {
+        el.innerHTML = '<p class="text-muted small mb-0">No passkeys registered.</p>';
+        return;
+      }
+      el.innerHTML = creds.map(c => `
+        <div class="d-flex align-items-center gap-2 mb-1" id="pk-row-${c.id}">
+          <i class="bi bi-key text-secondary"></i>
+          <span class="flex-grow-1 small" id="pk-name-${c.id}">${esc(c.name)}</span>
+          <button class="btn btn-sm btn-link p-0" title="Rename" onclick="renamePasskey(${c.id})"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-link p-0 text-danger" title="Delete" onclick="deletePasskey(${c.id})"><i class="bi bi-trash"></i></button>
+        </div>`).join('');
+    } catch (_) {
+      el.innerHTML = '<span class="text-danger small">Failed to load passkeys.</span>';
+    }
+  }
+
+  async function addPasskey() {
+    const errEl = document.getElementById('passkey-error');
+    errEl.textContent = '';
+    if (!window.PublicKeyCredential) {
+      errEl.textContent = 'Your browser does not support passkeys.';
+      return;
+    }
+    const name = prompt('Name for this passkey (e.g. "MacBook Touch ID"):');
+    if (!name) return;
+    try {
+      const beginRes = await fetch('/api/passkeys/register/begin', { method: 'POST' });
+      if (!beginRes.ok) throw new Error(await beginRes.text());
+      const options = await beginRes.json();
+
+      options.publicKey.challenge = b64url(options.publicKey.challenge);
+      options.publicKey.user.id  = b64url(options.publicKey.user.id);
+      if (options.publicKey.excludeCredentials) {
+        options.publicKey.excludeCredentials = options.publicKey.excludeCredentials.map(c => ({
+          ...c, id: b64url(c.id),
+        }));
+      }
+
+      const cred = await navigator.credentials.create({ publicKey: options.publicKey });
+
+      const resp = cred.response;
+      const regResp = {
+        id:       cred.id,
+        rawId:    ab2b64(cred.rawId),
+        type:     cred.type,
+        response: {
+          attestationObject: ab2b64(resp.attestationObject),
+          clientDataJSON:    ab2b64(resp.clientDataJSON),
+        },
+      };
+      // Include optional fields when available (improves compatibility).
+      if (typeof resp.getTransports === 'function') regResp.response.transports = resp.getTransports();
+      if (typeof resp.getAuthenticatorData === 'function') regResp.response.authenticatorData = ab2b64(resp.getAuthenticatorData());
+      if (typeof resp.getPublicKey === 'function' && resp.getPublicKey()) regResp.response.publicKey = ab2b64(resp.getPublicKey());
+      if (typeof resp.getPublicKeyAlgorithm === 'function') regResp.response.publicKeyAlgorithm = resp.getPublicKeyAlgorithm();
+
+      const finishRes = await fetch(`/api/passkeys/register/finish?name=${encodeURIComponent(name)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(regResp),
+      });
+      if (!finishRes.ok) throw new Error(await finishRes.text());
+      await loadPasskeyList();
+    } catch (err) {
+      if (err.name !== 'NotAllowedError') errEl.textContent = err.message || 'Failed to register passkey.';
+    }
+  }
+
+  async function renamePasskey(id) {
+    const name = prompt('New name:', document.getElementById(`pk-name-${id}`)?.textContent || '');
+    if (!name) return;
+    const res = await fetch(`/api/passkeys/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) await loadPasskeyList();
+    else document.getElementById('passkey-error').textContent = await res.text();
+  }
+
+  async function deletePasskey(id) {
+    if (!confirm('Delete this passkey?')) return;
+    const res = await fetch(`/api/passkeys/${id}`, { method: 'DELETE' });
+    if (res.ok) await loadPasskeyList();
+    else document.getElementById('passkey-error').textContent = await res.text();
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
   </script>
   {{end}}

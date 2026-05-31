@@ -28,8 +28,87 @@
           </div>
           <button type="submit" class="btn btn-primary w-100">Sign in</button>
         </form>
+
+        <div class="d-flex align-items-center my-3">
+          <hr class="flex-grow-1"><span class="px-2 text-muted small">or</span><hr class="flex-grow-1">
+        </div>
+
+        <button id="passkey-btn" class="btn btn-outline-secondary w-100" type="button">
+          <i class="bi bi-key me-2"></i>Sign in with passkey
+        </button>
+        <div id="passkey-error" class="alert alert-danger py-2 mt-2 d-none"></div>
       </div>
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+  const btn = document.getElementById('passkey-btn');
+  const errDiv = document.getElementById('passkey-error');
+
+  function showErr(msg) {
+    errDiv.textContent = msg;
+    errDiv.classList.remove('d-none');
+  }
+
+  if (!window.PublicKeyCredential) {
+    btn.disabled = true;
+    btn.title = 'Your browser does not support passkeys';
+  }
+
+  btn.addEventListener('click', async () => {
+    errDiv.classList.add('d-none');
+    btn.disabled = true;
+    try {
+      const beginRes = await fetch('/api/passkeys/login/begin', { method: 'POST' });
+      if (!beginRes.ok) throw new Error(await beginRes.text());
+      const options = await beginRes.json();
+
+      // Convert base64url strings to ArrayBuffers expected by the browser API.
+      options.publicKey.challenge = b64url(options.publicKey.challenge);
+      if (options.publicKey.allowCredentials) {
+        options.publicKey.allowCredentials = options.publicKey.allowCredentials.map(c => ({
+          ...c, id: b64url(c.id),
+        }));
+      }
+
+      const assertion = await navigator.credentials.get({ publicKey: options.publicKey });
+
+      const finishRes = await fetch('/api/passkeys/login/finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id:       assertion.id,
+          rawId:    ab2b64(assertion.rawId),
+          type:     assertion.type,
+          response: {
+            authenticatorData: ab2b64(assertion.response.authenticatorData),
+            clientDataJSON:    ab2b64(assertion.response.clientDataJSON),
+            signature:         ab2b64(assertion.response.signature),
+            userHandle:        assertion.response.userHandle ? ab2b64(assertion.response.userHandle) : null,
+          },
+        }),
+      });
+      if (!finishRes.ok) throw new Error(await finishRes.text());
+      const data = await finishRes.json();
+      window.location.href = data.redirect || '/';
+    } catch (err) {
+      if (err.name !== 'NotAllowedError') showErr(err.message || 'Passkey sign-in failed');
+      btn.disabled = false;
+    }
+  });
+
+  function b64url(str) {
+    const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return buf.buffer;
+  }
+  function ab2b64(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
+}());
+</script>
 {{end}}

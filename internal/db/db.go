@@ -21,11 +21,17 @@ type DB struct {
 
 // Open opens the SQLite database at path and runs all pending migrations.
 func Open(path string) (*DB, error) {
-	conn, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on")
+	conn, err := sql.Open("sqlite", path+"?_journal_mode=WAL")
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 	conn.SetMaxOpenConns(1) // SQLite is single-writer
+
+	// modernc.org/sqlite ignores DSN pragma params; enforce via PRAGMA statement.
+	if _, err := conn.ExecContext(context.Background(), "PRAGMA foreign_keys = ON"); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("enable foreign keys: %w", err)
+	}
 
 	db := &DB{sql: conn, path: path}
 	if err := db.migrate(); err != nil {
@@ -202,6 +208,43 @@ var migrations = []migration{
 			`ALTER TABLE users ADD COLUMN qrz_username TEXT NOT NULL DEFAULT ''`,
 			`ALTER TABLE users ADD COLUMN qrz_password_enc TEXT NOT NULL DEFAULT ''`,
 			`ALTER TABLE users ADD COLUMN lookup_source TEXT NOT NULL DEFAULT ''`,
+		} {
+			if _, err := tx.ExecContext(ctx, stmt); err != nil {
+				return err
+			}
+		}
+		return nil
+	}},
+	{version: 10, fn: func(ctx context.Context, tx *sql.Tx) error {
+		for _, stmt := range []string{
+			`ALTER TABLE users ADD COLUMN webauthn_id BLOB`,
+			`CREATE TABLE IF NOT EXISTS webauthn_credentials (
+				id              INTEGER PRIMARY KEY AUTOINCREMENT,
+				user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				credential_id   BLOB UNIQUE NOT NULL,
+				name            TEXT NOT NULL DEFAULT '',
+				credential_json TEXT NOT NULL,
+				created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+				last_used_at    DATETIME
+			)`,
+			`CREATE TABLE IF NOT EXISTS webauthn_sessions (
+				session_id   TEXT PRIMARY KEY,
+				ceremony     TEXT NOT NULL,
+				user_id      INTEGER,
+				session_json TEXT NOT NULL,
+				expires_at   INTEGER NOT NULL
+			)`,
+		} {
+			if _, err := tx.ExecContext(ctx, stmt); err != nil {
+				return err
+			}
+		}
+		return nil
+	}},
+	{version: 11, fn: func(ctx context.Context, tx *sql.Tx) error {
+		for _, stmt := range []string{
+			`ALTER TABLE webauthn_sessions ADD COLUMN rpid   TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE webauthn_sessions ADD COLUMN origin TEXT NOT NULL DEFAULT ''`,
 		} {
 			if _, err := tx.ExecContext(ctx, stmt); err != nil {
 				return err

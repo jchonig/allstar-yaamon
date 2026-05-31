@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -45,14 +46,15 @@ type User struct {
 	QRZUsername    string
 	QRZPasswordEnc string
 	LookupSource   string
+	WebAuthnID     []byte
 }
 
-const userSelectCols = `id, username, password, permission, full_name, avatar_url, qrz_username, qrz_password_enc, lookup_source`
+const userSelectCols = `id, username, password, permission, full_name, avatar_url, qrz_username, qrz_password_enc, lookup_source, webauthn_id`
 
 func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	u := &User{}
 	err := row.Scan(&u.ID, &u.Username, &u.Password, &u.Permission, &u.FullName, &u.AvatarURL,
-		&u.QRZUsername, &u.QRZPasswordEnc, &u.LookupSource)
+		&u.QRZUsername, &u.QRZPasswordEnc, &u.LookupSource, &u.WebAuthnID)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +155,27 @@ func (db *DB) UpdateUserLookupSource(ctx context.Context, id int64, source strin
 	_, err := db.sql.ExecContext(ctx,
 		`UPDATE users SET lookup_source = ? WHERE id = ?`, source, id)
 	return err
+}
+
+// GetOrSetWebAuthnID returns the user's stable WebAuthn user handle, generating
+// and persisting a 64-byte random one if it doesn't exist yet.
+func (db *DB) GetOrSetWebAuthnID(ctx context.Context, userID int64) ([]byte, error) {
+	var id []byte
+	err := db.sql.QueryRowContext(ctx, `SELECT webauthn_id FROM users WHERE id = ?`, userID).Scan(&id)
+	if err != nil {
+		return nil, fmt.Errorf("get webauthn_id: %w", err)
+	}
+	if len(id) > 0 {
+		return id, nil
+	}
+	id = make([]byte, 64)
+	if _, err := rand.Read(id); err != nil {
+		return nil, fmt.Errorf("generate webauthn_id: %w", err)
+	}
+	if _, err := db.sql.ExecContext(ctx, `UPDATE users SET webauthn_id = ? WHERE id = ?`, id, userID); err != nil {
+		return nil, fmt.Errorf("save webauthn_id: %w", err)
+	}
+	return id, nil
 }
 
 // DeleteUser deletes the user with the given id.
