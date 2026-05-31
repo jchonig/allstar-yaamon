@@ -12,6 +12,7 @@ YAAMon is a modern, responsive web application for managing and monitoring [AllS
 - Multi-user with role-based access (superuser / admin / readwrite / readonly)
 - Adaptive AllStarLink stats fetching — deduplicates across all open dashboards, switches between bulk and individual endpoints automatically to stay within API rate limits
 - Live dashboard with SSE-pushed updates (no page refresh needed)
+- Passkey / WebAuthn (FIDO2) authentication support
 - Encrypted backup and restore
 - Multiple color themes including high-contrast
 
@@ -23,259 +24,50 @@ YAAMon is a modern, responsive web application for managing and monitoring [AllS
 
 ## Installation
 
-### Option 1 — Debian / Ubuntu package (recommended for ASL3 nodes)
+| Method | Best for |
+|--------|----------|
+| [Debian / Ubuntu package](docs/installation/deb.md) | ASL3 nodes (Raspberry Pi, x86 server) — recommended |
+| [Pre-built binary](docs/installation/binary.md) | Non-Debian Linux, manual systemd setup |
+| [Docker](docs/installation/docker.md) | Quick start, isolated environment |
+| [docker-compose](docs/installation/docker-compose.md) | Production Docker deployments |
+| [Building from source](docs/installation/building.md) | Development, custom builds |
 
-> **Port note**: ASL3 already runs Apache2 on port 80. YAAMon defaults to port 8080 to avoid the conflict. Access it at `http://<your-node-ip>:8080/` (or `http://nodeXXXXX.local:8080/`). See [Changing the port](#changing-the-port) below if you want a different port or to front it with Apache.
-
-Download the `.deb` for your architecture from the [Releases page](https://github.com/jchonig/allstar-yaamon/releases/latest):
-
-| Platform | File |
-|----------|------|
-| Raspberry Pi 3B+ / Zero 2 W / Pi 4 / Pi 5 | `yaamon_*_linux_arm64.deb` |
-| x86-64 server / VM | `yaamon_*_linux_amd64.deb` |
+### Quick start — Debian / Ubuntu
 
 ```bash
-# Example — replace version and arch as appropriate
-wget https://github.com/jchonig/allstar-yaamon/releases/download/v1.0.0/yaamon_1.0.0_linux_arm64.deb
-sudo dpkg -i yaamon_1.0.0_linux_arm64.deb
+wget https://github.com/jchonig/allstar-yaamon/releases/latest/download/yaamon_linux_arm64.deb
+sudo dpkg -i yaamon_linux_arm64.deb
 ```
 
-The package installs the binary to `/usr/local/bin/yaamon`, a systemd unit, and a starter config at `/etc/yaamon/config.yaml`. The service starts automatically on install.
+Access at `http://<your-node-ip>:8080/`. Default port is **8080** to coexist with ASL3's Apache on port 80.
+
+### Quick start — Docker
 
 ```bash
-# Check it started
-sudo systemctl status yaamon
-
-# View logs
-sudo journalctl -u yaamon -f
-```
-
-Open `http://<your-node-ip>:8080/` in a browser. On first visit you will be directed to the setup page to create your admin account.
-
-### Option 2 — Pre-built binary (tarball)
-
-Download the tarball for your platform from the [Releases page](https://github.com/jchonig/allstar-yaamon/releases/latest), extract, and run:
-
-```bash
-tar xzf yaamon_*_linux_arm64.tar.gz
-sudo mv yaamon /usr/local/bin/
-yaamon serve --config /etc/yaamon/config.yaml
-```
-
-For persistent operation copy the [contrib/yaamon.service](contrib/yaamon.service) systemd unit to `/etc/systemd/system/` and enable it:
-
-```bash
-sudo cp contrib/yaamon.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now yaamon
-```
-
-### Option 3 — Docker
-
-```bash
-docker run -d \
-  --name yaamon \
-  --restart unless-stopped \
+docker run -d --name yaamon --restart unless-stopped \
   -p 8080:8080 \
   -v /etc/yaamon:/etc/yaamon \
   -v /var/lib/yaamon:/var/lib/yaamon \
   ghcr.io/jchonig/yaamon:latest
 ```
 
-Mount your config file at `/etc/yaamon/config.yaml` and a persistent data volume at `/var/lib/yaamon`. The database is created at `/var/lib/yaamon/yaamon.db` on first run. Access at `http://<host>:8080/`.
-
-### Option 4 — docker-compose
-
-```yaml
-services:
-  yaamon:
-    image: ghcr.io/jchonig/yaamon:latest
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./config:/etc/yaamon       # config.yaml lives here
-      - yaamon-data:/var/lib/yaamon  # named volume for the SQLite database
-    environment:
-      # Override any config.yaml value with YAAMON_<SECTION>_<KEY>
-      - YAAMON_LOG_LEVEL=info
-
-volumes:
-  yaamon-data:
-```
-
-A bind-mount directory works too — replace `yaamon-data:/var/lib/yaamon` with `./data:/var/lib/yaamon` if you prefer the database stored at a known path on the host.
-
-#### Bind-mount ownership (PUID / PGID)
-
-When using a bind-mount for `/var/lib/yaamon`, the host directory must be writable by the user inside the container. By default the container runs as uid/gid 1000. If your host directory is owned by a different user, set `PUID` and `PGID` to match:
-
-```yaml
-    environment:
-      - PUID=1000   # uid of the host directory owner
-      - PGID=1000   # gid of the host directory owner
-```
-
-The entrypoint adjusts the `yaamon` user to the specified uid/gid before starting the server. Named Docker volumes (the default) are always owned correctly and do not require this.
-
-To run on non-standard ports, map the host ports in `ports` and set matching values in `config.yaml` (or via environment variables):
-
-```yaml
-    ports:
-      - "8080:8080"
-      - "8443:8443"
-    environment:
-      - YAAMON_SERVER_HTTP_PORT=8080
-      - YAAMON_SERVER_HTTPS_PORT=8443
-```
-
-```bash
-docker compose up -d
-docker compose logs -f
-```
-
 ---
 
-## Configuration
+## Documentation
 
-Copy `config.yaml.example` to `config.yaml` and edit it before first run:
-
-```yaml
-server:
-  http_port: 8080            # default; coexists with ASL3's Apache on port 80
-  https_port: 443
-
-tls:
-  mode: disabled             # disabled | self_signed | provided | acme
-
-db:
-  path: /var/lib/yaamon/yaamon.db
-
-log:
-  level: info
-```
-
-Any config value can be overridden with an environment variable using the pattern `YAAMON_<SECTION>_<KEY>` — for example `YAAMON_DB_PATH=/var/lib/yaamon/yaamon.db`.
-
-See [`config.yaml.example`](config.yaml.example) for all options including TLS and UI footer customization.
-
----
-
-## Changing the port
-
-YAAMon's default HTTP port is **8080** so it can coexist with ASL3's Apache on port 80. To change it, edit `/etc/yaamon/config.yaml`:
-
-```yaml
-server:
-  http_port: 8080      # change to any available port
-```
-
-Then restart the service:
-
-```bash
-sudo systemctl restart yaamon
-```
-
-Any config value can also be set via environment variable — e.g. `YAAMON_SERVER_HTTP_PORT=9000`.
-
-### Running on port 80 (standalone, no ASL3 Apache)
-
-If YAAMon is the only web service on the host (e.g. a dedicated Pi), set `http_port: 80`. You will need to either run as root or grant the binary the `CAP_NET_BIND_SERVICE` capability:
-
-```bash
-sudo setcap cap_net_bind_service=+ep /usr/local/bin/yaamon
-```
-
-### Fronting with Apache (ASL3 coexistence on port 80)
-
-If you want YAAMon reachable on port 80 via Apache, use a reverse proxy. Ensure `mod_proxy` and `mod_proxy_http` are enabled:
-
-```bash
-sudo a2enmod proxy proxy_http
-```
-
-Create `/etc/apache2/conf-available/yaamon.conf`:
-
-```apache
-ProxyPreserveHost On
-ProxyPass        /yaamon/ http://127.0.0.1:8080/
-ProxyPassReverse /yaamon/ http://127.0.0.1:8080/
-```
-
-Enable and reload:
-
-```bash
-sudo a2enconf yaamon
-sudo systemctl reload apache2
-```
-
-> **Note**: Full subfolder support (so all links and redirects work under `/yaamon/`) requires a code change tracked in [issue #14](https://github.com/jchonig/allstar-yaamon/issues/14). Until then, proxying at root (`/` → `http://localhost:8080/`) works without any code changes.
-
----
-
-## TLS / HTTPS
-
-YAAMon has four TLS modes set in `config.yaml`:
-
-| Mode | When to use |
-|------|-------------|
-| `disabled` | HTTP only — local LAN, behind a reverse proxy |
-| `self_signed` | Generates a self-signed cert on first run — quick setup, browser warning |
-| `provided` | Supply your own `cert_file` and `key_file` |
-| `acme` | Automatic Let's Encrypt via ACME — requires a public domain name and port 80 reachable from the internet |
-
-> **Planned**: DNS-01 ACME challenge support (no port 80 required, wildcard certificates) and automatic hot-reload of externally-managed certificates (e.g. from certbot) are planned for a future release.
-
----
-
-## Building from Source
-
-Builds run inside Docker — Go does not need to be installed on the host. Only Docker is required.
-
-```bash
-git clone https://github.com/jchonig/allstar-yaamon.git
-cd allstar-yaamon
-make build               # builds a Docker image for the current platform
-make test                # unit + integration tests (also runs in Docker)
-make snapshot            # GoReleaser cross-compile snapshot (all platforms + .deb)
-make test-deb            # build snapshot .deb and run integration tests against it
-```
-
----
-
-## Systemd Quick Reference
-
-```bash
-sudo systemctl start yaamon
-sudo systemctl stop yaamon
-sudo systemctl restart yaamon
-sudo systemctl status yaamon
-sudo journalctl -u yaamon -f        # live logs
-sudo journalctl -u yaamon --since today
-```
-
----
-
-## AMI Security Note
-
-The Asterisk Manager Interface (AMI) used to connect to your nodes transmits credentials and commands in plain text by default. **Do not expose AMI port 5038 directly to the internet.** For remote nodes, use one of:
-
-- A VPN (WireGuard, OpenVPN) between the YAAMon host and the remote node
-- An SSH tunnel: `ssh -L 5038:localhost:5038 user@remote-node`
-
-See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed setup guidance and [REFERENCE.md](REFERENCE.md) for the full CLI reference.
+- [Installation](docs/installation/README.md) — all installation methods, migration from AllScan/Allmon3
+- [Configuration](docs/configuration/README.md) — config file reference, TLS, AMI, authentication
+- [User Guide](docs/user-guide/README.md) — dashboard, favorites, profile, passkeys
+- [Security](docs/security/README.md) — web security, AMI security
+- [Troubleshooting](docs/troubleshooting/README.md) — debug logging, common issues
+- [CLI Reference](docs/reference/cli.md) — all `yaamon` subcommands and flags
+- [Design](docs/design/README.md) — architecture, database schema, API, CI/CD
 
 ---
 
 ## Migrating from AllScan or Allmon3
 
-YAAMon has built-in import support — no conversion scripts needed.
-
-**From Allmon3**: go to **Admin → Nodes**, click **Import from Allmon3**, and upload your `allmon3.ini` file. YAAMon lists the nodes found; select the ones to import and confirm. AMI credentials are read from the file.
-
-**From AllScan**: go to **Favorites**, click **Import**, and upload your `favorites.ini` file. YAAMon extracts node numbers and labels (splitting callsign from description where possible) and imports them as favorites for the selected node.
-
-YAAMon uses its own database and can run alongside AllScan or Allmon3 during transition.
+See [docs/installation/migration.md](docs/installation/migration.md) — built-in import support, no conversion scripts needed.
 
 ---
 
