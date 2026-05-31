@@ -328,6 +328,20 @@ Enter your current password and a new password to change it. Passwords must be a
 
 If your site uses [Tailscale authentication](#tailscale-authentication), enter your Tailscale login name (e.g. `jch@honig.net`) here. Separate multiple logins with commas. When a request arrives from Tailscale with a matching identity header, you will be logged in automatically without a password.
 
+### Callsign Lookup
+
+![Callsign Lookup and Passkeys](docs/images/passkeys.png)
+
+Choose which source to use for callsign lookups on the dashboard:
+
+| Option | Description |
+|--------|-------------|
+| **Automatic** | Uses QRZ.com when credentials are configured, otherwise callook.info (US only) |
+| **callook.info** | Always use callook.info (free, US callsigns only) |
+| **QRZ.com** | Always use QRZ.com (requires a QRZ.com subscription) |
+
+To configure QRZ.com credentials, expand **QRZ.com Credentials**, enter your QRZ.com username and password, and click **Save QRZ**. Click **Remove** to clear stored credentials, or **Clear cache** to force fresh lookups.
+
 ---
 
 ## Themes
