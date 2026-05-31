@@ -578,6 +578,8 @@ When a session is established via Tailscale auth, a shield icon (🛡) appears n
 
 ## Passkeys (WebAuthn / FIDO2)
 
+![Passkeys in Profile](docs/images/passkeys.png)
+
 Passkeys let users authenticate without a password using a platform authenticator (Touch ID, Face ID, Windows Hello) or a hardware security key (YubiKey, etc.). Any FIDO2-compatible password manager — Bitwarden, 1Password, iCloud Keychain — also works as a passkey provider.
 
 ### How it works
