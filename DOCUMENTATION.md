@@ -30,6 +30,8 @@ When you open YAAMon for the first time — before any users exist — you are r
 
 After creating the account you are taken to the login page. Sign in with the credentials you just created.
 
+![Login page](docs/images/login.png)
+
 > If you need to bootstrap a fresh install non-interactively (e.g., in a Docker environment), set `YAAMON_STATE_FILE` to the path of a state file — it will be applied automatically on container start. See [Declarative State](#declarative-state-yaamon-apply).
 
 ---
@@ -301,7 +303,7 @@ Click the graph icon on any connection row to open an interactive network graph 
 
 ## Your Profile
 
-![My Profile](docs/images/profile.png)
+![My Profile](docs/images/passkeys.png)
 
 Click your name or avatar in the top-right corner and choose **My Profile**.
 
@@ -327,6 +329,18 @@ Enter your current password and a new password to change it. Passwords must be a
 ### Tailscale Usernames
 
 If your site uses [Tailscale authentication](#tailscale-authentication), enter your Tailscale login name (e.g. `jch@honig.net`) here. Separate multiple logins with commas. When a request arrives from Tailscale with a matching identity header, you will be logged in automatically without a password.
+
+### Callsign Lookup
+
+Choose which source to use for callsign lookups on the dashboard:
+
+| Option | Description |
+|--------|-------------|
+| **Automatic** | Uses QRZ.com when credentials are configured, otherwise callook.info (US only) |
+| **callook.info** | Always use callook.info (free, US callsigns only) |
+| **QRZ.com** | Always use QRZ.com (requires a QRZ.com subscription) |
+
+To configure QRZ.com credentials, expand **QRZ.com Credentials**, enter your QRZ.com username and password, and click **Save QRZ**. Click **Remove** to clear stored credentials, or **Clear cache** to force fresh lookups.
 
 ---
 
@@ -578,6 +592,8 @@ When a session is established via Tailscale auth, a shield icon (🛡) appears n
 
 ## Passkeys (WebAuthn / FIDO2)
 
+The Passkeys panel is visible in the [My Profile screenshot](#your-profile) above.
+
 Passkeys let users authenticate without a password using a platform authenticator (Touch ID, Face ID, Windows Hello) or a hardware security key (YubiKey, etc.). Any FIDO2-compatible password manager — Bitwarden, 1Password, iCloud Keychain — also works as a passkey provider.
 
 ### How it works
@@ -618,7 +634,7 @@ When `webauthn.rpid` and `webauthn.rp_origins` are both set, the configured valu
 
 ### Signing in with a passkey
 
-On the login page, click **Sign in with passkey** below the password form. The browser will present any stored credentials for the site.
+On the login page (see [login screenshot](#first-time-setup) above), click **Sign in with passkey** below the password form. The browser will present any stored credentials for the site.
 
 ### Managing passkeys
 
