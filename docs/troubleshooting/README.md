@@ -81,6 +81,29 @@ Check:
 4. The secret in YAAMon matches `manager.conf`
 5. The AMI port (default 5038) is not blocked by a firewall
 
+### Opening the AMI port on AllStarLink Appliance
+
+AllStarLink Appliance uses firewalld. The AMI service definition is called `astmgr`.
+
+**Cockpit** (browser UI at `http://<node-ip>:9090`):
+1. Go to **Networking → Firewall**.
+2. Under the `public` zone, click **Add Services**.
+3. Search for `astmgr` and enable it.
+4. Click **Add Services** to apply.
+
+**firewalld CLI:**
+
+```bash
+# Allow AMI permanently and reload
+sudo firewall-cmd --permanent --add-service=astmgr
+sudo firewall-cmd --reload
+
+# Verify
+sudo firewall-cmd --list-services
+```
+
+> **Note**: Only open the AMI port to trusted hosts. If YAAMon runs on the same machine as Asterisk, no firewall change is needed — `localhost` connections are not affected by firewalld's public zone.
+
 Test connectivity without starting the full server:
 
 ```bash
