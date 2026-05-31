@@ -24,6 +24,8 @@ type WebAuthnSession struct {
 	UserID      *int64
 	SessionJSON string
 	ExpiresAt   time.Time
+	RPID        string
+	Origin      string
 }
 
 func (db *DB) CreateCredential(ctx context.Context, userID int64, credID []byte, name, credJSON string) (*Credential, error) {
@@ -120,29 +122,31 @@ func (db *DB) CountCredentials(ctx context.Context, userID int64) (int, error) {
 	return n, err
 }
 
-func (db *DB) CreateWebAuthnSession(ctx context.Context, sessionID, ceremony string, userID *int64, sessionJSON string, expiresAt time.Time) error {
+func (db *DB) CreateWebAuthnSession(ctx context.Context, sessionID, ceremony, rpid, origin string, userID *int64, sessionJSON string, expiresAt time.Time) error {
 	_, err := db.sql.ExecContext(ctx,
-		`INSERT INTO webauthn_sessions (session_id, ceremony, user_id, session_json, expires_at) VALUES (?, ?, ?, ?, ?)`,
-		sessionID, ceremony, userID, sessionJSON, expiresAt)
+		`INSERT INTO webauthn_sessions (session_id, ceremony, user_id, session_json, expires_at, rpid, origin) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		sessionID, ceremony, userID, sessionJSON, expiresAt.Unix(), rpid, origin)
 	return err
 }
 
 func (db *DB) GetAndDeleteWebAuthnSession(ctx context.Context, sessionID string) (*WebAuthnSession, error) {
 	var s WebAuthnSession
+	var expiresUnix int64
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT session_id, ceremony, user_id, session_json, expires_at FROM webauthn_sessions WHERE session_id = ?`,
-		sessionID).Scan(&s.SessionID, &s.Ceremony, &s.UserID, &s.SessionJSON, &s.ExpiresAt)
+		`SELECT session_id, ceremony, user_id, session_json, expires_at, rpid, origin FROM webauthn_sessions WHERE session_id = ?`,
+		sessionID).Scan(&s.SessionID, &s.Ceremony, &s.UserID, &s.SessionJSON, &expiresUnix, &s.RPID, &s.Origin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get webauthn session: %w", err)
 	}
+	s.ExpiresAt = time.Unix(expiresUnix, 0)
 	_, _ = db.sql.ExecContext(ctx, `DELETE FROM webauthn_sessions WHERE session_id = ?`, sessionID)
 	return &s, nil
 }
 
 func (db *DB) PruneWebAuthnSessions(ctx context.Context) error {
-	_, err := db.sql.ExecContext(ctx, `DELETE FROM webauthn_sessions WHERE expires_at < CURRENT_TIMESTAMP`)
+	_, err := db.sql.ExecContext(ctx, `DELETE FROM webauthn_sessions WHERE expires_at < unixepoch()`)
 	return err
 }

@@ -576,6 +576,63 @@ When a session is established via Tailscale auth, a shield icon (🛡) appears n
 
 ---
 
+## Passkeys (WebAuthn / FIDO2)
+
+Passkeys let users authenticate without a password using a platform authenticator (Touch ID, Face ID, Windows Hello) or a hardware security key (YubiKey, etc.). Any FIDO2-compatible password manager — Bitwarden, 1Password, iCloud Keychain — also works as a passkey provider.
+
+### How it works
+
+1. A registered user opens their **Profile → Passkeys** panel and clicks **Add passkey**.
+2. The browser prompts them to use an authenticator. A resident key (discoverable credential) is stored on the device or in their password manager.
+3. On subsequent logins the user clicks **Sign in with passkey** on the login page. The browser presents the stored credential, no username or password is needed.
+
+### Zero-config operation
+
+YAAMon derives the WebAuthn Relying Party ID and origin automatically from the `Origin` (or `Host`) header of each request. This means passkeys work out of the box with any hostname — no additional configuration is required for most deployments.
+
+### Configuration
+
+Explicit configuration is only needed when the automatic derivation would produce the wrong hostname (e.g., when accessed behind a reverse proxy that rewrites the `Origin` header):
+
+```yaml
+webauthn:
+  rpid: "yourdomain.example"          # Relying Party ID — must be a registered domain suffix
+  rp_origins:
+    - "https://yourdomain.example"    # List of allowed origins
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `webauthn.rpid` | derived from `Origin`/`Host` header | Relying Party ID (domain, no port) |
+| `webauthn.rp_origins` | derived from `Origin`/`Host` header | Allowed WebAuthn origins |
+
+When `webauthn.rpid` and `webauthn.rp_origins` are both set, the configured values take precedence for all ceremonies.
+
+### Registering a passkey
+
+1. Log in with your username and password.
+2. Open the user menu (top-right) and click **Profile**.
+3. Scroll to the **Passkeys** section and click **Add passkey**.
+4. Follow the browser prompt to create the credential.
+5. Optionally give the passkey a descriptive name (e.g. "MacBook Pro Touch ID") in the dialog.
+
+### Signing in with a passkey
+
+On the login page, click **Sign in with passkey** below the password form. The browser will present any stored credentials for the site.
+
+### Managing passkeys
+
+In the **Passkeys** section of the Profile modal:
+
+- **Rename** — click the pencil icon next to any passkey to give it a new name.
+- **Delete** — click the trash icon to remove a passkey.
+
+#### Safety guard
+
+If a passkey is the last one associated with an account **and** the account has no password set (passkey-only accounts created without a password), deletion is blocked with a `409 Conflict` error. This prevents being locked out. Set a password first, or add a second passkey, before removing the last one.
+
+---
+
 ## Troubleshooting
 
 ### Enabling debug logging

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -63,6 +64,65 @@ func (s *Server) buildWAUser(r *http.Request, userID int64) (*waUser, error) {
 	return &waUser{user: u, creds: creds}, nil
 }
 
+// requestOrigin derives the WebAuthn origin and RPID from the incoming request.
+// If webauthn.rpid / webauthn.rp_origins are explicitly configured those win;
+// otherwise we derive them from the request's Origin / Host header so the
+// ceremony works regardless of which hostname the user is accessing from.
+func (s *Server) requestOriginRPID(r *http.Request) (origin, rpid string) {
+	// Explicit config always wins.
+	if s.webAuthn != nil && len(s.cfg.WebAuthn.RPOrigins) > 0 {
+		return s.cfg.WebAuthn.RPOrigins[0], s.cfg.WebAuthn.RPID
+	}
+
+	// Use the Origin header if present; fall back to constructing from Host.
+	raw := r.Header.Get("Origin")
+	if raw == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		raw = scheme + "://" + r.Host
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "http://localhost", "localhost"
+	}
+
+	// RPID is the hostname without port.
+	rpid = u.Hostname()
+	// Normalise the origin to scheme + host (no trailing slash or path).
+	origin = u.Scheme + "://" + u.Host
+	return origin, rpid
+}
+
+// webAuthnForRequest returns a *webauthn.WebAuthn tuned to the origin/RPID
+// derived from the current request, falling back to the pre-built instance.
+func (s *Server) webAuthnForRequest(r *http.Request) (*wawebauthn.WebAuthn, error) {
+	if s.cfg.WebAuthn.RPID != "" && len(s.cfg.WebAuthn.RPOrigins) > 0 {
+		return s.webAuthn, nil
+	}
+	origin, rpid := s.requestOriginRPID(r)
+	return wawebauthn.New(&wawebauthn.Config{
+		RPDisplayName: "YAAMon",
+		RPID:          rpid,
+		RPOrigins:     []string{origin},
+	})
+}
+
+// webAuthnForSession returns a *webauthn.WebAuthn tuned to the origin/RPID
+// stored when the ceremony began.
+func webAuthnForSession(row *db.WebAuthnSession) (*wawebauthn.WebAuthn, error) {
+	if row.RPID == "" || row.Origin == "" {
+		return nil, fmt.Errorf("session missing origin/rpid")
+	}
+	return wawebauthn.New(&wawebauthn.Config{
+		RPDisplayName: "YAAMon",
+		RPID:          row.RPID,
+		RPOrigins:     []string{row.Origin},
+	})
+}
+
 func (s *Server) storeWASession(w http.ResponseWriter, r *http.Request, ceremony string, userID *int64, sd *wawebauthn.SessionData) error {
 	b, err := json.Marshal(sd)
 	if err != nil {
@@ -72,8 +132,9 @@ func (s *Server) storeWASession(w http.ResponseWriter, r *http.Request, ceremony
 	if err != nil {
 		return err
 	}
+	origin, rpid := s.requestOriginRPID(r)
 	exp := time.Now().Add(waCookieTTL)
-	if err := s.db.CreateWebAuthnSession(r.Context(), sessionID, ceremony, userID, string(b), exp); err != nil {
+	if err := s.db.CreateWebAuthnSession(r.Context(), sessionID, ceremony, rpid, origin, userID, string(b), exp); err != nil {
 		return err
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -88,7 +149,12 @@ func (s *Server) storeWASession(w http.ResponseWriter, r *http.Request, ceremony
 	return nil
 }
 
-func (s *Server) fetchWASession(r *http.Request, ceremony string) (*wawebauthn.SessionData, error) {
+type waSession struct {
+	sd     *wawebauthn.SessionData
+	row    *db.WebAuthnSession
+}
+
+func (s *Server) fetchWASession(r *http.Request, ceremony string) (*waSession, error) {
 	c, err := r.Cookie(waCookieName)
 	if err != nil {
 		return nil, fmt.Errorf("no session cookie")
@@ -107,7 +173,7 @@ func (s *Server) fetchWASession(r *http.Request, ceremony string) (*wawebauthn.S
 	if err := json.Unmarshal([]byte(row.SessionJSON), &sd); err != nil {
 		return nil, err
 	}
-	return &sd, nil
+	return &waSession{sd: &sd, row: row}, nil
 }
 
 func clearWACookie(w http.ResponseWriter) {
@@ -121,7 +187,12 @@ func (s *Server) handleAPIPasskeysLoginBegin(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "passkeys not configured", http.StatusNotImplemented)
 		return
 	}
-	options, sd, err := s.webAuthn.BeginDiscoverableLogin()
+	wa, err := s.webAuthnForRequest(r)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	options, sd, err := wa.BeginDiscoverableLogin()
 	if err != nil {
 		slog.Error("passkey login begin", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -140,13 +211,19 @@ func (s *Server) handleAPIPasskeysLoginFinish(w http.ResponseWriter, r *http.Req
 		http.Error(w, "passkeys not configured", http.StatusNotImplemented)
 		return
 	}
-	sd, err := s.fetchWASession(r, "login")
+	was, err := s.fetchWASession(r, "login")
 	if err != nil {
 		clearWACookie(w)
 		http.Error(w, "invalid or expired session", http.StatusBadRequest)
 		return
 	}
 	clearWACookie(w)
+
+	wa, err := webAuthnForSession(was.row)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 
 	var foundUser *db.User
 	handler := func(rawID, userHandle []byte) (wawebauthn.User, error) {
@@ -162,10 +239,10 @@ func (s *Server) handleAPIPasskeysLoginFinish(w http.ResponseWriter, r *http.Req
 		return &waUser{user: u, creds: creds}, nil
 	}
 
-	credential, err := s.webAuthn.FinishDiscoverableLogin(handler, *sd, r)
+	credential, err := wa.FinishDiscoverableLogin(handler, *was.sd, r)
 	if err != nil {
 		slog.Warn("passkey login finish", "err", err)
-		http.Error(w, "authentication failed", http.StatusUnauthorized)
+		http.Error(w, "authentication failed: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 	if foundUser == nil {
@@ -194,10 +271,17 @@ func (s *Server) handleAPIPasskeysRegisterBegin(w http.ResponseWriter, r *http.R
 	sess := auth.FromContext(r.Context())
 	wu, err := s.buildWAUser(r, sess.UserID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		slog.Error("passkey register begin: build user", "err", err)
+		http.Error(w, "internal error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	options, sd, err := s.webAuthn.BeginRegistration(wu,
+	wa, err := s.webAuthnForRequest(r)
+	if err != nil {
+		slog.Error("passkey register begin: webauthn init", "err", err)
+		http.Error(w, "internal error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	options, sd, err := wa.BeginRegistration(wu,
 		wawebauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired),
 	)
 	if err != nil {
@@ -218,7 +302,7 @@ func (s *Server) handleAPIPasskeysRegisterFinish(w http.ResponseWriter, r *http.
 		http.Error(w, "passkeys not configured", http.StatusNotImplemented)
 		return
 	}
-	sd, err := s.fetchWASession(r, "registration")
+	was, err := s.fetchWASession(r, "registration")
 	if err != nil {
 		clearWACookie(w)
 		http.Error(w, "invalid or expired session", http.StatusBadRequest)
@@ -226,16 +310,22 @@ func (s *Server) handleAPIPasskeysRegisterFinish(w http.ResponseWriter, r *http.
 	}
 	clearWACookie(w)
 
+	wa, err := webAuthnForSession(was.row)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	sess := auth.FromContext(r.Context())
 	wu, err := s.buildWAUser(r, sess.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	credential, err := s.webAuthn.FinishRegistration(wu, *sd, r)
+	credential, err := wa.FinishRegistration(wu, *was.sd, r)
 	if err != nil {
 		slog.Warn("passkey register finish", "err", err)
-		http.Error(w, "registration failed", http.StatusBadRequest)
+		http.Error(w, "registration failed: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	credJSON, _ := json.Marshal(credential)

@@ -526,18 +526,26 @@
 
       const cred = await navigator.credentials.create({ publicKey: options.publicKey });
 
+      const resp = cred.response;
+      const regResp = {
+        id:       cred.id,
+        rawId:    ab2b64(cred.rawId),
+        type:     cred.type,
+        response: {
+          attestationObject: ab2b64(resp.attestationObject),
+          clientDataJSON:    ab2b64(resp.clientDataJSON),
+        },
+      };
+      // Include optional fields when available (improves compatibility).
+      if (typeof resp.getTransports === 'function') regResp.response.transports = resp.getTransports();
+      if (typeof resp.getAuthenticatorData === 'function') regResp.response.authenticatorData = ab2b64(resp.getAuthenticatorData());
+      if (typeof resp.getPublicKey === 'function' && resp.getPublicKey()) regResp.response.publicKey = ab2b64(resp.getPublicKey());
+      if (typeof resp.getPublicKeyAlgorithm === 'function') regResp.response.publicKeyAlgorithm = resp.getPublicKeyAlgorithm();
+
       const finishRes = await fetch(`/api/passkeys/register/finish?name=${encodeURIComponent(name)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id:       cred.id,
-          rawId:    ab2b64(cred.rawId),
-          type:     cred.type,
-          response: {
-            attestationObject: ab2b64(cred.response.attestationObject),
-            clientDataJSON:    ab2b64(cred.response.clientDataJSON),
-          },
-        }),
+        body: JSON.stringify(regResp),
       });
       if (!finishRes.ok) throw new Error(await finishRes.text());
       await loadPasskeyList();
