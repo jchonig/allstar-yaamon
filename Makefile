@@ -25,7 +25,7 @@ TEST_ADMIN_PASSWORD  := testpassword
 TEST_VIEWER_PASSWORD := viewerpassword
 
 .PHONY: all build build-multi test test-unit coverage lint deps check \
-        check-whitespace check-tidy compile run stop logs watch \
+        check-whitespace check-tidy check-docs-index docs-index compile run stop logs watch \
         test-integration test-puid e2e e2e-dev snapshot \
         test-deb-integration test-deb \
         install-hooks install-service uninstall-service version clean cleanall
@@ -80,8 +80,23 @@ check-whitespace:
 check-tidy:
 	$(DOCKER_GO) sh -c 'git config --global --add safe.directory /src && go mod tidy && STATUS=$$(git diff go.mod go.sum) && test -z "$$STATUS" || (echo "go.mod/go.sum changed after go mod tidy:"; git diff go.mod go.sum; exit 1)'
 
-## Run all pre-commit checks: whitespace and module tidy.
-check: check-whitespace check-tidy
+## Regenerate docs/README.md table of contents from the docs tree.
+docs-index:
+	./scripts/gen-docs-index.sh
+
+## Fail if docs/README.md is out of date with the docs tree.
+check-docs-index:
+	@./scripts/gen-docs-index.sh
+	@STATUS=$$(git diff docs/README.md); \
+	if [ -n "$$STATUS" ]; then \
+	  echo "docs/README.md is out of date — run 'make docs-index' and commit the result"; \
+	  git diff docs/README.md; \
+	  exit 1; \
+	fi
+	@echo "docs/README.md OK."
+
+## Run all pre-commit checks: whitespace, module tidy, and docs index.
+check: check-whitespace check-tidy check-docs-index
 
 ## Install git pre-commit hook that runs 'make check' before every commit.
 install-hooks:
