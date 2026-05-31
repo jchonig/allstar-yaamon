@@ -570,10 +570,12 @@ function applyStats(stats) {
     const row = tbody.querySelector(`tr[data-node-num="${num}"]`);
     if (!row) continue;
     const cells = row.cells;
+    const fav = favsData.find(x => x.node_number === num);
     cells[0].innerHTML = keyedDot(num);
-    if (s.callsign)       cells[2].innerHTML = `<span class="qrz-tip" data-callsign="${esc(s.callsign)}">${esc(s.callsign)}</span>`;
-    if (s.description) { cells[3].textContent = s.description; cells[3].title = s.description; }
-    if (s.location)    { cells[4].textContent = s.location;    cells[4].title = s.location; }
+    if (s.callsign && !(fav && fav.callsign))
+      cells[2].innerHTML = `<span class="qrz-tip" data-callsign="${esc(s.callsign)}">${esc(s.callsign)}</span>`;
+    if (s.description && !(fav && fav.description)) { cells[3].textContent = s.description; cells[3].title = s.description; }
+    if (s.location    && !(fav && fav.location))    { cells[4].textContent = s.location;    cells[4].title = s.location; }
     if (s.description || s.location) {
       const d = cells[3].textContent.trim();
       const l = cells[4].textContent.trim();
@@ -583,9 +585,8 @@ function applyStats(stats) {
     if (s.connected_links != null) updateLCntCell(cells[6], num, s.connected_links);
     // Rebuild action cell when connection state may have changed.
     if (s.linked_nodes !== undefined && CAN_WRITE) {
-      const f = favsData.find(x => x.node_number === num);
-      if (f) {
-        cells[7].innerHTML = actionCell(num, f.id);
+      if (fav) {
+        cells[7].innerHTML = actionCell(num, fav.id);
         row.classList.toggle('row-connected', isConnected(num));
       }
     }
