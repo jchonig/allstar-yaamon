@@ -197,4 +197,16 @@ var migrations = []migration{
 		record_json TEXT NOT NULL,
 		fetched_at  DATETIME NOT NULL
 	)`},
+	{version: 9, fn: func(ctx context.Context, tx *sql.Tx) error {
+		for _, stmt := range []string{
+			`ALTER TABLE users ADD COLUMN qrz_username TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE users ADD COLUMN qrz_password_enc TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE users ADD COLUMN lookup_source TEXT NOT NULL DEFAULT ''`,
+		} {
+			if _, err := tx.ExecContext(ctx, stmt); err != nil {
+				return err
+			}
+		}
+		return nil
+	}},
 }

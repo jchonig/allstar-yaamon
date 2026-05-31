@@ -19,16 +19,18 @@ const (
 	CacheTTL       = 30 * 24 * time.Hour // 30 days
 )
 
-// Record holds the fields we extract from a QRZ callsign lookup.
+// Record holds the fields we extract from a callsign lookup.
 type Record struct {
-	Callsign  string `json:"callsign" xml:"call"`
-	FirstName string `json:"first_name" xml:"fname"`
-	LastName  string `json:"last_name" xml:"name"`
-	Address   string `json:"address" xml:"addr2"`
-	State     string `json:"state" xml:"state"`
-	Country   string `json:"country" xml:"country"`
-	Email     string `json:"email" xml:"email"`
-	Class     string `json:"class" xml:"class"`
+	Callsign  string    `json:"callsign" xml:"call"`
+	FirstName string    `json:"first_name" xml:"fname"`
+	LastName  string    `json:"last_name" xml:"name"`
+	Address   string    `json:"address" xml:"addr2"`
+	State     string    `json:"state" xml:"state"`
+	Country   string    `json:"country" xml:"country"`
+	Email     string    `json:"email" xml:"email"`
+	Phone     string    `json:"phone" xml:"phone"`
+	Class     string    `json:"class" xml:"class"`
+	Source    string    `json:"source"`    // "qrz" or "callook"
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
@@ -80,6 +82,13 @@ func New(username, password string) *Client {
 		http:     &http.Client{Timeout: 10 * time.Second},
 		cache:    make(map[string]Record),
 	}
+}
+
+// ClearCache discards all in-memory cached records.
+func (c *Client) ClearCache() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache = make(map[string]Record)
 }
 
 // Seed pre-populates the in-memory cache from a DB snapshot (call on startup).
@@ -195,6 +204,7 @@ func (c *Client) lookupCallsign(ctx context.Context, sessionKey, callsign string
 	}
 	rec := resp.Callsign.Record
 	rec.FetchedAt = time.Now().UTC()
+	rec.Source = "qrz"
 	return rec, nil
 }
 
