@@ -234,9 +234,6 @@
       </ul>
     </div>
 
-    <button class="btn btn-sm btn-outline-secondary text-nowrap" onclick="openAddFavModal()">
-      <i class="bi bi-plus-circle me-1"></i>Add Favorite
-    </button>
   </div>
   {{end}}
 </div>
@@ -257,12 +254,21 @@
 
 {{/* Favorites table */}}
 <div class="card mb-4">
-  <div class="card-header d-flex align-items-center py-2 collapse-header"
-       data-bs-toggle="collapse" data-bs-target="#favorites-collapse"
-       aria-expanded="true" aria-controls="favorites-collapse">
-    <i class="bi bi-star me-2"></i>
-    <span>Favorites</span>
-    <i class="bi bi-chevron-down ms-auto collapse-chevron"></i>
+  <div class="card-header d-flex align-items-center py-2">
+    <div class="d-flex flex-grow-1 align-items-center collapse-header"
+         data-bs-toggle="collapse" data-bs-target="#favorites-collapse"
+         aria-expanded="true" aria-controls="favorites-collapse">
+      <i class="bi bi-star me-2"></i>
+      <span>Favorites</span>
+      <i class="bi bi-chevron-down ms-auto collapse-chevron"></i>
+    </div>
+    {{if or (eq .Permission "superuser") (eq .Permission "admin") (eq .Permission "readwrite")}}
+    <button class="btn btn-sm btn-link p-0 ms-2 text-body"
+            onclick="openAddFavModal()"
+            title="Add Favorite">
+      <i class="bi bi-plus-lg"></i>
+    </button>
+    {{end}}
   </div>
   <div class="collapse show" id="favorites-collapse">
     <table class="table table-hover table-sm align-middle mb-0" id="favs-table">
@@ -290,7 +296,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Add Favorite</h5>
+        <h5 class="modal-title" id="fav-modal-title">Add Favorite</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -318,7 +324,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" onclick="saveFavorite()">Add</button>
+        <button type="button" class="btn btn-primary" id="fav-modal-save-btn" onclick="saveFavorite()">Add</button>
       </div>
     </div>
   </div>
@@ -785,6 +791,20 @@ function renderActiveLinks() {
          </div>`
       : '';
 
+    const moreActions = (!isDirect && CAN_WRITE)
+      ? `<div class="btn-group btn-group-sm ms-1">
+           <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown"
+                   aria-expanded="false" title="More actions">
+             <i class="bi bi-three-dots"></i>
+           </button>
+           <ul class="dropdown-menu dropdown-menu-end">
+             <li><button class="dropdown-item${fav ? ' disabled' : ''}"
+                   onclick="openAddFavModal('${esc(nodeNum)}','${esc(call)}','${esc(desc)}','${esc(loc)}')">
+               <i class="bi bi-star me-1"></i>Add as Favorite</button></li>
+           </ul>
+         </div>`
+      : '';
+
     const since = fmtAge(linksSince[nodeNum]);
     const lcnt  = s.connected_links != null ? s.connected_links : null;
     const lcntColor = lcnt > 0 ? 'color:var(--accent-blue)' : '';
@@ -798,7 +818,7 @@ function renderActiveLinks() {
       <td class="text-muted small">${typeLabel}</td>
       <td class="text-muted small d-none d-md-table-cell">${since}</td>
       <td class="d-none d-md-table-cell small" style="${lcntColor}">${lcnt != null ? lcnt : '—'}</td>
-      <td class="text-end text-nowrap">${actions}</td>
+      <td class="text-end text-nowrap">${actions}${moreActions}</td>
     </tr>`;
   }).join('');
 
@@ -811,7 +831,7 @@ function renderActiveLinks() {
         <th>Type</th>
         <th class="d-none d-md-table-cell">Since</th>
         <th class="d-none d-md-table-cell" title="Connected links">Links</th>
-        <th></th>
+        <th class="text-end">Action</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -875,7 +895,19 @@ function actionCell(nodeNum, favId) {
       </ul>
     </div>`;
   }
-  return dropdown;
+  const moreDrop = `<div class="btn-group btn-group-sm ms-1">
+    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown"
+            aria-expanded="false" title="More actions">
+      <i class="bi bi-three-dots"></i>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end">
+      <li><button class="dropdown-item" onclick="openEditFavModal(${favId})">
+        <i class="bi bi-pencil me-1"></i>Edit</button></li>
+      <li><button class="dropdown-item text-danger" onclick="deleteFav(${favId})">
+        <i class="bi bi-trash me-1"></i>Delete</button></li>
+    </ul>
+  </div>`;
+  return dropdown + moreDrop;
 }
 
 // --- Connect / Disconnect ---
@@ -904,14 +936,36 @@ async function doDisconnect(targetNum, permanent) {
 
 // --- Favorites CRUD ---
 
-function openAddFavModal() {
-  document.getElementById('addFavModal').querySelector('form') &&
-    document.getElementById('addFavModal').querySelector('form').reset();
-  document.getElementById('fav-node-number').value = '';
-  document.getElementById('fav-callsign').value = '';
-  document.getElementById('fav-description').value = '';
-  document.getElementById('fav-location').value = '';
-  document.getElementById('fav-group').value = '';
+let editFavId = null;
+
+function openAddFavModal(nodeNum = '', callsign = '', description = '', location = '') {
+  editFavId = null;
+  document.getElementById('fav-modal-title').textContent = 'Add Favorite';
+  document.getElementById('fav-modal-save-btn').textContent = 'Add';
+  const nn = document.getElementById('fav-node-number');
+  nn.removeAttribute('disabled');
+  nn.value = nodeNum;
+  document.getElementById('fav-callsign').value    = callsign;
+  document.getElementById('fav-description').value = description;
+  document.getElementById('fav-location').value    = location;
+  document.getElementById('fav-group').value       = '';
+  document.getElementById('fav-form-error').textContent = '';
+  addFavModal.show();
+}
+
+function openEditFavModal(favId) {
+  const fav = favsData.find(f => f.id === favId);
+  if (!fav) return;
+  editFavId = favId;
+  document.getElementById('fav-modal-title').textContent = 'Edit Favorite';
+  document.getElementById('fav-modal-save-btn').textContent = 'Save';
+  const nn = document.getElementById('fav-node-number');
+  nn.setAttribute('disabled', '');
+  nn.value = fav.node_number;
+  document.getElementById('fav-callsign').value    = fav.callsign    || '';
+  document.getElementById('fav-description').value = fav.description || '';
+  document.getElementById('fav-location').value    = fav.location    || '';
+  document.getElementById('fav-group').value       = (fav.group_name === 'default') ? '' : (fav.group_name || '');
   document.getElementById('fav-form-error').textContent = '';
   addFavModal.show();
 }
@@ -929,8 +983,12 @@ async function saveFavorite() {
     location:     document.getElementById('fav-location').value.trim(),
     group_name:   document.getElementById('fav-group').value.trim() || 'default',
   };
-  const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/favorites`, {
-    method: 'POST',
+  const url    = editFavId != null
+    ? BASE_PATH + `/api/nodes/${NODE_ID}/favorites/${editFavId}`
+    : BASE_PATH + `/api/nodes/${NODE_ID}/favorites`;
+  const method = editFavId != null ? 'PUT' : 'POST';
+  const r = await fetch(url, {
+    method,
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(body),
   });
@@ -939,6 +997,7 @@ async function saveFavorite() {
     return;
   }
   addFavModal.hide();
+  editFavId = null;
   loadFavs();
 }
 

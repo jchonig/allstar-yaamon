@@ -34,6 +34,10 @@ The active connections table lists every node currently linked, with:
 
 Hovering over a callsign shows a tooltip with additional information from callook.info or QRZ.com.
 
+#### Adding an active link as a favorite
+
+On any active connection row, click the **⋯** button and choose **Add as Favorite**. The form pre-fills the node number, callsign, description, and location from the live connection data. The ⋯ button only appears for nodes that are not already in your favorites list.
+
 ### Favorites panel
 
 Your favorites for this node appear as buttons, organized by group. Buttons for active connections are highlighted. Click to connect; click again to disconnect.
@@ -50,7 +54,7 @@ Favorites are the nodes you frequently connect to, organized per node. Go to **F
 
 ### Adding favorites
 
-Select the node you want to manage favorites for. Click **Add Favorite** and fill in:
+Select the node you want to manage favorites for. Click the **+** in the Favorites card header to open the Add Favorite form, then fill in:
 
 | Field | Description |
 |-------|-------------|
@@ -61,6 +65,13 @@ Select the node you want to manage favorites for. Click **Add Favorite** and fil
 | **Group** | Organize favorites into named groups (tabs on the dashboard) |
 
 Manually configured callsign, description, and location override the values fetched from the AllStarLink node database.
+
+### Editing and deleting favorites
+
+You can edit or delete a favorite directly from the dashboard without navigating to the Favorites settings page. Click the **⋯** button on any favorites row:
+
+- **Edit** — opens the form pre-filled with the favorite's current values. The node number cannot be changed (delete and re-add if you need a different number).
+- **Delete** — removes the favorite after confirmation.
 
 ### Reordering
 

@@ -16,7 +16,7 @@ DOCKER_GO := docker run --rm \
   -w /src \
   $(BUILDER)
 
-PLAYWRIGHT_IMAGE := mcr.microsoft.com/playwright:v1.47.0-jammy
+PLAYWRIGHT_IMAGE := mcr.microsoft.com/playwright:v1.60.0-jammy
 
 # Names and credentials used by the integration test setup.
 TEST_NET             := yaamon-test-net
