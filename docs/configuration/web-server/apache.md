@@ -8,10 +8,10 @@ The `.deb` package installs two ready-to-use Apache reverse-proxy configs into
 | `yaamon-subfolder` | ASL3 coexistence — YAAMon at `/yaamon/` on the existing site | `a2enconf yaamon-subfolder` |
 | `yaamon-subdomain` | Dedicated subdomain — `yaamon.example.com` | `a2enconf yaamon-subdomain` |
 
-Enable proxy modules first (one-time):
+Enable the required modules first (one-time):
 
 ```bash
-sudo a2enmod proxy proxy_http
+sudo a2enmod proxy proxy_http substitute
 ```
 
 ---
@@ -54,9 +54,21 @@ Redirect permanent /yaamon /yaamon/
 ProxyPreserveHost On
 ProxyPass        /yaamon/ http://127.0.0.1:8080/yaamon/ flushpackets=on
 ProxyPassReverse /yaamon/ http://127.0.0.1:8080/yaamon/
+
+# Inject a YAAMon card into the ASL3 dashboard without modifying index.html.
+<IfModule mod_substitute.c>
+  <Directory /var/www/html>
+    <Files "index.html">
+      AddOutputFilterByType SUBSTITUTE text/html
+      Substitute "s|</body>|<script src=\"/js/yaamon-asl3-card.js\"></script></body>|i"
+    </Files>
+  </Directory>
+</IfModule>
 ```
 
 `flushpackets=on` is required for live dashboard updates (SSE).
+
+The config also uses `mod_substitute` to inject a YAAMon card into the ASL3 web dashboard automatically — no changes to ASL3's `index.html` are needed. The `.deb` installs the required JavaScript to `/var/www/html/js/yaamon-asl3-card.js`.
 
 ---
 
