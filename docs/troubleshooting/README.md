@@ -102,7 +102,7 @@ sudo firewall-cmd --reload
 sudo firewall-cmd --list-services
 ```
 
-> **Note**: Only open the AMI port to trusted hosts. If YAAMon runs on the same machine as Asterisk, no firewall change is needed — `localhost` connections are not affected by firewalld's public zone.
+> **Note**: Only open the AMI port to trusted networks (your LAN or VPN). AMI transmits credentials and commands in plain text — never expose port 5038 to the general internet. If YAAMon runs on the same machine as Asterisk, no firewall change is needed — `localhost` connections are not affected by firewalld's public zone. For YAAMon on a remote host, consider a VPN or SSH tunnel instead of opening the port at all; see [AMI Security](../security/ami-security.md).
 
 Test connectivity without starting the full server:
 
