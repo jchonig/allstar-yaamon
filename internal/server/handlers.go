@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -295,8 +296,8 @@ func (s *Server) fillNodeInfo(nodes []db.Node) {
 // except for /setup itself and static assets.
 func (s *Server) setupGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/setup" || r.URL.Path == "/health" ||
-			len(r.URL.Path) >= 8 && r.URL.Path[:8] == "/static/" {
+		if r.URL.Path == s.url("/setup") || r.URL.Path == "/health" ||
+			strings.HasPrefix(r.URL.Path, s.url("/static/")) {
 			next.ServeHTTP(w, r)
 			return
 		}
