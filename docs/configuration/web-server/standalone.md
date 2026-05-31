@@ -71,6 +71,34 @@ Requirements:
 
 > **Planned**: DNS-01 ACME challenge support (no port 80 required, wildcard certificates) — tracked in [issue #11](https://github.com/jchonig/allstar-yaamon/issues/11).
 
+## HTTP/3 (QUIC)
+
+When TLS is active (`tls.mode` is anything other than `disabled`), YAAMon automatically opens a QUIC (UDP) listener on the same port as HTTPS and injects an `Alt-Svc` header on every response so browsers discover and upgrade to HTTP/3. No configuration is required.
+
+To opt out (e.g. when UDP is blocked by a firewall):
+
+```yaml
+server:
+  quic: false
+```
+
+**Firewall / Docker note**: QUIC runs over UDP. Make sure UDP on the HTTPS port is reachable:
+
+```bash
+# firewalld (AllStarLink Appliance or any firewalld host)
+sudo firewall-cmd --permanent --add-port=443/udp
+sudo firewall-cmd --reload
+```
+
+```yaml
+# docker-compose.yml — add the UDP mapping alongside TCP
+ports:
+  - "443:443"
+  - "443:443/udp"
+```
+
+> **Behind a proxy?** QUIC is not needed in YAAMon when running behind Caddy (or any modern reverse proxy) — the proxy handles QUIC termination itself. This feature is only relevant for standalone deployments where YAAMon is the TLS endpoint. See [Behind Caddy](caddy.md) for proxy setup.
+
 ## Running on port 80 without root
 
 Port 80 (and 443) are privileged ports. To run as a non-root user, grant the binary the `CAP_NET_BIND_SERVICE` capability:

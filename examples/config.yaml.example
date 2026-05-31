@@ -9,6 +9,8 @@ server:
   http_port: 8080
   https_port: 443
   redirect_http: true        # 301 redirect http → https when TLS is enabled
+  # quic: true               # HTTP/3 (QUIC) over UDP — enabled by default when TLS is active.
+  #                          # Set to false if UDP is blocked or behind a proxy (proxy handles QUIC).
 
 tls:
   mode: disabled             # disabled | self_signed | provided | acme

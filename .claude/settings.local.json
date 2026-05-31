@@ -98,7 +98,9 @@
       "Bash(go list *)",
       "Bash(sed -n '65,100p' ~/go/pkg/mod/github.com/go-webauthn/webauthn@v0.17.4/webauthn/credential.go)",
       "Bash(sed -n '32,60p' ~/go/pkg/mod/github.com/go-webauthn/webauthn@v0.17.4/webauthn/types_session.go)",
-      "Bash(xargs ls -lt)"
+      "Bash(xargs ls -lt)",
+      "Bash(chmod +x /Volumes/Projects/Radio/allstar-yaamon/scripts/gen-docs-index.sh)",
+      "Bash(/Volumes/Projects/Radio/allstar-yaamon/scripts/gen-docs-index.sh)"
     ]
   }
 }
