@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	wawebauthn "github.com/go-webauthn/webauthn/webauthn"
+	"github.com/quic-go/quic-go/http3"
 
 	"allstar-yaamon/internal/ami"
 	"allstar-yaamon/internal/aslstats"
@@ -340,16 +341,30 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 	s.nodeDB.Start(ctx, 1*time.Hour)
 
 	var mainServer *http.Server
+	var h3Server *http3.Server
 
 	baseCtx := func(_ net.Listener) context.Context { return ctx }
 
 	if tlsCfg != nil {
 		httpsAddr := fmt.Sprintf(":%d", s.cfg.Server.HTTPSPort)
+
+		// Start HTTP/3 (QUIC) alongside HTTP/2 when enabled.
+		httpsHandler := hstsMiddleware(handler)
+		if s.cfg.Server.QUIC {
+			h3Server = &http3.Server{
+				Addr:      httpsAddr,
+				Handler:   httpsHandler,
+				TLSConfig: http3.ConfigureTLSConfig(tlsCfg.Clone()),
+			}
+			// Advertise H3 on every TCP/TLS response so browsers upgrade.
+			httpsHandler = altSvcMiddleware(h3Server, httpsHandler)
+		}
+
 		mainServer = &http.Server{
-			Addr:        httpsAddr,
-			Handler:     hstsMiddleware(handler),
-			TLSConfig:   tlsCfg,
-			BaseContext: baseCtx,
+			Addr:         httpsAddr,
+			Handler:      httpsHandler,
+			TLSConfig:    tlsCfg,
+			BaseContext:  baseCtx,
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
 		}
@@ -377,12 +392,20 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 				slog.Error("HTTPS server", "err", err)
 			}
 		}()
+		if h3Server != nil {
+			slog.Info("HTTP/3 (QUIC) server listening", "addr", httpsAddr)
+			go func() {
+				if err := h3Server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					slog.Error("HTTP/3 server", "err", err)
+				}
+			}()
+		}
 	} else {
 		httpAddr := fmt.Sprintf(":%d", s.cfg.Server.HTTPPort)
 		mainServer = &http.Server{
-			Addr:        httpAddr,
-			Handler:     handler,
-			BaseContext: baseCtx,
+			Addr:         httpAddr,
+			Handler:      handler,
+			BaseContext:  baseCtx,
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
 		}
@@ -399,5 +422,8 @@ func (s *Server) listenAndServe(handler http.Handler) error {
 	s.amiMgr.Shutdown()
 	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+	if h3Server != nil {
+		h3Server.Close() //nolint:errcheck
+	}
 	return mainServer.Shutdown(shutCtx)
 }

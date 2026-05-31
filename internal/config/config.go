@@ -60,6 +60,7 @@ type ServerConfig struct {
 	HTTPPort     int  `mapstructure:"http_port"`
 	HTTPSPort    int  `mapstructure:"https_port"`
 	RedirectHTTP bool `mapstructure:"redirect_http"`
+	QUIC         bool `mapstructure:"quic"`
 }
 
 type TLSConfig struct {
@@ -89,6 +90,7 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("server.http_port", 8080)
 	v.SetDefault("server.https_port", 443)
 	v.SetDefault("server.redirect_http", true)
+	v.SetDefault("server.quic", true)
 	v.SetDefault("tls.mode", "disabled")
 	v.SetDefault("tls.acme_cache_dir", "/etc/yaamon/acme")
 	v.SetDefault("db.path", "/var/lib/yaamon/yaamon.db")

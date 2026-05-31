@@ -25,6 +25,22 @@ func hstsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// quicHeaderSetter is the subset of http3.Server used by altSvcMiddleware.
+// Keeping it as an interface makes the middleware unit-testable without a
+// live QUIC listener.
+type quicHeaderSetter interface {
+	SetQUICHeaders(http.Header) error
+}
+
+// altSvcMiddleware injects an Alt-Svc header on each HTTPS/TCP response so
+// that browsers discover and upgrade to HTTP/3 (QUIC) on the same port.
+func altSvcMiddleware(h3 quicHeaderSetter, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h3.SetQUICHeaders(w.Header()) //nolint:errcheck
+		next.ServeHTTP(w, r)
+	})
+}
+
 // --- CSRF origin check ---
 
 // csrfMiddleware rejects state-changing requests where the Origin header is
