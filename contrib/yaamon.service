@@ -9,7 +9,6 @@ Type=simple
 User=yaamon
 Group=yaamon
 ExecStart=/usr/bin/yaamon serve
-ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5s
 
