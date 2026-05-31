@@ -7,7 +7,7 @@ YAAMon is a modern, responsive web application for managing and monitoring [AllS
 **Key differences from AllScan and Allmon3:**
 
 - Single static binary — no web server, no PHP, no Node.js required
-- Built-in TLS with automatic Let's Encrypt certificates
+- Built-in TLS with automatic Let's Encrypt certificates and HTTP/3 (QUIC)
 - Docker and docker-compose ready
 - Multi-user with role-based access (superuser / admin / readwrite / readonly)
 - Adaptive AllStarLink stats fetching — deduplicates across all open dashboards, switches between bulk and individual endpoints automatically to stay within API rate limits
