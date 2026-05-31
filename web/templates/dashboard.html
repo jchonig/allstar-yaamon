@@ -1,6 +1,6 @@
 {{template "base" .}}
 
-{{define "title"}}Dashboard — YAAMon{{end}}
+{{define "title"}}{{if .ActiveNode}}{{.ActiveNode.Name}}{{else}}Overview{{end}} — YAAMon{{end}}
 
 {{define "nav-center"}}
 {{if and .ActiveNode (gt (len .Nodes) 1)}}
