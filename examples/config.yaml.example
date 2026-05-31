@@ -23,6 +23,12 @@ server:
   #                          # Example: base_path: /yaamon → accessible at http://host/yaamon/
   # base_path: /yaamon
 
+  # allow_public_plaintext: false   # Safety guard: YAAMon refuses to start when tls.mode is
+  #                                 # disabled and the bound address is publicly routable (non-RFC-1918).
+  #                                 # Set to true only if you understand the risk (credentials in the
+  #                                 # clear) and have an external layer handling security.
+  # allow_public_plaintext: true
+
 tls:
   mode: disabled             # disabled | self_signed | provided | acme
   # cert_file: /etc/yaamon/fullchain.pem   # required for mode: provided
