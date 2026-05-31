@@ -38,7 +38,7 @@ nodes:
 
 Environment variable substitution is supported — any value beginning with `$` is resolved from the environment at apply time, keeping secrets out of the file.
 
-See [`state.yaml.example`](../../state.yaml.example) in the repository for the full format.
+See [`examples/state.yaml.example`](../../examples/state.yaml.example) in the repository for the full format.
 
 ## purge controls
 

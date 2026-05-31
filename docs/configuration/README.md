@@ -30,7 +30,7 @@ ui:
   footer_attribution_url: https://n2vlv.net
 ```
 
-A fully commented example is included as `config.yaml.example` in every release tarball and the Docker image.
+A fully commented example is included as [`examples/config.yaml.example`](../../examples/config.yaml.example) in the repository and every release tarball.
 
 ## Environment variable overrides
 

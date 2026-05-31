@@ -40,4 +40,4 @@ sudo journalctl -u yaamon -f
 
 ## Configuration
 
-Create `/etc/yaamon/config.yaml` (see [Configuration](../configuration/README.md)). The tarball includes a `config.yaml.example` as a starting point.
+Create `/etc/yaamon/config.yaml` (see [Configuration](../configuration/README.md)). The tarball includes `examples/config.yaml.example` as a starting point.

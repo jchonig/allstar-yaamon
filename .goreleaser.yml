@@ -29,7 +29,7 @@ archives:
     files:
       - README.md
       - LICENSE
-      - config.yaml.example
+      - examples/config.yaml.example
       - contrib/yaamon.service
 
 nfpms:
@@ -43,7 +43,7 @@ nfpms:
     formats:
       - deb
     contents:
-      - src: config.yaml.example
+      - src: examples/config.yaml.example
         dst: /etc/yaamon/config.yaml
         type: config|noreplace
       - src: contrib/yaamon.service
