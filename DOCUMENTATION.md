@@ -301,7 +301,7 @@ Click the graph icon on any connection row to open an interactive network graph 
 
 ## Your Profile
 
-![My Profile](docs/images/profile.png)
+![My Profile](docs/images/passkeys.png)
 
 Click your name or avatar in the top-right corner and choose **My Profile**.
 
@@ -329,8 +329,6 @@ Enter your current password and a new password to change it. Passwords must be a
 If your site uses [Tailscale authentication](#tailscale-authentication), enter your Tailscale login name (e.g. `jch@honig.net`) here. Separate multiple logins with commas. When a request arrives from Tailscale with a matching identity header, you will be logged in automatically without a password.
 
 ### Callsign Lookup
-
-![Callsign Lookup and Passkeys](docs/images/passkeys.png)
 
 Choose which source to use for callsign lookups on the dashboard:
 
@@ -592,7 +590,7 @@ When a session is established via Tailscale auth, a shield icon (🛡) appears n
 
 ## Passkeys (WebAuthn / FIDO2)
 
-![Passkeys in Profile](docs/images/passkeys.png)
+The Passkeys panel is visible in the [My Profile screenshot](#your-profile) above.
 
 Passkeys let users authenticate without a password using a platform authenticator (Touch ID, Face ID, Windows Hello) or a hardware security key (YubiKey, etc.). Any FIDO2-compatible password manager — Bitwarden, 1Password, iCloud Keychain — also works as a passkey provider.
 
