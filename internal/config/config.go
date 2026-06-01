@@ -18,11 +18,33 @@ type Config struct {
 	AstDB         AstDBConfig         `mapstructure:"astdb"`
 	Log           LogConfig           `mapstructure:"log"`
 	UI            UIConfig            `mapstructure:"ui"`
+	Commands      CommandsConfig      `mapstructure:"commands"`
 	ProxyAuth     ProxyAuthConfig     `mapstructure:"proxy_auth"`
 	TailscaleAuth TailscaleAuthConfig `mapstructure:"tailscale_auth"`
 	WebAuthn      WebAuthnConfig      `mapstructure:"webauthn"`
 
 	configFile string // resolved path of the config file actually loaded
+}
+
+// CommandArg describes a user-supplied argument for a node command.
+type CommandArg struct {
+	Name  string `mapstructure:"name"`  // template placeholder key
+	Label string `mapstructure:"label"` // UI label
+	Type  string `mapstructure:"type"`  // "node_number" | "string"
+}
+
+// NodeCommand is a single entry in the Functions menu.
+type NodeCommand struct {
+	Name  string       `mapstructure:"name"`
+	Cmd   string       `mapstructure:"cmd"`   // template; {node} always server-resolved
+	Args  []CommandArg `mapstructure:"args"`
+	Role  string       `mapstructure:"role"`  // "readonly" | "readwrite" | "admin" | "superuser"
+	Group string       `mapstructure:"group"` // optional grouping key; divider inserted when group changes
+}
+
+// CommandsConfig holds the list of node commands shown in the Functions menu.
+type CommandsConfig struct {
+	Commands []NodeCommand `mapstructure:"commands"`
 }
 
 type WebAuthnConfig struct {
@@ -143,10 +165,27 @@ func Load(cfgFile string) (*Config, error) {
 	}
 
 	cfg.configFile = v.ConfigFileUsed()
+	if len(cfg.Commands.Commands) == 0 {
+		cfg.Commands.Commands = defaultCommands()
+	}
 	if err := normalise(&cfg); err != nil {
 		return nil, err
 	}
 	return &cfg, validate(&cfg)
+}
+
+func defaultCommands() []NodeCommand {
+	return []NodeCommand{
+		{Name: "Say Time of Day", Cmd: "rpt cmd {node} status 12 xxx", Role: "readwrite", Group: "announce"},
+		{Name: "Force ID", Cmd: "rpt cmd {node} status 11 xxx", Role: "readwrite", Group: "announce"},
+		{Name: "Reconnect", Cmd: "rpt cmd {node} ilink 16", Role: "readwrite", Group: "link"},
+		{Name: "Show Node Status", Cmd: "rpt stats {node}", Role: "readwrite", Group: "status"},
+		{Name: "Show Link Status", Cmd: "rpt lstats {node}", Role: "readwrite", Group: "status"},
+		{Name: "Show IAX Registry", Cmd: "iax2 show registry", Role: "readwrite", Group: "status"},
+		{Name: "Show IAX Channels", Cmd: "iax2 show channels", Role: "readwrite", Group: "status"},
+		{Name: "Show Network Status", Cmd: "iax2 show netstats", Role: "readwrite", Group: "status"},
+		{Name: "Show Uptime", Cmd: "core show uptime", Role: "readwrite", Group: "status"},
+	}
 }
 
 func normalise(cfg *Config) error {
@@ -180,6 +219,12 @@ func validate(cfg *Config) error {
 	}
 	if cfg.TLS.Mode != "disabled" && (cfg.Server.HTTPSPort < 1 || cfg.Server.HTTPSPort > 65535) {
 		return fmt.Errorf("server.https_port must be 1–65535")
+	}
+	validRoles := map[string]bool{"readonly": true, "readwrite": true, "admin": true, "superuser": true}
+	for i, cmd := range cfg.Commands.Commands {
+		if !validRoles[cmd.Role] {
+			return fmt.Errorf("commands.commands[%d].role must be one of: readonly, readwrite, admin, superuser (got %q)", i, cmd.Role)
+		}
 	}
 	return nil
 }

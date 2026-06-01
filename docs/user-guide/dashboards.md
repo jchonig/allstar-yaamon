@@ -42,6 +42,22 @@ On any active connection row, click the **⋯** button and choose **Add as Favor
 
 Your favorites for this node appear as buttons, organized by group. Buttons for active connections are highlighted. Click to connect; click again to disconnect.
 
+### Functions menu
+
+The **Functions** button (grid icon, top-right of the node toolbar) opens a dropdown of node commands sent directly to Asterisk via AMI. Commands are grouped by type with labelled separators:
+
+| Group | Commands |
+|-------|----------|
+| Announce | Say Time of Day, Force ID |
+| Link | Reconnect |
+| Status | Show Node Status, Show Link Status, Show IAX Registry, Show IAX Channels, Show Network Status, Show Uptime |
+
+Commands that produce text output (status queries, registry listings) open a scrollable monospace modal. Commands that trigger audio or control actions (time announcement, ID, reconnect) show a brief "Command sent" confirmation.
+
+The Functions button is **disabled** when the node's AMI connection is offline.
+
+The command list is role-filtered — only commands whose configured `role` is at or below your session role are shown. The administrator can customise the list, add arguments, or restrict commands in `config.yaml`. See [Node Commands](../configuration/commands.md).
+
 ### Network graph
 
 Click the graph icon on any connection row to open an interactive network graph showing how connected nodes link to each other. The graph is also available as a full-page view.

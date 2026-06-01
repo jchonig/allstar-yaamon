@@ -221,16 +221,16 @@
       </ul>
     </div>
 
-    {{/* Functions menu — placeholder for future commands */}}
+    {{/* Functions menu — node commands */}}
     <div class="dropdown">
-      <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" id="functions-btn"
               type="button" data-bs-toggle="dropdown" aria-expanded="false"
               title="Functions">
         <i class="bi bi-grid-3x3-gap"></i>
       </button>
-      <ul class="dropdown-menu dropdown-menu-end">
+      <ul class="dropdown-menu dropdown-menu-end" id="functions-menu">
         <li><h6 class="dropdown-header">Functions</h6></li>
-        <li><span class="dropdown-item disabled text-muted fst-italic">Coming soon…</span></li>
+        <li><span class="dropdown-item disabled text-muted fst-italic">Loading…</span></li>
       </ul>
     </div>
 
@@ -379,6 +379,41 @@
   </div>
 </div>
 
+{{/* Command Output Modal */}}
+<div class="modal fade" id="cmdOutputModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog" style="max-width:calc(100vw - 2rem);width:calc(100vw - 2rem)">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title" id="cmd-output-title">Command Output</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <pre id="cmd-output-body" class="m-0 p-3" style="max-height:60vh;overflow:auto;white-space:pre;font-size:.8rem"></pre>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{/* Command Arguments Modal */}}
+<div class="modal fade" id="cmdArgsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title" id="cmd-args-title">Command Arguments</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="cmd-args-body"></div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="cmd-args-run-btn">Run</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {{end}}
 {{end}}
 
@@ -439,13 +474,19 @@ let sortDir = parseInt(sessionStorage.getItem('yaamon_sort_dir') || '1');
 let addFavModal, connModal;
 let sseSource = null;
 
+let cmdArgsModal = null;
+let cmdOutputModal = null;
+
 document.addEventListener('DOMContentLoaded', () => {
   addFavModal = new bootstrap.Modal(document.getElementById('addFavModal'));
   connModal   = new bootstrap.Modal(document.getElementById('connModal'));
+  cmdArgsModal  = new bootstrap.Modal(document.getElementById('cmdArgsModal'));
+  cmdOutputModal = new bootstrap.Modal(document.getElementById('cmdOutputModal'));
   const connModalEl = document.getElementById('connModal');
   connModalEl.addEventListener('show.bs.modal',  () => { connModalOpen = true; });
   connModalEl.addEventListener('hidden.bs.modal', () => { connModalOpen = false; });
   loadFavs();
+  loadCmds();
   connectSSE();
 });
 
@@ -654,10 +695,13 @@ function connectSSE() {
 
 function setAMIBadge(connected) {
   const el = document.getElementById('ami-badge');
-  if (!el) return;
-  el.classList.toggle('connected', connected);
-  el.classList.remove('polling');
-  el.title = connected ? 'Asterisk AMI connected' : 'Asterisk AMI not connected';
+  if (el) {
+    el.classList.toggle('connected', connected);
+    el.classList.remove('polling');
+    el.title = connected ? 'Asterisk AMI connected' : 'Asterisk AMI not connected';
+  }
+  const fb = document.getElementById('functions-btn');
+  if (fb) fb.disabled = !connected;
 }
 
 function setASLBadge(connected) {
@@ -908,6 +952,97 @@ function actionCell(nodeNum, favId) {
     </ul>
   </div>`;
   return dropdown + moreDrop;
+}
+
+// --- Commands (Functions menu) ---
+
+async function loadCmds() {
+  try {
+    const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/commands`);
+    const cmds = await r.json();
+    const ul = document.getElementById('functions-menu');
+    if (!ul) return;
+    const header = '<li><h6 class="dropdown-header">Functions</h6></li>';
+    if (!cmds || cmds.length === 0) {
+      ul.innerHTML = header + '<li><span class="dropdown-item disabled text-muted fst-italic">No functions available</span></li>';
+      return;
+    }
+    let lastGroup = undefined;
+    const items = cmds.map(c => {
+      let html = '';
+      if (c.group !== lastGroup) {
+        lastGroup = c.group;
+        if (c.group) {
+          const label = c.group.charAt(0).toUpperCase() + c.group.slice(1);
+          html += `<li><h6 class="dropdown-header">${esc(label)}</h6></li>`;
+        }
+      }
+      html += `<li><button class="dropdown-item" onclick="doCmd(${c.index},${esc(JSON.stringify(c.check))},${esc(JSON.stringify(c.args||[]))},${esc(JSON.stringify(c.name))})">${esc(c.name)}</button></li>`;
+      return html;
+    }).join('');
+    ul.innerHTML = header + items;
+  } catch {}
+}
+
+let _pendingCmdIndex = null;
+let _pendingCmdCheck = null;
+let _pendingCmdArgDefs = null;
+let _pendingCmdName = null;
+
+async function doCmd(index, check, argDefs, name) {
+  if (argDefs && argDefs.length > 0) {
+    _pendingCmdIndex = index;
+    _pendingCmdCheck = check;
+    _pendingCmdArgDefs = argDefs;
+    _pendingCmdName = name;
+    const body = document.getElementById('cmd-args-body');
+    body.innerHTML = argDefs.map(a =>
+      `<div class="mb-2">
+        <label class="form-label small mb-1">${esc(a.label||a.name)}</label>
+        <input class="form-control form-control-sm" id="cmd-arg-${esc(a.name)}" type="text"
+               inputmode="${a.type==='node_number'?'numeric':'text'}" autocomplete="off"
+               ${a.type==='node_number'?'pattern="[0-9]+" oninput="this.value=this.value.replace(/[^0-9]/g,\'\')"':''}>
+      </div>`
+    ).join('');
+    document.getElementById('cmd-args-run-btn').onclick = runCmdWithArgs;
+    cmdArgsModal.show();
+    return;
+  }
+  await _runCmd(index, check, {}, name);
+}
+
+async function runCmdWithArgs() {
+  const args = {};
+  for (const a of (_pendingCmdArgDefs || [])) {
+    args[a.name] = document.getElementById('cmd-arg-' + a.name)?.value || '';
+  }
+  cmdArgsModal.hide();
+  await _runCmd(_pendingCmdIndex, _pendingCmdCheck, args, _pendingCmdName);
+}
+
+async function _runCmd(index, check, args, name) {
+  try {
+    const r = await fetch(BASE_PATH + `/api/nodes/${NODE_ID}/cmd`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({index, check, args}),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      const out = (data.output || '').trim();
+      if (out) {
+        document.getElementById('cmd-output-title').textContent = name || 'Command Output';
+        document.getElementById('cmd-output-body').textContent = out;
+        cmdOutputModal.show();
+      } else {
+        showToast('Command sent', 'success');
+      }
+    } else {
+      showToast('Command failed: ' + (data.error || 'unknown'), 'danger');
+    }
+  } catch (e) {
+    showToast('Command failed: ' + e.message, 'danger');
+  }
 }
 
 // --- Connect / Disconnect ---

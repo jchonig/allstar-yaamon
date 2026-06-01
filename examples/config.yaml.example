@@ -68,3 +68,158 @@ ui:
   # Footer right side — attribution link.
   footer_attribution: N2VLV
   footer_attribution_url: https://n2vlv.net
+
+# commands: Node command menu shown in the dashboard Functions dropdown.
+# Omit this section to use the built-in defaults.
+# Each entry needs: name, cmd ({node} is replaced with the node number), and role.
+# Commands that produce output display it in a modal; others show a toast.
+# commands:
+#   commands:
+#     # --- Announcements (group: announce) ---
+#     - name:  "Say Time of Day"
+#       cmd:   "rpt cmd {node} status 12 xxx"
+#       role:  readwrite
+#       group: announce
+#     - name:  "Force ID"
+#       cmd:   "rpt cmd {node} status 11 xxx"
+#       role:  readwrite
+#       group: announce
+#
+#     # --- Linking (group: link) ---
+#     - name:  "Reconnect"
+#       cmd:   "rpt cmd {node} ilink 16"
+#       role:  readwrite
+#       group: link
+#     # Example with a user-supplied argument:
+#     # - name:  "Link to Node"
+#     #   cmd:   "rpt cmd {node} ilink 3 {target}"
+#     #   role:  readwrite
+#     #   group: link
+#     #   args:
+#     #     - name:  target
+#     #       label: "Target Node Number"
+#     #       type:  node_number
+#
+#     # --- Status / information (group: status) ---
+#     - name:  "Show Node Status"
+#       cmd:   "rpt stats {node}"
+#       role:  readwrite
+#       group: status
+#     - name:  "Show Link Status"
+#       cmd:   "rpt lstats {node}"
+#       role:  readwrite
+#       group: status
+#     - name:  "Show IAX Registry"
+#       cmd:   "iax2 show registry"
+#       role:  readwrite
+#       group: status
+#     - name:  "Show IAX Channels"
+#       cmd:   "iax2 show channels"
+#       role:  readwrite
+#       group: status
+#     - name:  "Show Network Status"
+#       cmd:   "iax2 show netstats"
+#       role:  readwrite
+#       group: status
+#     - name:  "Show Uptime"
+#       cmd:   "core show uptime"
+#       role:  readwrite
+#       group: status
+#
+#     # --- Telemetry (group: telemetry) ---
+#     - name:  "Local Telemetry Enable"
+#       cmd:   "rpt cmd {node} cop 33 xxx"
+#       role:  readwrite
+#       group: telemetry
+#     - name:  "Local Telemetry Disable"
+#       cmd:   "rpt cmd {node} cop 34 xxx"
+#       role:  readwrite
+#       group: telemetry
+#     - name:  "Local Telemetry On Demand"
+#       cmd:   "rpt cmd {node} cop 35 xxx"
+#       role:  readwrite
+#       group: telemetry
+#
+#     # --- System control — admin only (group: system) ---
+#     - name:  "Enable System"
+#       cmd:   "rpt cmd {node} cop 2 xxx"
+#       role:  admin
+#       group: system
+#     - name:  "Disable System"
+#       cmd:   "rpt cmd {node} cop 3 xxx"
+#       role:  admin
+#       group: system
+#     - name:  "Enable Linking"
+#       cmd:   "rpt cmd {node} cop 11 xxx"
+#       role:  admin
+#       group: system
+#     - name:  "Disable Linking"
+#       cmd:   "rpt cmd {node} cop 12 xxx"
+#       role:  admin
+#       group: system
+#     - name:  "Enable Autopatch"
+#       cmd:   "rpt cmd {node} cop 9 xxx"
+#       role:  admin
+#       group: system
+#     - name:  "Disable Autopatch"
+#       cmd:   "rpt cmd {node} cop 10 xxx"
+#       role:  admin
+#       group: system
+#     - name:  "Enable User Functions"
+#       cmd:   "rpt cmd {node} cop 17 xxx"
+#       role:  admin
+#       group: system
+#     - name:  "Disable User Functions"
+#       cmd:   "rpt cmd {node} cop 18 xxx"
+#       role:  admin
+#       group: system
+#     - name:  "Toggle Test Tone"
+#       cmd:   "rpt cmd {node} cop 4 1"
+#       role:  admin
+#       group: system
+#     - name:  "System State 0 (normal)"
+#       cmd:   "rpt cmd {node} cop 14 0"
+#       role:  admin
+#       group: system
+#     - name:  "System State 1 (rpt only)"
+#       cmd:   "rpt cmd {node} cop 14 1"
+#       role:  admin
+#       group: system
+#     - name:  "System State 2 (rpt off)"
+#       cmd:   "rpt cmd {node} cop 14 2"
+#       role:  admin
+#       group: system
+#
+#     # --- Database — admin only (group: database) ---
+#     - name:  "Show Node Allowlist"
+#       cmd:   "database show allowlist/{node}"
+#       role:  admin
+#       group: database
+#     - name:  "Show Node Denylist"
+#       cmd:   "database show denylist/{node}"
+#       role:  admin
+#       group: database
+#     - name:  "Delete Node Allowlist"
+#       cmd:   "database del allowlist/{node}"
+#       role:  admin
+#       group: database
+#     - name:  "Delete Node Denylist"
+#       cmd:   "database del denylist/{node}"
+#       role:  admin
+#       group: database
+#     - name:  "Add to Allowlist"
+#       cmd:   'database put allowlist/{node}/{target} "Reason"'
+#       role:  admin
+#       group: database
+#       args:
+#         - name:  target
+#           label: "Target Node Number"
+#           type:  node_number
+#     - name:  "Add to Denylist"
+#       cmd:   'database put denylist/{node}/{target} "Reason"'
+#       role:  admin
+#       group: database
+#       args:
+#         - name:  target
+#           label: "Target Node Number"
+#           type:  node_number

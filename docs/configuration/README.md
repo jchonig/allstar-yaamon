@@ -67,6 +67,7 @@ Environment variables take precedence over the config file.
 | `ui` | `footer_url` | — | URL for the footer label link |
 | `ui` | `footer_attribution` | `N2VLV` | Right footer attribution name |
 | `ui` | `footer_attribution_url` | `https://n2vlv.net` | Right footer attribution URL |
+| `commands` | `commands` | (5 defaults) | List of node commands in the Functions menu. See [Node Commands](commands.md). |
 
 ## Configuration topics
 
@@ -77,6 +78,7 @@ Environment variables take precedence over the config file.
 - [Tailscale Authentication](tailscale.md) — header-based Tailscale login
 - [Proxy Authentication](proxy-auth.md) — OAuth2 / oauth2-proxy header auth
 - [Declarative State](declarative-state.md) — `yaamon apply` state files
+- [Node Commands](commands.md) — Functions menu, custom commands, role filtering
 
 ## mDNS
 
