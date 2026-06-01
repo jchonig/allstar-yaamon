@@ -60,6 +60,9 @@ YAAMon's HTTP API is consumed by its own frontend. All endpoints return JSON unl
 | PUT | `/api/nodes/{id}/favorites/reorder` | Reorder favorites (drag and drop) |
 | POST | `/api/nodes/{id}/favorites/copy` | Copy favorites from another node |
 | DELETE | `/api/nodes/{id}/favorites/{fid}` | Delete a favorite |
+| GET | `/api/nodes/{id}/favorites/export` | Download favorites as `favorites.ini` |
+| POST | `/api/nodes/{id}/favorites/import/preview` | Dry-run INI import — returns summary without committing |
+| POST | `/api/nodes/{id}/favorites/import` | Commit INI import (skips existing entries) |
 
 ## Admin
 
@@ -99,3 +102,7 @@ YAAMon's HTTP API is consumed by its own frontend. All endpoints return JSON unl
 | `/static/*` | Embedded static files (CSS, JS, fonts) |
 | `/favicon.ico` | Favicon (custom or default) |
 | `/favicon.png` | 256×256 PNG favicon |
+
+## Notes
+
+**Active links enrichment** (`GET /api/nodes/{id}/stats`): The `connected_links` count in the stats response is overridden by live AMI data for home nodes. `enrichFromAMI` (`internal/server/stats.go`) replaces the AllStarLink cloud-reported count with `len(linksCache[nodeID])` whenever the AMI connection is active. This ensures the dashboard badge reflects real-time link state rather than the polled cloud value, which can lag by minutes. The `linksCache` is only populated while AMI is connected, so `hasData=true` implies a live AMI session.

@@ -24,7 +24,20 @@ Technical documentation for YAAMon's architecture and internals.
 
 - [AMI Interface](ami.md) — actions sent, events consumed, wire format, manager.conf requirements
 - [Database](database.md) — schema, tables, migrations
-- [Authentication](authentication.md) — auth modes, sessions, middleware chain
-- [API](api.md) — HTTP endpoint inventory
+- [Authentication](authentication.md) — auth modes, sessions, middleware chain, plaintext safety check
+- [API](api.md) — HTTP endpoint inventory, active links enrichment
 - [CI/CD](cicd.md) — GitHub Actions, release process, branch image builds
 - [Testing](testing.md) — unit, integration, and end-to-end test framework
+
+## Server configuration (`ServerConfig`)
+
+Key fields in `server:` config (`internal/config/config.go`):
+
+| Field | Default | Purpose |
+|---|---|---|
+| `http_port` | `80` | HTTP listen port |
+| `https_port` | `443` | HTTPS listen port (when TLS enabled) |
+| `redirect_http` | `false` | Redirect HTTP → HTTPS |
+| `bind_address` | `""` (all) | Interface to bind (IP or hostname) |
+| `base_path` | `""` | URL prefix when hosted under a sub-path (e.g. `/yaamon`) |
+| `allow_public_plaintext` | `false` | Bypass public-IP plaintext safety check |

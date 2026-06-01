@@ -78,3 +78,16 @@ Proxy-auth sessions (`AuthMethod != ""`) are re-derived from headers on every re
 | `superuser` | `admin` + create/modify superuser accounts |
 
 Only superusers can delete the last superuser account.
+
+## Plaintext HTTP safety check
+
+`checkPlaintextSafety` (`internal/server/plaintext_check.go`) runs at startup and refuses to serve plaintext HTTP if the server would be reachable on a public IP. The check is skipped entirely if any of the following are true:
+
+- TLS is active (any `tls.mode` other than `""` or `"none"`)
+- `proxy_auth.enabled: true` (upstream proxy handles TLS)
+- `tailscale_auth.enabled: true` (traffic is confined to the Tailscale network)
+- `server.allow_public_plaintext: true` (operator opt-out)
+
+If none of those apply, `resolveBindIPs` enumerates all interfaces that the configured `bind_address` maps to (wildcard addresses expand to all interfaces). If any resolved IP falls outside private ranges (RFC 1918, loopback, link-local, ULA), the server logs a fatal error and exits.
+
+This prevents accidental exposure of unauthenticated HTTP to the public internet.

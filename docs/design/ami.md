@@ -112,21 +112,30 @@ Action: Command
 Command: <resolved command string>
 ```
 
-The command template comes from `config.yaml` (or the built-in defaults listed below). `{node}` is substituted server-side with the node's AllStar node number before dispatch. Additional `{argname}` placeholders are filled from user input collected by the args modal. Any unresolved placeholder causes a 400 error before the command reaches AMI.
+The command template comes from `config.yaml` (or the built-in defaults listed below). `{node}` is always substituted server-side with the node's AllStar node number before dispatch. Additional `{argname}` placeholders are filled from user input collected by the args modal. Any unresolved placeholder causes a 400 error before the command reaches AMI.
+
+**Command arguments** (`args` on `NodeCommand`): Each arg has:
+- `name` — template placeholder key (e.g. `target` matches `{target}` in the command template)
+- `label` — UI label shown in the args modal
+- `type` — `"node_number"` (numeric input) or `"string"` (free text)
+
+The dashboard opens a modal to collect arg values before POSTing. `{node}` is server-side only and excluded from the client-visible arg list.
+
+**Command groups** (`group` on `NodeCommand`): Commands with the same `group` value are rendered together; a divider is inserted in the dropdown whenever the group key changes between consecutive items.
 
 **Default command set** (used when `commands:` is absent from `config.yaml`):
 
-| Name | Command template | Min. role |
-|---|---|---|
-| Node Time | `rpt cmd {node} status 12 xxx` | readwrite |
-| Node ID | `rpt cmd {node} status 11 xxx` | readwrite |
-| Reconnect | `rpt cmd {node} ilink 16` | readwrite |
-| Node Status | `rpt stats {node}` | readwrite |
-| Link Status | `rpt lstats {node}` | readwrite |
-| IAX Registry | `iax2 show registry` | readwrite |
-| IAX Channels | `iax2 show channels` | readwrite |
-| Network Status | `iax2 show netstats` | readwrite |
-| Uptime | `core show uptime` | readwrite |
+| Name | Command template | Group | Min. role |
+|---|---|---|---|
+| Say Time of Day | `rpt cmd {node} status 12 xxx` | announce | readwrite |
+| Force ID | `rpt cmd {node} status 11 xxx` | announce | readwrite |
+| Reconnect | `rpt cmd {node} ilink 16` | link | readwrite |
+| Show Node Status | `rpt stats {node}` | status | readwrite |
+| Show Link Status | `rpt lstats {node}` | status | readwrite |
+| Show IAX Registry | `iax2 show registry` | status | readwrite |
+| Show IAX Channels | `iax2 show channels` | status | readwrite |
+| Show Network Status | `iax2 show netstats` | status | readwrite |
+| Show Uptime | `core show uptime` | status | readwrite |
 
 The `Output` field of the response is returned to the browser as plain text and displayed in a toast notification. A special Asterisk message `"Command output follows but no following output"` is treated as success with empty output (the command ran but produced no console output).
 
