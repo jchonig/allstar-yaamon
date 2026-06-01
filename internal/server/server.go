@@ -58,6 +58,11 @@ type Server struct {
 	cipherKey     [32]byte
 	webAuthn      *wawebauthn.WebAuthn
 
+	// homeNodeNums maps each home node's string node number to its DB ID so
+	// publishCachedStats can override connected_links with live AMI counts.
+	// Written by pollLinks; read by enrichFromAMI. Uses sync.Map for lock-free reads.
+	homeNodeNums sync.Map // string → int64
+
 	// adaptive stats-fetch mode: switches between individual and bulk endpoint
 	// based on how many stale node numbers are pending (see fetchAdaptive).
 	adaptiveMu sync.Mutex

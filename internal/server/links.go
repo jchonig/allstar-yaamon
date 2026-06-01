@@ -101,6 +101,7 @@ func (s *Server) pollLinks(ctx context.Context) {
 		return
 	}
 	for _, n := range nodes {
+		s.homeNodeNums.Store(n.NodeNumber, n.ID)
 		if !n.Enabled || !s.amiMgr.IsConnected(n.ID) {
 			continue
 		}

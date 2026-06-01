@@ -235,11 +235,34 @@ func (s *Server) fetchAdaptive(ctx context.Context, stale []string) map[string]a
 	return s.fetcher.FetchAll(ctx, stale)
 }
 
+// enrichFromAMI overrides connected_links with live AMI link counts for nodes
+// that are home nodes managed by this instance. ASL cloud stats can lag or
+// disagree with local AMI state; AMI is authoritative when available.
+func (s *Server) enrichFromAMI(stats map[string]aslstats.NodeStats) {
+	for num, st := range stats {
+		v, ok := s.homeNodeNums.Load(num)
+		if !ok {
+			continue
+		}
+		nodeID := v.(int64)
+		if !s.amiMgr.IsConnected(nodeID) {
+			continue
+		}
+		links, hasData := s.linksCache.get(nodeID)
+		if !hasData {
+			continue
+		}
+		st.ConnectedLinks = len(links)
+		stats[num] = st
+	}
+}
+
 // publishCachedStats reads nums from the stats cache and publishes one SSE
 // event for nodeID containing whatever is currently cached.
 func (s *Server) publishCachedStats(nodeID int64, nums []string) {
 	subset := s.statsCache.getMany(nums)
 	s.enrichFromAstdb(subset)
+	s.enrichFromAMI(subset)
 	data, err := json.Marshal(map[string]any{
 		"type":   "stats",
 		"nodeID": nodeID,
