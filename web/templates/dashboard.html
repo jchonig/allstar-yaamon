@@ -357,9 +357,7 @@
           <div class="position-absolute bottom-0 start-0 m-2 small text-muted d-flex gap-3">
             <span><i class="bi bi-circle-fill" style="color:var(--accent-yellow)"></i> This node</span>
             <span><i class="bi bi-circle-fill" style="color:var(--accent-red)"></i> Keyed</span>
-            <span><i class="bi bi-circle-fill" style="color:var(--accent-green)"></i> Web TX</span>
             <span><i class="bi bi-circle-fill" style="color:var(--accent-blue)"></i> Online</span>
-            <span><i class="bi bi-circle-fill" style="color:var(--text-muted)"></i> Unknown</span>
           </div>
         </div>
       </div>
@@ -1328,7 +1326,6 @@ function renderConnGraph() {
   const cs = getComputedStyle(document.documentElement);
   const cMuted  = cs.getPropertyValue('--text-muted').trim()   || '#888';
   const cRed    = cs.getPropertyValue('--accent-red').trim()   || '#f85149';
-  const cGreen  = cs.getPropertyValue('--accent-green').trim() || '#3fb950';
   const cBlue   = cs.getPropertyValue('--accent-blue').trim()  || '#58a6ff';
   const cYellow = cs.getPropertyValue('--accent-yellow').trim()|| '#d29922';
   const cText   = cs.getPropertyValue('--text-primary').trim() || '#e6edf3';
@@ -1337,14 +1334,14 @@ function renderConnGraph() {
   const rootStats = statsData[rootNum] || {};
   const nodesArr = [{
     id: rootNum, callsign: connData.callsign || '', lcnt: connData.lcnt || 0,
-    keyed: rootStats.keyed, web: rootStats.web, isRoot: true,
+    keyed: rootStats.keyed, isRoot: true,
   }];
   for (const c of (connData.connections || [])) {
     const cs2 = statsData[c.node_number] || {};
     nodesArr.push({
       id: c.node_number, callsign: c.callsign || '', lcnt: 0,
       description: c.description || '', location: c.location || '',
-      keyed: cs2.keyed, web: c.web || cs2.web, isRoot: false,
+      keyed: c.keyed || cs2.keyed, isRoot: false,
     });
   }
   const linksArr = (connData.connections || []).map(c => ({ source: rootNum, target: c.node_number }));
@@ -1353,7 +1350,6 @@ function renderConnGraph() {
   const nodeStroke = d => {
     if (d.isRoot) return cYellow;
     if (d.keyed)  return cRed;
-    if (d.web)    return cGreen;
     return cBlue;
   };
 
