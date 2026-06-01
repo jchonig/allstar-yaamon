@@ -1,0 +1,94 @@
+name: Bug Report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: YAAMon version
+      description: Found in the page footer or `yaamon --version`
+      placeholder: "e.g. v0.3.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment method
+      options:
+        - Docker
+        - Debian package (.deb)
+        - Built from source
+    validations:
+      required: true
+
+  - type: textarea
+    id: docker-details
+    attributes:
+      label: Docker details
+      description: >
+        **Docker installs only.** Paste the `docker run` command or the relevant
+        service section from your `docker-compose.yml`. Redact passwords/tokens.
+      render: yaml
+    validations:
+      required: false
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS / distro version
+      description: >
+        **Debian package installs only.** Include distro name and version
+        (e.g. Debian 12 bookworm, Ubuntu 24.04 LTS, Raspberry Pi OS Bookworm).
+      placeholder: "e.g. Raspberry Pi OS Bookworm (64-bit)"
+    validations:
+      required: false
+
+  - type: textarea
+    id: allstar-setup
+    attributes:
+      label: AllStarLink setup
+      description: >
+        ASL version, number of nodes, AMI configuration (host/port only — no
+        passwords). Note if Asterisk is on the same host or remote.
+      placeholder: |
+        ASL3, 2 nodes (667342, 687390)
+        AMI on localhost:5038
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to …
+        2. Click …
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: >
+        YAAMon log output (`log.level: debug` often helps). Redact any
+        credentials before pasting.
+      render: text
+    validations:
+      required: false

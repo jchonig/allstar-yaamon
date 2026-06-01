@@ -1,0 +1,36 @@
+name: Feature Request
+description: Suggest an idea or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to do that's currently difficult or impossible?
+      placeholder: "e.g. I can't easily see which nodes are keyed across all my favorites at a glance."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe what you'd like to see added or changed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds you've tried or other approaches you considered.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, links to similar tools, or anything else that helps.
+    validations:
+      required: false
