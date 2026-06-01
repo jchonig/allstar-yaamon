@@ -15,7 +15,7 @@ type connEntry struct {
 	Callsign    string `json:"callsign"`
 	Description string `json:"description"`
 	Location    string `json:"location"`
-	Keyed       bool   `json:"keyed"`
+	Web         bool   `json:"web"`
 }
 
 type connResponse struct {
@@ -67,7 +67,7 @@ func (s *Server) handleAPIConnections(w http.ResponseWriter, r *http.Request) {
 			e.Location = n.Location
 		}
 		if ls, ok2 := s.statsCache.get(ln); ok2 {
-			e.Keyed = ls.Keyed
+			e.Web = ls.Web
 		}
 		resp.Connections = append(resp.Connections, e)
 	}
