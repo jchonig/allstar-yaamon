@@ -2,8 +2,30 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - 'Makefile'
+      - 'web/**'
+      - 'scripts/**'
+      - 'e2e/**'
+      - 'integration_tests/**'
+      - '.github/workflows/**'
   pull_request:
     branches: [main]
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - 'Makefile'
+      - 'web/**'
+      - 'scripts/**'
+      - 'e2e/**'
+      - 'integration_tests/**'
+      - '.github/workflows/**'
 
 jobs:
   # Unit tests run inside Docker via `make test-unit` — same as local dev.

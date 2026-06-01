@@ -6,7 +6,9 @@ YAAMon uses GitHub Actions for continuous integration, branch image builds, and 
 
 ### `ci.yml` — Continuous Integration
 
-Triggers on every push to `main` and on pull requests.
+Triggers on pushes to `main` and on pull requests, but **only when build-relevant files change**. Pushes that touch only `docs/**`, `*.md`, `contrib/**`, `examples/**`, or other non-code files skip CI entirely — GitHub marks the workflow as passed so docs-only PRs still merge cleanly.
+
+The path filter covers: `**/*.go`, `go.mod`, `go.sum`, `Dockerfile`, `Makefile`, `web/**`, `scripts/**`, `e2e/**`, `integration_tests/**`, `.github/workflows/**`.
 
 Stages (in order):
 
