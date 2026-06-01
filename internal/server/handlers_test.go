@@ -185,6 +185,95 @@ func TestEnrichFromAstdb_MultipleNodes(t *testing.T) {
 	}
 }
 
+// --- enrichFromAMI ---
+
+func TestEnrichFromAMI_OverridesConnectedLinksForHomeNode(t *testing.T) {
+	s := &Server{linksCache: newLinksCache()}
+	s.homeNodeNums.Store("667342", int64(1))
+	// Simulate 4 active AMI links for node 667342.
+	s.linksCache.set(1, map[string]LinkState{
+		"100001": {Type: "T"},
+		"100002": {Type: "T"},
+		"100003": {Type: "M"},
+		"100004": {Type: "T"},
+	})
+
+	stats := map[string]aslstats.NodeStats{
+		"667342": {NodeNumber: "667342", ConnectedLinks: 0}, // ASL stats says 0
+	}
+	s.enrichFromAMI(stats)
+
+	if got := stats["667342"].ConnectedLinks; got != 4 {
+		t.Errorf("ConnectedLinks = %d, want 4 (AMI count takes precedence)", got)
+	}
+}
+
+func TestEnrichFromAMI_NotAHomeNode_Unchanged(t *testing.T) {
+	s := &Server{linksCache: newLinksCache()}
+	// 999999 is not in homeNodeNums — it's a regular favorite.
+
+	stats := map[string]aslstats.NodeStats{
+		"999999": {NodeNumber: "999999", ConnectedLinks: 3},
+	}
+	s.enrichFromAMI(stats)
+
+	if got := stats["999999"].ConnectedLinks; got != 3 {
+		t.Errorf("ConnectedLinks = %d, want 3 (non-home node unchanged)", got)
+	}
+}
+
+func TestEnrichFromAMI_HomeNodeNeverPolled_Unchanged(t *testing.T) {
+	s := &Server{linksCache: newLinksCache()}
+	s.homeNodeNums.Store("667342", int64(1))
+	// linksCache has no entry for node 1 — AMI was never connected.
+
+	stats := map[string]aslstats.NodeStats{
+		"667342": {NodeNumber: "667342", ConnectedLinks: 2},
+	}
+	s.enrichFromAMI(stats)
+
+	if got := stats["667342"].ConnectedLinks; got != 2 {
+		t.Errorf("ConnectedLinks = %d, want 2 (no AMI data, ASL stats preserved)", got)
+	}
+}
+
+func TestEnrichFromAMI_HomeNodeZeroLinks(t *testing.T) {
+	s := &Server{linksCache: newLinksCache()}
+	s.homeNodeNums.Store("667342", int64(1))
+	// AMI polled and found 0 links.
+	s.linksCache.set(1, map[string]LinkState{})
+
+	stats := map[string]aslstats.NodeStats{
+		"667342": {NodeNumber: "667342", ConnectedLinks: 5}, // ASL says 5 (stale)
+	}
+	s.enrichFromAMI(stats)
+
+	if got := stats["667342"].ConnectedLinks; got != 0 {
+		t.Errorf("ConnectedLinks = %d, want 0 (AMI 0 takes precedence over stale ASL 5)", got)
+	}
+}
+
+func TestEnrichFromAMI_MixedHomeAndFavorites(t *testing.T) {
+	s := &Server{linksCache: newLinksCache()}
+	s.homeNodeNums.Store("667342", int64(1))
+	s.linksCache.set(1, map[string]LinkState{
+		"100001": {Type: "T"},
+	})
+
+	stats := map[string]aslstats.NodeStats{
+		"667342": {NodeNumber: "667342", ConnectedLinks: 0}, // home node: overridden
+		"999999": {NodeNumber: "999999", ConnectedLinks: 7}, // favorite: unchanged
+	}
+	s.enrichFromAMI(stats)
+
+	if got := stats["667342"].ConnectedLinks; got != 1 {
+		t.Errorf("667342 ConnectedLinks = %d, want 1", got)
+	}
+	if got := stats["999999"].ConnectedLinks; got != 7 {
+		t.Errorf("999999 ConnectedLinks = %d, want 7 (favorite unchanged)", got)
+	}
+}
+
 func TestFillNodeInfo_MultipleNodes(t *testing.T) {
 	stub := &stubAstDB{nodes: map[string]astdb.Node{
 		"11111": {Description: "desc A", Location: "loc A"},

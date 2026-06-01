@@ -852,6 +852,12 @@ function renderActiveLinks() {
     const since = fmtAge(linksSince[nodeNum]);
     const lcnt  = s.connected_links != null ? s.connected_links : null;
     const lcntColor = lcnt > 0 ? 'color:var(--accent-blue)' : '';
+    const lcntTitle = lcnt != null && lcnt > 0
+      ? `${lcnt} link${lcnt !== 1 ? 's' : ''} — click for details` : '';
+    const lcntTd = !isDirect && lcnt != null
+      ? `<td class="d-none d-md-table-cell small" style="cursor:pointer;${lcntColor}"
+            title="${lcntTitle}" onclick="openConnModal('${esc(nodeNum)}',${lcnt})">${lcnt}</td>`
+      : '<td class="d-none d-md-table-cell small">—</td>';
     const callTip = [desc, loc].filter(Boolean).join(' — ');
     return `<tr>
       <td class="text-center" style="width:1.5rem">
@@ -861,7 +867,7 @@ function renderActiveLinks() {
       <td>${call ? `<span class="qrz-tip" data-callsign="${esc(call)}">${esc(call)}</span>` : '—'}</td>
       <td class="text-muted small">${typeLabel}</td>
       <td class="text-muted small d-none d-md-table-cell">${since}</td>
-      <td class="d-none d-md-table-cell small" style="${lcntColor}">${lcnt != null ? lcnt : '—'}</td>
+      ${lcntTd}
       <td class="text-end text-nowrap">${actions}${moreActions}</td>
     </tr>`;
   }).join('');

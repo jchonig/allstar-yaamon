@@ -238,17 +238,15 @@ func (s *Server) fetchAdaptive(ctx context.Context, stale []string) map[string]a
 // enrichFromAMI overrides connected_links with live AMI link counts for nodes
 // that are home nodes managed by this instance. ASL cloud stats can lag or
 // disagree with local AMI state; AMI is authoritative when available.
+// linksCache is only populated while AMI is connected, so hasData=true implies
+// the count came from a live poll — no separate IsConnected check is needed.
 func (s *Server) enrichFromAMI(stats map[string]aslstats.NodeStats) {
 	for num, st := range stats {
 		v, ok := s.homeNodeNums.Load(num)
 		if !ok {
 			continue
 		}
-		nodeID := v.(int64)
-		if !s.amiMgr.IsConnected(nodeID) {
-			continue
-		}
-		links, hasData := s.linksCache.get(nodeID)
+		links, hasData := s.linksCache.get(v.(int64))
 		if !hasData {
 			continue
 		}

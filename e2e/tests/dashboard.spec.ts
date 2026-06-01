@@ -42,6 +42,55 @@ test.describe('Dashboard', () => {
   });
 });
 
+test.describe('Dashboard — active links table', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page);
+  });
+
+  test('active-links-section is in the DOM', async ({ page }) => {
+    await expect(page.locator('#active-links-section')).toBeAttached();
+  });
+
+  test('active links Links column is clickable when count > 0', async ({ page }) => {
+    // Inject a fake AMI link with a non-zero connected_links count and verify
+    // the rendered cell has cursor:pointer and an onclick that calls openConnModal.
+    const html: string = await page.evaluate(() => {
+      // Build a minimal amiLinks entry (renderActiveLinks reads this global).
+      (window as any).amiLinks = { '687390': { type: 'T', keyed: false } };
+      (window as any).linksSince = { '687390': new Date() };
+      (window as any).statsData = {
+        '687390': { connected_links: 4, callsign: 'W1AW' },
+      };
+      (window as any).favsData = [];
+      (window as any).astdbCache = {};
+      (window as any).amiLinksReceived = true;
+      (window as any).renderActiveLinks();
+      const tbody = document.querySelector('#active-links-body');
+      return tbody ? tbody.innerHTML : '';
+    });
+    // The Links column td must have cursor:pointer and an onclick calling openConnModal.
+    expect(html).toContain('cursor:pointer');
+    expect(html).toContain('openConnModal');
+  });
+
+  test('active links Links column shows em-dash for web/direct clients', async ({ page }) => {
+    const html: string = await page.evaluate(() => {
+      (window as any).amiLinks = { 'KR4YXX': { type: 'T', keyed: false } };
+      (window as any).linksSince = { 'KR4YXX': new Date() };
+      (window as any).statsData = {};
+      (window as any).favsData = [];
+      (window as any).astdbCache = {};
+      (window as any).amiLinksReceived = true;
+      (window as any).renderActiveLinks();
+      const tbody = document.querySelector('#active-links-body');
+      return tbody ? tbody.innerHTML : '';
+    });
+    // isDirect nodes never get a clickable lcnt cell.
+    expect(html).not.toContain('openConnModal');
+    expect(html).toContain('—');
+  });
+});
+
 test.describe('Dashboard — mobile viewport', () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
