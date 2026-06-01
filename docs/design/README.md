@@ -22,6 +22,7 @@ Technical documentation for YAAMon's architecture and internals.
 
 ## Topics
 
+- [AMI Interface](ami.md) — actions sent, events consumed, wire format, manager.conf requirements
 - [Database](database.md) — schema, tables, migrations
 - [Authentication](authentication.md) — auth modes, sessions, middleware chain
 - [API](api.md) — HTTP endpoint inventory
