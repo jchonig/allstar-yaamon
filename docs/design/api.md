@@ -27,6 +27,8 @@ YAAMon's HTTP API is consumed by its own frontend. All endpoints return JSON unl
 | GET | `/graph/{nodeNumber}` | Network graph page |
 | GET | `/api/nodes` | List all nodes |
 | GET | `/api/nodes/{id}/favorites` | List favorites for a node |
+| GET | `/api/nodes/{id}/commands` | List node commands visible to the calling user (filtered by role) |
+| POST | `/api/nodes/{id}/cmd` | Execute a node command; body: `{index, check, args}` |
 | GET | `/api/nodes/{id}/stats` | Current stats for a node |
 | GET | `/api/nodes/{id}/connections/{nodeNumber}` | Connection detail |
 | GET | `/api/profile` | Get current user's profile |

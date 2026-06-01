@@ -274,6 +274,8 @@ func (s *Server) Run() error {
 		r.Delete("/api/profile/qrz", s.handleAPIDeleteUserQRZ)
 		r.Delete("/api/profile/qrz/cache", s.handleAPIClearUserQRZCache)
 		r.Get("/api/users/{id}/avatar", s.handleAPIGetAvatar)
+		r.Get("/api/nodes/{id}/commands", s.handleAPIListCommands)
+		r.Post("/api/nodes/{id}/cmd", s.handleAPIRunCommand)
 		r.Get("/api/qrz/{callsign}", s.handleAPIQRZLookup)
 		r.Get("/api/passkeys", s.handleAPIListPasskeys)
 		r.Post("/api/passkeys/register/begin", s.handleAPIPasskeysRegisterBegin)

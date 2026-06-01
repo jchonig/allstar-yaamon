@@ -9,3 +9,42 @@ astdb:
   path: /var/lib/yaamon/astdb.txt
 log:
   level: debug
+
+commands:
+  commands:
+    - name:  "Say Time of Day"
+      cmd:   "rpt cmd {node} status 12 xxx"
+      role:  readwrite
+      group: announce
+    - name:  "Force ID"
+      cmd:   "rpt cmd {node} status 11 xxx"
+      role:  readwrite
+      group: announce
+    - name:  "Reconnect"
+      cmd:   "rpt cmd {node} ilink 16"
+      role:  readwrite
+      group: link
+    - name:  "Show Node Status"
+      cmd:   "rpt stats {node}"
+      role:  readwrite
+      group: status
+    - name:  "Show Link Status"
+      cmd:   "rpt lstats {node}"
+      role:  readwrite
+      group: status
+    - name:  "Show IAX Registry"
+      cmd:   "iax2 show registry"
+      role:  readwrite
+      group: status
+    - name:  "Show IAX Channels"
+      cmd:   "iax2 show channels"
+      role:  readwrite
+      group: status
+    - name:  "Show Network Status"
+      cmd:   "iax2 show netstats"
+      role:  readwrite
+      group: status
+    - name:  "Show Uptime"
+      cmd:   "core show uptime"
+      role:  readwrite
+      group: status
