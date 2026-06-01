@@ -15,6 +15,7 @@
 
 - [AMI Configuration](configuration/ami.md)
 - [AllStarLink Node Database (astdb)](configuration/astdb.md)
+- [Node Commands (Functions Menu)](configuration/commands.md)
 - [Declarative State (yaamon apply)](configuration/declarative-state.md)
 - [Passkeys (WebAuthn / FIDO2)](configuration/passkeys.md)
 - [Proxy Authentication (OAuth2 / oauth2-proxy)](configuration/proxy-auth.md)

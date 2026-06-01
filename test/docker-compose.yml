@@ -37,7 +37,6 @@ services:
         - action: sync+restart
           path: ./yaamon
           target: /usr/local/bin/yaamon
-        # Sync config/state files and restart.
-        - action: sync+restart
+        # Restart when config changes — bind mount already delivers the file.
+        - action: restart
           path: ./config
-          target: /etc/yaamon
