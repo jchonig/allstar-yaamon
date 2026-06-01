@@ -1310,7 +1310,7 @@ function loadD3ThenGraph() {
   if (d3Loaded) return; // already loading
   d3Loaded = true;
   const sc = document.createElement('script');
-  sc.src = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
+  sc.src = BASE_PATH + '/static/d3.min.js';
   sc.onload = renderConnGraph;
   document.head.appendChild(sc);
 }

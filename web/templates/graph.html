@@ -70,7 +70,6 @@
 {{end}}
 
 {{define "scripts"}}
-<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script>
 const NODE_NUMBER = "{{.NodeNumber}}";
 const HOME_NODE_ID = {{.HomeNodeID}};
@@ -81,19 +80,44 @@ let gZoom = null;
 let gSvg = null;
 let gNodes = null; // D3 selection of node <g> elements for filter updates
 
+function loadD3() {
+  return new Promise((resolve, reject) => {
+    if (window.d3) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = BASE_PATH + '/static/d3.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load D3'));
+    document.head.appendChild(s);
+  });
+}
+
+function showGraphError(msg) {
+  console.error('graph error:', msg);
+  const el = document.getElementById('graph-loading');
+  if (el) el.innerHTML =
+    `<div class="text-danger text-center p-4"><i class="bi bi-exclamation-triangle me-2"></i>Failed to load graph data: ${msg}</div>`;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  const url = BASE_PATH + `/api/nodes/${HOME_NODE_ID}/connections/${NODE_NUMBER}`;
   try {
-    const r = await fetch(BASE_PATH + `/api/nodes/${HOME_NODE_ID}/connections/${NODE_NUMBER}`);
+    const [, r] = await Promise.all([
+      loadD3(),
+      fetch(url),
+    ]);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
     if (data.callsign) {
       document.getElementById('graph-node-callsign').textContent = '(' + data.callsign + ')';
     }
-    document.getElementById('graph-loading').style.display = 'none';
-    renderGraph(data);
+    document.getElementById('graph-loading').classList.add('d-none');
+    try {
+      renderGraph(data);
+    } catch (re) {
+      showGraphError('render: ' + (re.message || String(re)));
+    }
   } catch (e) {
-    document.getElementById('graph-loading').innerHTML =
-      `<div class="text-danger text-center p-4"><i class="bi bi-exclamation-triangle me-2"></i>Failed to load graph data: ${e.message}</div>`;
+    showGraphError(e.message || String(e));
   }
 });
 
