@@ -49,6 +49,7 @@
 
 ## [Design](design/README.md)
 
+- [AMI Interface](design/ami.md)
 - [REST API](design/api.md)
 - [Authentication](design/authentication.md)
 - [CI/CD](design/cicd.md)
