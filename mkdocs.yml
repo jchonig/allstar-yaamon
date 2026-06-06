@@ -1,0 +1,92 @@
+site_name: YAAMon
+site_url: https://yaamon.n2vlv.net
+site_description: >-
+  Yet Another AllStar MONitor — a modern, self-contained web application
+  for managing and monitoring AllStarLink amateur radio nodes.
+repo_url: https://github.com/jchonig/allstar-yaamon
+repo_name: jchonig/allstar-yaamon
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Installation:
+    - Overview: installation/README.md
+    - Debian / Ubuntu Package: installation/deb.md
+    - Pre-built Binary: installation/binary.md
+    - Docker: installation/docker.md
+    - docker-compose: installation/docker-compose.md
+    - Building from Source: installation/building.md
+    - Migration: installation/migration.md
+  - Configuration:
+    - Overview: configuration/README.md
+    - AMI: configuration/ami.md
+    - AllStarLink Database: configuration/astdb.md
+    - Node Commands: configuration/commands.md
+    - Declarative State: configuration/declarative-state.md
+    - Passkeys: configuration/passkeys.md
+    - Proxy Authentication: configuration/proxy-auth.md
+    - Tailscale: configuration/tailscale.md
+    - Web Server:
+      - Overview: configuration/web-server/README.md
+      - Apache: configuration/web-server/apache.md
+      - Caddy: configuration/web-server/caddy.md
+      - nginx: configuration/web-server/nginx.md
+      - Standalone: configuration/web-server/standalone.md
+  - User Guide:
+    - Overview: user-guide/README.md
+    - Administration: user-guide/administration.md
+    - Callsign Lookup: user-guide/callsign-lookup.md
+    - Dashboards: user-guide/dashboards.md
+    - Overview Page: user-guide/overview.md
+    - Profile: user-guide/profile.md
+    - Roles: user-guide/roles.md
+  - Security:
+    - Overview: security/README.md
+    - AMI Security: security/ami-security.md
+    - Web Security: security/web-security.md
+  - Troubleshooting: troubleshooting/README.md
+  - Reference:
+    - Overview: reference/README.md
+    - CLI Reference: reference/cli.md
+  - Design:
+    - Overview: design/README.md
+    - AMI Interface: design/ami.md
+    - REST API: design/api.md
+    - Authentication: design/authentication.md
+    - CI/CD: design/cicd.md
+    - Database: design/database.md
+    - Testing: design/testing.md
