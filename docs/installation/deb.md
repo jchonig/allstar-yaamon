@@ -9,8 +9,11 @@ Adding the YAAMon APT repository lets you install and upgrade with standard `apt
 **1. Install the signing key**
 
 ```bash
-sudo curl -fsSL https://yaamon.n2vlv.net/gpg.key \
-  -o /usr/share/keyrings/yaamon-archive-keyring.gpg
+curl -fsSL https://yaamon.n2vlv.net/gpg.key \
+  | sudo gpg --no-default-keyring \
+      --keyring gnupg-ring:/usr/share/keyrings/yaamon-archive-keyring.gpg \
+      --import
+sudo chmod 644 /usr/share/keyrings/yaamon-archive-keyring.gpg
 ```
 
 **2. Add the repository**
