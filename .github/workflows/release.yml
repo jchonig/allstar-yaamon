@@ -93,6 +93,42 @@ jobs:
       - name: Merge APT repository into MkDocs site
         if: "!contains(github.ref_name, '-')"
         run: mkdir -p site/debian && cp -r ${{ steps.apt-repo.outputs.dir }}/. site/debian/
+      - name: Generate APT repository directory indexes
+        if: "!contains(github.ref_name, '-')"
+        run: |
+          python3 - <<'EOF'
+          import os, html
+          from pathlib import Path
+
+          def make_index(directory):
+              path = Path(directory)
+              entries = sorted(path.iterdir())
+              dirs  = [e for e in entries if e.is_dir()]
+              files = [e for e in entries if e.is_file() and e.name != 'index.html']
+              rel = '/' + str(path).replace('site/', '').lstrip('/')
+              lines = [
+                  '<!DOCTYPE html><html><head>',
+                  f'<title>Index of {html.escape(rel)}</title>',
+                  '<style>body{font-family:monospace;padding:2em;max-width:800px;margin:0 auto}',
+                  'h1{border-bottom:1px solid #ccc;padding-bottom:.5em}',
+                  'a{display:block;padding:.2em 0;color:#228B22}',
+                  '.size{color:#666;margin-left:1em}</style></head><body>',
+                  f'<h1>Index of {html.escape(rel)}</h1>',
+              ]
+              if str(path) != 'site/debian':
+                  lines.append('<a href="../">&#x2191; Parent Directory</a>')
+              for d in dirs:
+                  lines.append(f'<a href="{d.name}/">&#x1F4C1; {html.escape(d.name)}/</a>')
+              for f in files:
+                  size = f.stat().st_size
+                  lines.append(f'<a href="{html.escape(f.name)}">&#x1F4C4; {html.escape(f.name)}'
+                                f'<span class="size">({size:,} bytes)</span></a>')
+              lines.append('</body></html>')
+              (path / 'index.html').write_text('\n'.join(lines))
+
+          for root, dirs, files in os.walk('site/debian'):
+              make_index(root)
+          EOF
       - name: Add CNAME for custom domain
         if: "!contains(github.ref_name, '-')"
         run: echo "yaamon.n2vlv.net" > site/CNAME
