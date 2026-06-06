@@ -2,7 +2,38 @@
 
 > **Port note**: ASL3 already runs Apache2 on port 80. YAAMon defaults to port 8080 to avoid the conflict. Access it at `http://<your-node-ip>:8080/` (or `http://nodeXXXXX.local:8080/`). See [web server configuration](../configuration/web-server/README.md) if you want a different port or to front it with Apache.
 
-## Download and install
+## APT repository (recommended)
+
+Adding the YAAMon APT repository lets you install and upgrade with standard `apt` commands.
+
+**1. Install the signing keyring**
+
+```bash
+curl -fsSL https://yaamon.n2vlv.net/yaamon-keyring_latest_all.deb -o /tmp/yaamon-keyring.deb
+sudo dpkg -i /tmp/yaamon-keyring.deb
+```
+
+**2. Add the repository**
+
+```bash
+echo "deb [signed-by=/usr/share/keyrings/yaamon-keyring.gpg] https://yaamon.n2vlv.net stable main" \
+  | sudo tee /etc/apt/sources.list.d/yaamon.list > /dev/null
+```
+
+**3. Install**
+
+```bash
+sudo apt update
+sudo apt install yaamon
+```
+
+**Upgrading**
+
+```bash
+sudo apt update && sudo apt upgrade yaamon
+```
+
+## Manual download and install
 
 Download the `.deb` for your architecture from the [Releases page](https://github.com/jchonig/allstar-yaamon/releases/latest):
 

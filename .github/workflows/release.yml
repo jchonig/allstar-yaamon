@@ -5,7 +5,9 @@ on:
 
 permissions:
   contents: write
-  packages: write     # required to push images to ghcr.io
+  packages: write
+  pages: write
+  id-token: write
 
 jobs:
   # Build the snapshot .deb and run integration tests against it before publishing.
@@ -33,6 +35,9 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     needs: test-deb
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy-pages.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,3 +68,27 @@ jobs:
           args: release --clean ${{ steps.relnotes.outputs.flag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create APT repository
+        id: apt-repo
+        if: "!contains(github.ref_name, '-')"
+        uses: morph027/apt-repo-action@v3
+        with:
+          repo-name: yaamon
+          scan-dir: ./dist
+          codename: stable
+          architectures: amd64 arm64
+          components: main
+          signing-key: ${{ secrets.APT_SIGNING_KEY }}
+          import-from-repo-url: https://jchonig.github.io/allstar-yaamon
+          import-from-repo-failure-allow: true
+      - name: Add CNAME for custom domain
+        if: "!contains(github.ref_name, '-')"
+        run: echo "yaamon.n2vlv.net" > ${{ steps.apt-repo.outputs.dir }}/CNAME
+      - if: "!contains(github.ref_name, '-')"
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.apt-repo.outputs.dir }}
+      - name: Deploy to GitHub Pages
+        id: deploy-pages
+        if: "!contains(github.ref_name, '-')"
+        uses: actions/deploy-pages@v4
