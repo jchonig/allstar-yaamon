@@ -31,11 +31,11 @@ YAAMon is a modern, responsive web application for managing and monitoring [AllS
 
 | Method | Best for |
 |--------|----------|
-| [Debian / Ubuntu package](docs/installation/deb.md) | ASL3 nodes (Raspberry Pi, x86 server) — recommended |
-| [Pre-built binary](docs/installation/binary.md) | Non-Debian Linux, manual systemd setup |
-| [Docker](docs/installation/docker.md) | Quick start, isolated environment |
-| [docker-compose](docs/installation/docker-compose.md) | Production Docker deployments |
-| [Building from source](docs/installation/building.md) | Development, custom builds |
+| [Debian / Ubuntu package](https://yaamon.n2vlv.net/installation/deb/) | ASL3 nodes (Raspberry Pi, x86 server) — recommended |
+| [Pre-built binary](https://yaamon.n2vlv.net/installation/binary/) | Non-Debian Linux, manual systemd setup |
+| [Docker](https://yaamon.n2vlv.net/installation/docker/) | Quick start, isolated environment |
+| [docker-compose](https://yaamon.n2vlv.net/installation/docker-compose/) | Production Docker deployments |
+| [Building from source](https://yaamon.n2vlv.net/installation/building/) | Development, custom builds |
 
 ### Quick start — Debian / Ubuntu (APT repository)
 
@@ -52,7 +52,7 @@ sudo apt update && sudo apt install yaamon
 
 Upgrades: `sudo apt update && sudo apt upgrade yaamon`
 
-See [full installation docs](docs/installation/deb.md) for manual `.deb` download and other options.
+See [full installation docs](https://yaamon.n2vlv.net/installation/deb/) for manual `.deb` download and other options.
 
 Access at `http://<your-node-ip>:8080/`. Default port is **8080** to coexist with ASL3's Apache on port 80.
 
@@ -70,19 +70,21 @@ docker run -d --name yaamon --restart unless-stopped \
 
 ## Documentation
 
-- [Installation](docs/installation/README.md) — all installation methods, migration from AllScan/Allmon3
-- [Configuration](docs/configuration/README.md) — config file reference, TLS, AMI, authentication
-- [User Guide](docs/user-guide/README.md) — dashboard, favorites, profile, passkeys
-- [Security](docs/security/README.md) — web security, AMI security
-- [Troubleshooting](docs/troubleshooting/README.md) — debug logging, common issues
-- [CLI Reference](docs/reference/cli.md) — all `yaamon` subcommands and flags
-- [Design](docs/design/README.md) — architecture, database schema, API, CI/CD
+Full documentation is at **[yaamon.n2vlv.net](https://yaamon.n2vlv.net)**.
+
+- [Installation](https://yaamon.n2vlv.net/installation/) — all installation methods, migration from AllScan/Allmon3
+- [Configuration](https://yaamon.n2vlv.net/configuration/) — config file reference, TLS, AMI, authentication
+- [User Guide](https://yaamon.n2vlv.net/user-guide/) — dashboard, favorites, profile, passkeys
+- [Security](https://yaamon.n2vlv.net/security/) — web security, AMI security
+- [Troubleshooting](https://yaamon.n2vlv.net/troubleshooting/) — debug logging, common issues
+- [CLI Reference](https://yaamon.n2vlv.net/reference/cli/) — all `yaamon` subcommands and flags
+- [Design](https://yaamon.n2vlv.net/design/) — architecture, database schema, API, CI/CD
 
 ---
 
 ## Migrating from AllScan or Allmon3
 
-See [docs/installation/migration.md](docs/installation/migration.md) — built-in import support, no conversion scripts needed.
+See [Migration](https://yaamon.n2vlv.net/installation/migration/) — built-in import support, no conversion scripts needed.
 
 ---
 
