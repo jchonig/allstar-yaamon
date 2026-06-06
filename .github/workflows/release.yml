@@ -74,19 +74,32 @@ jobs:
           args: release --clean ${{ steps.relnotes.outputs.flag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Collect all historical .deb packages
+        if: "!contains(github.ref_name, '-')"
+        run: |
+          mkdir -p combined-debs
+          gh release list --repo ${{ github.repository }} --limit 100 \
+            --json tagName --jq '.[].tagName' | \
+          while read tag; do
+            gh release download "$tag" --repo ${{ github.repository }} \
+              --pattern '*.deb' --dir combined-debs/ --clobber 2>/dev/null || true
+          done
+          cp dist/*.deb combined-debs/
+          echo "Packages collected:"
+          ls combined-debs/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create APT repository
         id: apt-repo
         if: "!contains(github.ref_name, '-')"
         uses: morph027/apt-repo-action@v3
         with:
           repo-name: yaamon
-          scan-dir: ./dist
+          scan-dir: ./combined-debs
           codename: stable
           architectures: amd64 arm64
           components: main
           signing-key: ${{ secrets.APT_SIGNING_KEY }}
-          import-from-repo-url: https://yaamon.n2vlv.net/debian
-          import-from-repo-failure-allow: true
       - name: Build MkDocs site
         if: "!contains(github.ref_name, '-')"
         run: mkdocs build
@@ -171,6 +184,14 @@ jobs:
           check "$BASE/debian/gpg.key"
           check "$BASE/debian/dists/stable/InRelease"
           check "$BASE/debian/dists/stable/main/binary-amd64/Packages"
+      - name: Check APT repository directory listing
+        run: |
+          BASE=https://yaamon.n2vlv.net
+          BODY=$(curl -sf "$BASE/debian/")
+          echo "$BODY" | grep -q 'dists/'  || { echo "FAIL: dists/ missing from listing"; exit 1; }
+          echo "$BODY" | grep -q 'pool/'   || { echo "FAIL: pool/ missing from listing"; exit 1; }
+          echo "$BODY" | grep -q 'gpg.key' || { echo "FAIL: gpg.key missing from listing"; exit 1; }
+          echo "Directory listing OK"
 
   test-apt-repo:
     runs-on: ubuntu-latest
