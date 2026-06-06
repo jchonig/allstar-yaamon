@@ -50,6 +50,10 @@ echo "deb [signed-by=/usr/share/keyrings/yaamon-archive-keyring.gpg] https://yaa
 sudo apt update && sudo apt install yaamon
 ```
 
+Upgrades: `sudo apt update && sudo apt upgrade yaamon`
+
+See [full installation docs](installation/deb.md) for manual `.deb` download and other options.
+
 ### Quick start — Docker
 
 ```bash

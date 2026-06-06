@@ -37,12 +37,22 @@ YAAMon is a modern, responsive web application for managing and monitoring [AllS
 | [docker-compose](docs/installation/docker-compose.md) | Production Docker deployments |
 | [Building from source](docs/installation/building.md) | Development, custom builds |
 
-### Quick start — Debian / Ubuntu
+### Quick start — Debian / Ubuntu (APT repository)
 
 ```bash
-wget https://github.com/jchonig/allstar-yaamon/releases/latest/download/yaamon_linux_arm64.deb
-sudo dpkg -i yaamon_linux_arm64.deb
+curl -fsSL https://yaamon.n2vlv.net/gpg.key \
+  | sudo gpg --no-default-keyring \
+      --keyring gnupg-ring:/usr/share/keyrings/yaamon-archive-keyring.gpg \
+      --import
+sudo chmod 644 /usr/share/keyrings/yaamon-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/yaamon-archive-keyring.gpg] https://yaamon.n2vlv.net stable main" \
+  | sudo tee /etc/apt/sources.list.d/yaamon.list
+sudo apt update && sudo apt install yaamon
 ```
+
+Upgrades: `sudo apt update && sudo apt upgrade yaamon`
+
+See [full installation docs](docs/installation/deb.md) for manual `.deb` download and other options.
 
 Access at `http://<your-node-ip>:8080/`. Default port is **8080** to coexist with ASL3's Apache on port 80.
 
