@@ -85,14 +85,14 @@ jobs:
           architectures: amd64 arm64
           components: main
           signing-key: ${{ secrets.APT_SIGNING_KEY }}
-          import-from-repo-url: https://yaamon.n2vlv.net
+          import-from-repo-url: https://yaamon.n2vlv.net/debian
           import-from-repo-failure-allow: true
       - name: Build MkDocs site
         if: "!contains(github.ref_name, '-')"
         run: mkdocs build
       - name: Merge APT repository into MkDocs site
         if: "!contains(github.ref_name, '-')"
-        run: cp -r ${{ steps.apt-repo.outputs.dir }}/. site/
+        run: mkdir -p site/debian && cp -r ${{ steps.apt-repo.outputs.dir }}/. site/debian/
       - name: Add CNAME for custom domain
         if: "!contains(github.ref_name, '-')"
         run: echo "yaamon.n2vlv.net" > site/CNAME
@@ -132,9 +132,9 @@ jobs:
             echo "$STATUS  $1"
             [[ "$STATUS" == "200" ]] || { echo "FAIL: expected 200"; exit 1; }
           }
-          check "$BASE/gpg.key"
-          check "$BASE/dists/stable/InRelease"
-          check "$BASE/dists/stable/main/binary-amd64/Packages"
+          check "$BASE/debian/gpg.key"
+          check "$BASE/debian/dists/stable/InRelease"
+          check "$BASE/debian/dists/stable/main/binary-amd64/Packages"
 
   test-apt-repo:
     runs-on: ubuntu-latest
@@ -145,14 +145,14 @@ jobs:
         run: sleep 30
       - name: Install signing key
         run: |
-          curl -fsSL https://yaamon.n2vlv.net/gpg.key \
+          curl -fsSL https://yaamon.n2vlv.net/debian/gpg.key \
             | sudo gpg --no-default-keyring \
                 --keyring gnupg-ring:/usr/share/keyrings/yaamon-archive-keyring.gpg \
                 --import
           sudo chmod 644 /usr/share/keyrings/yaamon-archive-keyring.gpg
       - name: Add APT repository
         run: |
-          echo "deb [signed-by=/usr/share/keyrings/yaamon-archive-keyring.gpg] https://yaamon.n2vlv.net stable main" \
+          echo "deb [signed-by=/usr/share/keyrings/yaamon-archive-keyring.gpg] https://yaamon.n2vlv.net/debian stable main" \
             | sudo tee /etc/apt/sources.list.d/yaamon.list
       - name: Install yaamon from APT repository
         run: |

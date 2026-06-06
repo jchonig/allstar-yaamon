@@ -40,12 +40,12 @@ YAAMon is a modern, responsive web application for managing and monitoring [AllS
 ### Quick start — Debian / Ubuntu (APT repository)
 
 ```bash
-curl -fsSL https://yaamon.n2vlv.net/gpg.key \
+curl -fsSL https://yaamon.n2vlv.net/debian/gpg.key \
   | sudo gpg --no-default-keyring \
       --keyring gnupg-ring:/usr/share/keyrings/yaamon-archive-keyring.gpg \
       --import
 sudo chmod 644 /usr/share/keyrings/yaamon-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/yaamon-archive-keyring.gpg] https://yaamon.n2vlv.net stable main" \
+echo "deb [signed-by=/usr/share/keyrings/yaamon-archive-keyring.gpg] https://yaamon.n2vlv.net/debian stable main" \
   | sudo tee /etc/apt/sources.list.d/yaamon.list
 sudo apt update && sudo apt install yaamon
 ```
