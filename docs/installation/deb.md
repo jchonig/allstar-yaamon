@@ -39,13 +39,13 @@ Download the `.deb` for your architecture from the [Releases page](https://githu
 
 | Platform | File |
 |----------|------|
-| Raspberry Pi 3B+ / Zero 2 W / Pi 4 / Pi 5 | `yaamon_*_linux_arm64.deb` |
-| x86-64 server / VM | `yaamon_*_linux_amd64.deb` |
+| Raspberry Pi 3B+ / Zero 2 W / Pi 4 / Pi 5 | `yaamon_*_arm64.deb` |
+| x86-64 server / VM | `yaamon_*_amd64.deb` |
 
 ```bash
 # Example — replace version and arch as appropriate
-wget https://github.com/jchonig/allstar-yaamon/releases/download/v1.0.0/yaamon_1.0.0_linux_arm64.deb
-sudo dpkg -i yaamon_1.0.0_linux_arm64.deb
+wget https://github.com/jchonig/allstar-yaamon/releases/download/v0.4.3/yaamon_0.4.3_arm64.deb
+sudo dpkg -i yaamon_0.4.3_arm64.deb
 ```
 
 The package installs:
