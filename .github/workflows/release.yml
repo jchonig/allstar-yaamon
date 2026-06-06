@@ -38,8 +38,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deploy-pages.outputs.page_url }}
-    outputs:
-      keyring: ${{ steps.apt-repo.outputs.keyring }}
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,17 +101,13 @@ jobs:
     steps:
       - name: Wait for Pages to propagate
         run: sleep 30
-      - name: Install signing keyring
-        env:
-          KEYRING: ${{ needs.goreleaser.outputs.keyring }}
+      - name: Install signing key
         run: |
-          KEYRING_PATH=$(curl -sf https://yaamon.n2vlv.net/dists/stable/main/binary-amd64/Packages \
-            | awk -v pkg="${KEYRING}" '/^Package: /{cur=$2} cur==pkg && /^Filename:/{print $2; exit}')
-          curl -fsSL "https://yaamon.n2vlv.net/${KEYRING_PATH}" -o /tmp/keyring.deb
-          sudo dpkg -i /tmp/keyring.deb
+          sudo curl -fsSL https://yaamon.n2vlv.net/gpg.key \
+            -o /usr/share/keyrings/yaamon-archive-keyring.gpg
       - name: Add APT repository
         run: |
-          echo "deb [signed-by=/usr/share/keyrings/yaamon-keyring.gpg] https://yaamon.n2vlv.net stable main" \
+          echo "deb [signed-by=/usr/share/keyrings/yaamon-archive-keyring.gpg] https://yaamon.n2vlv.net stable main" \
             | sudo tee /etc/apt/sources.list.d/yaamon.list
       - name: Install yaamon from APT repository
         run: |

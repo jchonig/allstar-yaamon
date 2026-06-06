@@ -6,17 +6,17 @@
 
 Adding the YAAMon APT repository lets you install and upgrade with standard `apt` commands.
 
-**1. Install the signing keyring**
+**1. Install the signing key**
 
 ```bash
-curl -fsSL https://yaamon.n2vlv.net/yaamon-keyring_latest_all.deb -o /tmp/yaamon-keyring.deb
-sudo dpkg -i /tmp/yaamon-keyring.deb
+sudo curl -fsSL https://yaamon.n2vlv.net/gpg.key \
+  -o /usr/share/keyrings/yaamon-archive-keyring.gpg
 ```
 
 **2. Add the repository**
 
 ```bash
-echo "deb [signed-by=/usr/share/keyrings/yaamon-keyring.gpg] https://yaamon.n2vlv.net stable main" \
+echo "deb [signed-by=/usr/share/keyrings/yaamon-archive-keyring.gpg] https://yaamon.n2vlv.net stable main" \
   | sudo tee /etc/apt/sources.list.d/yaamon.list > /dev/null
 ```
 
