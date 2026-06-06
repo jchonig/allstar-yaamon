@@ -1,5 +1,18 @@
 .md-footer-meta__inner {
   justify-content: space-between;
+  align-items: center;
+}
+.md-copyright,
+.md-footer-copyright,
+.md-footer-byline {
+  flex: 1;
+}
+.md-footer-copyright {
+  text-align: center;
+  color: var(--md-footer-fg-color--light);
+}
+.md-footer-byline {
+  text-align: right;
 }
 .md-footer-byline a {
   color: var(--md-footer-fg-color--light);

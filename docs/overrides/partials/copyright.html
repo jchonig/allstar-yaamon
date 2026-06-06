@@ -1,15 +1,13 @@
 <div class="md-copyright">
-  {% if config.copyright %}
-    <div class="md-copyright__highlight">
-      {{ config.copyright }}
-    </div>
-  {% endif %}
   {% if not config.extra.generator == false %}
     Made with
     <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
       Material for MkDocs
     </a>
   {% endif %}
+</div>
+<div class="md-footer-copyright">
+  {% if config.copyright %}{{ config.copyright }}{% endif %}
 </div>
 <div class="md-footer-byline">
   <a href="https://n2vlv.net" target="_blank" rel="noopener">N2VLV &bull; n2vlv.net</a>
