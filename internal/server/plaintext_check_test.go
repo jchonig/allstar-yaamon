@@ -25,6 +25,11 @@ func TestIsPrivateIP(t *testing.T) {
 		{"fe80::1", true},
 		{"fc00::1", true},
 		{"fd00::1", true},
+		// RFC 6598 CGNAT / Tailscale
+		{"100.64.0.1", true},
+		{"100.92.0.52", true},
+		{"100.127.255.255", true},
+		{"fd7a:115c:a1e0::1", true},
 		// public addresses
 		{"1.1.1.1", false},
 		{"8.8.8.8", false},

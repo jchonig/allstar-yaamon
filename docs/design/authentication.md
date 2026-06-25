@@ -88,6 +88,6 @@ Only superusers can delete the last superuser account.
 - `tailscale_auth.enabled: true` (traffic is confined to the Tailscale network)
 - `server.allow_public_plaintext: true` (operator opt-out)
 
-If none of those apply, `resolveBindIPs` enumerates all interfaces that the configured `bind_address` maps to (wildcard addresses expand to all interfaces). If any resolved IP falls outside private ranges (RFC 1918, loopback, link-local, ULA), the server logs a fatal error and exits.
+If none of those apply, `resolveBindIPs` enumerates all interfaces that the configured `bind_address` maps to (wildcard addresses expand to all interfaces). If any resolved IP falls outside private ranges (RFC 1918, loopback, link-local, ULA, RFC 6598 CGNAT / Tailscale `100.64.0.0/10`, `fd7a:115c:a1e0::/48`), the server logs a fatal error and exits.
 
 This prevents accidental exposure of unauthenticated HTTP to the public internet.
