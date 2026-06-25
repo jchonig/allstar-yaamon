@@ -7,6 +7,7 @@ fi
 
 mkdir -p /etc/yaamon /var/lib/yaamon
 chown yaamon:yaamon /etc/yaamon /var/lib/yaamon
+chmod 0640 /etc/yaamon/config.yaml 2>/dev/null || true
 
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload
