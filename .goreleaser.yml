@@ -49,6 +49,10 @@ nfpms:
       - src: examples/config.yaml.example
         dst: /etc/yaamon/config.yaml
         type: config|noreplace
+        file_info:
+          mode: 0640
+          owner: yaamon
+          group: yaamon
       - src: contrib/yaamon.service
         dst: /lib/systemd/system/yaamon.service
       - src: contrib/apache2-subfolder.conf

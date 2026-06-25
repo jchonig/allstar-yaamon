@@ -60,7 +60,7 @@ Environment variables take precedence over the config file.
 | `tls` | `acme_domain` | — | Domain for Let's Encrypt (required for `mode: acme`) |
 | `tls` | `acme_cache_dir` | `/etc/yaamon/acme` | ACME cache directory |
 | `db` | `path` | `/var/lib/yaamon/yaamon.db` | SQLite database path |
-| `astdb` | `path` | `/var/lib/asterisk/astdb.txt` | AllStarLink node database path |
+| `astdb` | `path` | `/var/lib/yaamon/astdb.txt` | AllStarLink node database path |
 | `astdb` | `update` | `true` | Download/refresh the node database automatically |
 | `log` | `level` | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `ui` | `footer_text` | (YAAMon name) | Left footer label |

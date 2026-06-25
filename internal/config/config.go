@@ -122,7 +122,7 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("tls.mode", "disabled")
 	v.SetDefault("tls.acme_cache_dir", "/etc/yaamon/acme")
 	v.SetDefault("db.path", "/var/lib/yaamon/yaamon.db")
-	v.SetDefault("astdb.path", "/var/lib/asterisk/astdb.txt")
+	v.SetDefault("astdb.path", "/var/lib/yaamon/astdb.txt")
 	v.SetDefault("astdb.update", true)
 	v.SetDefault("log.level", "info")
 	v.SetDefault("ui.footer_text", "Yet Another Allstarlink MONitor (and favorites)")
