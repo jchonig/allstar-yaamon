@@ -48,8 +48,8 @@ server:
 
 When `tls.mode: disabled` and no proxy auth is configured, YAAMon checks the
 bound address at startup. If any interface address is publicly routable
-(outside RFC 1918 / loopback / link-local ranges), YAAMon **refuses to start**
-and logs an error explaining the risk.
+(outside RFC 1918, loopback, link-local, RFC 6598 CGNAT, and Tailscale
+ranges), YAAMon **refuses to start** and logs an error explaining the risk.
 
 This protects against accidentally running an unauthenticated, unencrypted
 server on a VPS or cloud host. The check is automatically skipped when:

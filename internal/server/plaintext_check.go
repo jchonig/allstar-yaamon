@@ -8,7 +8,7 @@ import (
 	"allstar-yaamon/internal/config"
 )
 
-// privateRanges lists RFC 1918, loopback, and link-local CIDRs considered
+// privateRanges lists RFC 1918, loopback, link-local, and VPN CIDRs considered
 // safe for plaintext HTTP (no public exposure).
 var privateRanges []*net.IPNet
 
@@ -22,6 +22,10 @@ func init() {
 		"169.254.0.0/16",
 		"fe80::/10",
 		"fc00::/7",
+		// RFC 6598 Shared Address Space (carrier-grade NAT) and Tailscale overlay
+		// addresses — neither is routable on the public internet.
+		"100.64.0.0/10",
+		"fd7a:115c:a1e0::/48",
 	} {
 		_, network, _ := net.ParseCIDR(cidr)
 		privateRanges = append(privateRanges, network)
